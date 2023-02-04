@@ -16,5 +16,22 @@ by exposing the different flags and arguments as HTML forms).
 
 ## Steps
 
-- Serve templated file (test data)
-- Serve tailwind CSS
+- [x] Serve templated file (test data)
+- [x] Serve tailwind CSS
+
+### 2023-01-30 - Brainstorm parka structure
+
+So now I want to make this a bit more useful.
+I want to be able to serve markdown from multiple sources, so there should be
+a mechanism to register sources of markdown to prefixes, the same way the fin router can do the
+`r.Use()` stuff.
+
+`r.Use()` takes a middleware handler function, so probably that's how things should be done,
+along with helper methods (?).
+
+The handlerFunc takes a `gin.Context`.
+
+But also, it could all be much simpler, and we can just have the application register
+a set of lookup functions that return markdown content for a certain prefix.
+
+The server can then go through and take the first matching one.

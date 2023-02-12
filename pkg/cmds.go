@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/formatters"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
+	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 	"io"
+	"mime/multipart"
 	"strings"
 )
 
@@ -18,7 +19,7 @@ type JSONMarshaler interface {
 }
 
 // parseQueryParameters extracts the query parameters out of a request according to the description in parameters
-func parseQueryParameters(c *gin.Context, parameters []*cmds.Parameter) (map[string]interface{}, error) {
+func parseQueryParameters(c *gin.Context, parameters []*cmds.ParameterDefinition) (map[string]interface{}, error) {
 	params := make(map[string]interface{})
 	for _, p := range parameters {
 		value := c.Query(p.Name)
@@ -48,7 +49,12 @@ func parseStringFromFile(c *gin.Context, name string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error retrieving file '%s': %v", name, err)
 	}
-	defer file.Close()
+	defer func(file multipart.File) {
+		err := file.Close()
+		if err != nil {
+			log.Error().Err(err).Msgf("error closing file '%s'", name)
+		}
+	}(file)
 
 	fileBytes, err := io.ReadAll(file)
 	if err != nil {
@@ -63,7 +69,12 @@ func parseObjectFromFile(c *gin.Context, name string) (map[string]interface{}, e
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving file '%s': %v", name, err)
 	}
-	defer file.Close()
+	defer func(file multipart.File) {
+		err := file.Close()
+		if err != nil {
+			log.Error().Err(err).Msgf("error closing file '%s'", name)
+		}
+	}(file)
 
 	fileBytes, err := io.ReadAll(file)
 	if err != nil {
@@ -88,7 +99,7 @@ func parseObjectFromFile(c *gin.Context, name string) (map[string]interface{}, e
 	return obj, nil
 }
 
-func parseFormData(c *gin.Context, parameters []*cmds.Parameter) (map[string]interface{}, error) {
+func parseFormData(c *gin.Context, parameters []*cmds.ParameterDefinition) (map[string]interface{}, error) {
 	params := make(map[string]interface{})
 	for _, p := range parameters {
 		value := c.PostForm(p.Name)
@@ -123,7 +134,7 @@ func parseFormData(c *gin.Context, parameters []*cmds.Parameter) (map[string]int
 
 type ParkaCommand interface {
 	cmds.Command
-	RunFromParka(c *gin.Context, parameters map[string]interface{}, gp *cli.GlazeProcessor) error
+	RunFromParka(c *gin.Context, parameters map[string]interface{}, gp *cmds.GlazeProcessor) error
 }
 
 func (s *Server) serveCommands() {
@@ -148,7 +159,7 @@ func (s *Server) serveCommands() {
 				return
 			}
 
-			of, gp, _ := SetupProcessor(c, flags)
+			of, gp, _ := SetupProcessor()
 
 			err = cmd.RunFromParka(c, flags, gp)
 			if err != nil {
@@ -183,7 +194,7 @@ func (s *Server) serveCommands() {
 					return
 				}
 
-				of, gp, _ := SetupProcessor(c, flags)
+				of, gp, _ := SetupProcessor()
 
 				err = cmd.RunFromParka(c, flags, gp)
 				if err != nil {
@@ -215,16 +226,12 @@ func (s *Server) serveCommands() {
 
 }
 
-func SetupProcessor(c *gin.Context, flags map[string]interface{}) (
-	*formatters.JSONOutputFormatter,
-	*cli.GlazeProcessor,
-	error,
-) {
+func SetupProcessor() (*formatters.JSONOutputFormatter, *cmds.GlazeProcessor, error) {
 	// TODO(manuel, 2023-02-11) For now, create a raw JSON output formatter. We will want more nuance here
 	// See https://github.com/go-go-golems/parka/issues/8
 
 	of := formatters.NewJSONOutputFormatter(true)
-	gp := cli.NewGlazeProcessor(of, []middlewares.ObjectMiddleware{})
+	gp := cmds.NewGlazeProcessor(of, []middlewares.ObjectMiddleware{})
 
 	return of, gp, nil
 }

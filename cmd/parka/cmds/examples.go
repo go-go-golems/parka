@@ -2,7 +2,6 @@ package cmds
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 )
 
@@ -16,7 +15,7 @@ func NewExampleCommand() *ExampleCommand {
 			Name:  "example",
 			Short: "Short parka example command",
 			Long:  "",
-			Flags: []*cmds.Parameter{
+			Flags: []*cmds.ParameterDefinition{
 				// required string test argument
 				{
 					Name:      "test",
@@ -101,7 +100,7 @@ func NewExampleCommand() *ExampleCommand {
 	}
 }
 
-func (e *ExampleCommand) Run(parameters map[string]interface{}, gp *cli.GlazeProcessor) error {
+func (e *ExampleCommand) Run(parameters map[string]interface{}, gp *cmds.GlazeProcessor) error {
 	obj := map[string]interface{}{
 		"test":             parameters["test"],
 		"string":           parameters["string"],
@@ -136,6 +135,6 @@ func (e *ExampleCommand) Description() *cmds.CommandDescription {
 	return e.description
 }
 
-func (e *ExampleCommand) RunFromParka(c *gin.Context, parameters map[string]interface{}, gp *cli.GlazeProcessor) error {
+func (e *ExampleCommand) RunFromParka(_ *gin.Context, parameters map[string]interface{}, gp *cmds.GlazeProcessor) error {
 	return e.Run(parameters, gp)
 }

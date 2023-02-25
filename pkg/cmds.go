@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/formatters"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/rs/zerolog/log"
@@ -19,16 +20,16 @@ type JSONMarshaler interface {
 }
 
 // parseQueryParameters extracts the query parameters out of a request according to the description in parameters
-func parseQueryParameters(c *gin.Context, parameters []*cmds.ParameterDefinition) (map[string]interface{}, error) {
+func parseQueryParameters(c *gin.Context, ps []*parameters.ParameterDefinition) (map[string]interface{}, error) {
 	params := make(map[string]interface{})
-	for _, p := range parameters {
+	for _, p := range ps {
 		value := c.Query(p.Name)
 		if value == "" {
 			if p.Required {
 				return nil, fmt.Errorf("required parameter '%s' is missing", p.Name)
 			}
 			params[p.Name] = p.Default
-		} else if p.Type != cmds.ParameterTypeStringFromFile && p.Type != cmds.ParameterTypeObjectFromFile {
+		} else if p.Type != parameters.ParameterTypeStringFromFile && p.Type != parameters.ParameterTypeObjectFromFile {
 			pValue, err := p.ParseParameter([]string{value})
 			if err != nil {
 				return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
@@ -99,28 +100,28 @@ func parseObjectFromFile(c *gin.Context, name string) (map[string]interface{}, e
 	return obj, nil
 }
 
-func parseFormData(c *gin.Context, parameters []*cmds.ParameterDefinition) (map[string]interface{}, error) {
+func parseFormData(c *gin.Context, ps []*parameters.ParameterDefinition) (map[string]interface{}, error) {
 	params := make(map[string]interface{})
-	for _, p := range parameters {
+	for _, p := range ps {
 		value := c.PostForm(p.Name)
 		if value == "" {
 			if p.Required {
 				return nil, fmt.Errorf("required parameter '%s' is missing", p.Name)
 			}
 			params[p.Name] = p.Default
-		} else if p.Type != cmds.ParameterTypeStringFromFile && p.Type != cmds.ParameterTypeObjectFromFile {
+		} else if p.Type != parameters.ParameterTypeStringFromFile && p.Type != parameters.ParameterTypeObjectFromFile {
 			pValue, err := p.ParseParameter([]string{value})
 			if err != nil {
 				return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
 			}
 			params[p.Name] = pValue
-		} else if p.Type == cmds.ParameterTypeStringFromFile {
+		} else if p.Type == parameters.ParameterTypeStringFromFile {
 			s, err := parseStringFromFile(c, p.Name)
 			if err != nil {
 				return nil, err
 			}
 			params[p.Name] = s
-		} else if p.Type == cmds.ParameterTypeObjectFromFile {
+		} else if p.Type == parameters.ParameterTypeObjectFromFile {
 			obj, err := parseObjectFromFile(c, p.Name)
 			if err != nil {
 				return nil, err

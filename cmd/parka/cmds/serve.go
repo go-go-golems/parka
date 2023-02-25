@@ -52,7 +52,7 @@ var LsServerCmd = &cobra.Command{
 		err = json.Unmarshal(body, &cmds)
 		cobra.CheckErr(err)
 
-		gp, of, err := cli.SetupProcessor(cmd)
+		gp, of, err := cli.CreateGlazedProcessorFromCobra(cmd)
 		cobra.CheckErr(err)
 
 		for _, cmd := range cmds {
@@ -71,5 +71,6 @@ func init() {
 	ServeCmd.Flags().String("template-dir", "web/src/templates", "Directory containing templates")
 
 	LsServerCmd.PersistentFlags().String("server", "", "Server to list commands from")
-	cli.AddFlags(LsServerCmd, cli.NewFlagsDefaults())
+	err := cli.AddGlazedProcessorFlagsToCobraCommand(LsServerCmd, nil)
+	cobra.CheckErr(err)
 }

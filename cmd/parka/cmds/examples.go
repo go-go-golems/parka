@@ -1,8 +1,10 @@
 package cmds
 
 import (
+	"context"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 )
 
 type ExampleCommand struct {
@@ -15,82 +17,82 @@ func NewExampleCommand() *ExampleCommand {
 			Name:  "example",
 			Short: "Short parka example command",
 			Long:  "",
-			Flags: []*cmds.ParameterDefinition{
+			Flags: []*parameters.ParameterDefinition{
 				// required string test argument
 				{
 					Name:      "test",
 					ShortFlag: "t",
-					Type:      cmds.ParameterTypeString,
+					Type:      parameters.ParameterTypeString,
 					Help:      "Test string argument",
 					Required:  true,
 				},
 				{
 					Name:      "string",
 					ShortFlag: "s",
-					Type:      cmds.ParameterTypeString,
+					Type:      parameters.ParameterTypeString,
 					Help:      "Test string flag",
 					Default:   "default",
 					Required:  false,
 				},
 				{
 					Name: "string_from_file",
-					Type: cmds.ParameterTypeStringFromFile,
+					Type: parameters.ParameterTypeStringFromFile,
 					Help: "Test string from file flag",
 				},
 				{
 					Name: "object_from_file",
-					Type: cmds.ParameterTypeObjectFromFile,
+					Type: parameters.ParameterTypeObjectFromFile,
 					Help: "Test object from file flag",
 				},
 				{
 					Name:      "integer",
 					ShortFlag: "i",
-					Type:      cmds.ParameterTypeInteger,
+					Type:      parameters.ParameterTypeInteger,
 					Help:      "Test integer flag",
 					Default:   1,
 				},
 				{
 					Name:      "float",
 					ShortFlag: "f",
-					Type:      cmds.ParameterTypeFloat,
+					Type:      parameters.ParameterTypeFloat,
 					Help:      "Test float flag",
 					Default:   1.0,
 				},
 				{
 					Name:      "bool",
 					ShortFlag: "b",
-					Type:      cmds.ParameterTypeBool,
+					Type:      parameters.ParameterTypeBool,
 					Help:      "Test bool flag",
 				},
 				{
 					Name:      "date",
 					ShortFlag: "d",
-					Type:      cmds.ParameterTypeDate,
+					Type:      parameters.ParameterTypeDate,
 					Help:      "Test date flag",
 				},
 				{
 					Name:      "string_list",
 					ShortFlag: "l",
-					Type:      cmds.ParameterTypeStringList,
+					Type:      parameters.ParameterTypeStringList,
 					Help:      "Test string list flag",
 					Default:   []string{"default", "default2"},
 				},
 				{
 					Name:    "integer_list",
-					Type:    cmds.ParameterTypeIntegerList,
+					Type:    parameters.ParameterTypeIntegerList,
 					Help:    "Test integer list flag",
 					Default: []int{1, 2},
 				},
 				{
 					Name:    "float_list",
-					Type:    cmds.ParameterTypeFloatList,
+					Type:    parameters.ParameterTypeFloatList,
 					Help:    "Test float list flag",
 					Default: []float64{1.0, 2.0},
 				},
 				{
 					Name:      "choice",
 					ShortFlag: "c",
-					Type:      cmds.ParameterTypeChoice,
+					Type:      parameters.ParameterTypeChoice,
 					Help:      "Test choice flag",
 					Choices:   []string{"choice1", "choice2"},
 					Default:   "choice1",
@@ -100,20 +102,20 @@ func NewExampleCommand() *ExampleCommand {
 	}
 }
 
-func (e *ExampleCommand) Run(parameters map[string]interface{}, gp *cmds.GlazeProcessor) error {
+func (e *ExampleCommand) Run(ctx context.Context, ps map[string]interface{}, gp *cmds.GlazeProcessor) error {
 	obj := map[string]interface{}{
-		"test":             parameters["test"],
-		"string":           parameters["string"],
-		"string_from_file": parameters["string_from_file"],
-		"object_from_file": parameters["object_from_file"],
-		"integer":          parameters["integer"],
-		"float":            parameters["float"],
-		"bool":             parameters["bool"],
-		"date":             parameters["date"],
-		"string_list":      parameters["string_list"],
-		"integer_list":     parameters["integer_list"],
-		"float_list":       parameters["float_list"],
-		"choice":           parameters["choice"],
+		"test":             ps["test"],
+		"string":           ps["string"],
+		"string_from_file": ps["string_from_file"],
+		"object_from_file": ps["object_from_file"],
+		"integer":          ps["integer"],
+		"float":            ps["float"],
+		"bool":             ps["bool"],
+		"date":             ps["date"],
+		"string_list":      ps["string_list"],
+		"integer_list":     ps["integer_list"],
+		"float_list":       ps["float_list"],
+		"choice":           ps["choice"],
 	}
 	err := gp.ProcessInputObject(obj)
 	if err != nil {
@@ -128,6 +130,9 @@ func (e *ExampleCommand) Run(parameters map[string]interface{}, gp *cmds.GlazePr
 			"test2": []int{123, 123, 123, 123},
 		},
 	})
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -135,6 +140,6 @@ func (e *ExampleCommand) Description() *cmds.CommandDescription {
 	return e.description
 }
 
-func (e *ExampleCommand) RunFromParka(_ *gin.Context, parameters map[string]interface{}, gp *cmds.GlazeProcessor) error {
-	return e.Run(parameters, gp)
+func (e *ExampleCommand) RunFromParka(c *gin.Context, ps map[string]interface{}, gp *cmds.GlazeProcessor) error {
+	return e.Run(c, ps, gp)
 }

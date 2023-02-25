@@ -19,7 +19,7 @@ test:
 
 build:
 	go generate ./...
-	go build
+	go build ./...
 
 goreleaser:
 	goreleaser release --snapshot --rm-dist
@@ -29,4 +29,14 @@ tag-release:
 
 release:
 	git push origin ${VERSION}
-	GOPROXY=proxy.golang.org go list -m github.com/wesen/parka@${VERSION}
+	GOPROXY=proxy.golang.org go list -m github.com/go-go-golems/parka@${VERSION}
+
+bump-glazed:
+	go get github.com/go-go-golems/glazed@main
+	go get github.com/go-go-golems/clay@main
+	go mod tidy
+
+PARKA_BINARY=$(shell which parka)
+install:
+	go build -o ./dist/parka ./cmd/parka && \
+		cp ./dist/parka $(PARKA_BINARY)

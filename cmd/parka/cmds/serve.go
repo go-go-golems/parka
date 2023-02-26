@@ -26,24 +26,22 @@ var ServeCmd = &cobra.Command{
 
 		serverOptions = append(serverOptions, pkg.WithCommands(NewExampleCommand()))
 
-		s, _ := pkg.NewServer(serverOptions...)
-
 		dev, _ := cmd.Flags().GetBool("dev")
+		templateDir, err := cmd.Flags().GetString("template-dir")
+		cobra.CheckErr(err)
+
 		if dev {
 			log.Info().
 				Str("assetsDir", "pkg/web/dist").
 				Str("templateDir", "pkg/web/src/templates").
 				Msg("Using assets from disk")
-			err = s.ServeAssets("pkg/web/dist", "pkg/web/src/templates")
+			serverOptions = append(serverOptions, pkg.WithDevMode(templateDir, "pkg/web/src/templates", "pkg/web/dist"))
 			cobra.CheckErr(err)
-		} else {
-			log.Info().Msg("Using embedded assets")
-			err = s.ServeEmbeddedAssets()
 		}
 
-		templateDir, err := cmd.Flags().GetString("template-dir")
-		cobra.CheckErr(err)
-		if templateDir != "" {
+		s, _ := pkg.NewServer(serverOptions...)
+
+		if !dev && templateDir != "" {
 			log.Info().Str("templateDir", templateDir).Msg("Using custom template directory")
 
 			t := helpers.CreateHTMLTemplate("templates")
@@ -96,7 +94,7 @@ var LsServerCmd = &cobra.Command{
 
 func init() {
 	ServeCmd.Flags().Uint16("port", 8080, "Port to listen on")
-	ServeCmd.Flags().String("template-dir", "web/src/templates", "Directory containing templates")
+	ServeCmd.Flags().String("template-dir", "pkg/web/src/templates", "Directory containing templates")
 	ServeCmd.Flags().Bool("dev", false, "Enable development mode")
 
 	LsServerCmd.PersistentFlags().String("server", "", "Server to list commands from")

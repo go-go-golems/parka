@@ -7,7 +7,6 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
-	"os"
 	"strings"
 )
 
@@ -26,6 +25,11 @@ type Server struct {
 	Router   *gin.Engine
 	Commands []ParkaCommand
 
+	devMode             bool
+	devTemplateDir      string
+	devParkaTemplateDir string
+	devStaticDir        string
+
 	// used by HTML() calls to render a template
 	Template *template.Template
 
@@ -38,6 +42,15 @@ type ServerOption = func(*Server)
 func WithCommands(commands ...ParkaCommand) ServerOption {
 	return func(s *Server) {
 		s.Commands = append(s.Commands, commands...)
+	}
+}
+
+func WithDevMode(templateDir string, parkaTemplateDir string, staticDir string) ServerOption {
+	return func(s *Server) {
+		s.devMode = true
+		s.devTemplateDir = templateDir
+		s.devParkaTemplateDir = parkaTemplateDir
+		s.devStaticDir = staticDir
 	}
 }
 
@@ -109,29 +122,23 @@ func (s *Server) ServeEmbeddedAssets() error {
 	return nil
 }
 
-func (s *Server) ServeAssets(distPath string, templatePath string) error {
-	s.Router.Static("/dist", distPath)
-
-	t := helpers.CreateHTMLTemplate("templates")
-	if !strings.HasSuffix(templatePath, "/") {
-		templatePath += "/"
-	}
-	err := helpers.ParseHTMLFS(t, os.DirFS(templatePath), "**/*.tmpl.*", templatePath)
-	if err != nil {
-		return err
-	}
-	s.SetParkaTemplate(t)
-	return nil
-}
-
 func (s *Server) Run() error {
 
+	if s.devMode {
+		s.Router.Static("/dist", s.devStaticDir)
+	} else {
+		err := s.ServeEmbeddedAssets()
+		if err != nil {
+			return err
+		}
+	}
+
 	s.Router.GET("/", func(c *gin.Context) {
-		s.renderMarkdownTemplate(c, "index", nil)
+		s.serveMarkdownTemplate(c, "index", nil)
 	})
 	s.Router.GET("/:page", func(c *gin.Context) {
 		page := c.Param("page")
-		s.renderMarkdownTemplate(c, page, nil)
+		s.serveMarkdownTemplate(c, page, nil)
 	})
 
 	s.serveCommands()

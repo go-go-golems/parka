@@ -4,10 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-go-golems/glazed/pkg/cli"
+	"github.com/go-go-golems/glazed/pkg/helpers"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/wesen/parka/pkg"
 	"io"
 	"net/http"
+	"os"
+	"strings"
 )
 
 var ServeCmd = &cobra.Command{
@@ -20,13 +24,37 @@ var ServeCmd = &cobra.Command{
 
 		serverOptions := []pkg.ServerOption{}
 
-		templateDir, err := cmd.Flags().GetString("template-dir")
-		cobra.CheckErr(err)
-		serverOptions = append(serverOptions, pkg.WithTemplateDir(templateDir))
 		serverOptions = append(serverOptions, pkg.WithCommands(NewExampleCommand()))
 
-		s := pkg.NewServer(serverOptions...)
+		s, _ := pkg.NewServer(serverOptions...)
 
+		dev, _ := cmd.Flags().GetBool("dev")
+		if dev {
+			log.Info().
+				Str("assetsDir", "pkg/web/dist").
+				Str("templateDir", "pkg/web/src/templates").
+				Msg("Using assets from disk")
+			err = s.ServeAssets("pkg/web/dist", "pkg/web/src/templates")
+			cobra.CheckErr(err)
+		} else {
+			log.Info().Msg("Using embedded assets")
+			err = s.ServeEmbeddedAssets()
+		}
+
+		templateDir, err := cmd.Flags().GetString("template-dir")
+		cobra.CheckErr(err)
+		if templateDir != "" {
+			log.Info().Str("templateDir", templateDir).Msg("Using custom template directory")
+
+			t := helpers.CreateHTMLTemplate("templates")
+			if !strings.HasSuffix(templateDir, "/") {
+				templateDir += "/"
+			}
+			err = helpers.ParseHTMLFS(t, os.DirFS(templateDir), "**/*.tmpl.*", templateDir)
+			cobra.CheckErr(err)
+
+			s.SetTemplate(t)
+		}
 		err = s.Run()
 		cobra.CheckErr(err)
 	},
@@ -69,6 +97,7 @@ var LsServerCmd = &cobra.Command{
 func init() {
 	ServeCmd.Flags().Uint16("port", 8080, "Port to listen on")
 	ServeCmd.Flags().String("template-dir", "web/src/templates", "Directory containing templates")
+	ServeCmd.Flags().Bool("dev", false, "Enable development mode")
 
 	LsServerCmd.PersistentFlags().String("server", "", "Server to list commands from")
 	err := cli.AddGlazedProcessorFlagsToCobraCommand(LsServerCmd, nil)

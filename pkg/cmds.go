@@ -138,9 +138,22 @@ type ParkaCommand interface {
 	RunFromParka(c *gin.Context, parameters map[string]interface{}, gp *cmds.GlazeProcessor) error
 }
 
+type SimpleParkaCommand struct {
+	cmds.Command
+}
+
+func (s *SimpleParkaCommand) RunFromParka(c *gin.Context, parameters map[string]interface{}, gp *cmds.GlazeProcessor) error {
+	return s.Command.Run(c, parameters, gp)
+}
+
 func (s *Server) serveCommands() {
 	apiCmds := []interface{}{}
 
+	// this probably should be exposed as a constructor argument, instead
+	// making this generic and adding commands up front.
+	//
+	// Something with either WithCommand() at ocnstructor time,
+	// or probably better ServeCommand() once the server is created.
 	for _, cmd := range s.Commands {
 		description := cmd.Description()
 

@@ -18,6 +18,50 @@ by exposing the different flags and arguments as HTML forms).
 
 - [x] Serve templated file (test data)
 - [x] Serve tailwind CSS
+- [ ] Integrate glazed.Command and expose as web form / API
+- [ ] Integrate with htmx for dynamic webforms and dynamic apps]
+
+### 2023-02-25 - Working on exposing glazed commands
+
+Now that we have a proper generic framework for commands in glazed,
+we can start wrapping and exposing individual commands as APIs.
+
+We don't want to expose all arguments to a web api however, so the question is how to 
+restrict parameters and arguments:
+
+- add a new layer that specifies which arguments are exposed, how they get filtered
+- annotate the original command with a `web` tag, which specifies how an argument should be handled?
+- add additional section to command definition that can be loaded by parka (basically, the first option, but somehow
+  maybe added as an extension layer to glazed commands themselves, instead of being directly parka specific)
+
+In fact, we may want to add parka specific attributes to wrap the command,
+so an additional layer makes sense. For example, a template argument might be used generically
+to specify that different templates could be used. I don't know if this all makes sense declaratively,
+so I will first focus on a code only API.
+
+What I want to achieve today:
+
+- [ ] Reload HTML/JS from disk, not embed, to avoid having to recompile every 2 seconds
+  - it seems like that's already how it works? odd
+  - this might mean I have to add back the option to serve from embed
+- [ ] Wrap a simple command as both REST+JSON and web form + htmx
+- [ ] Wrap a geppetto command to build the rewrite prompting
+- [ ] Build and package the web application for easy deployment on DO
+
+#### Exposing commands as APIs
+
+There is already a whole function for exposing commands as APIs, so I'm going to build upon that.
+What I want to do is be able to specify a HTML template to render out HTML, when called in a certain 
+form. In fact, because of htmx, it might make sense to call a single wrapped command
+with different endpoints / additional parameters.
+
+#### How much CSS / MD / HTML to bundle with the parka package itself
+
+To make it easy to just bang out UIs, a fair amount of CSS and base HTML should already
+be bundled with the package itself. It should be possible to just import parka, register
+a command, and get going.
+
+But, we should make all these things overridable too. But let's start with a single simple override.
 
 ### 2023-01-30 - Brainstorm parka structure
 

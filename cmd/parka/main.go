@@ -1,8 +1,8 @@
 package main
 
 import (
+	"github.com/go-go-golems/parka/cmd/parka/cmds"
 	"github.com/spf13/cobra"
-	"github.com/wesen/parka/cmd/parka/cmds"
 )
 
 var rootCmd = &cobra.Command{

@@ -1,4 +1,4 @@
-module github.com/wesen/parka
+module github.com/go-go-golems/parka
 
 go 1.19
 

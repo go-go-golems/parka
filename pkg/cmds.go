@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/formatters"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
@@ -152,15 +153,26 @@ func parseFormData(c *gin.Context, ps []*parameters.ParameterDefinition) (map[st
 
 type ParkaCommand interface {
 	cmds.Command
-	RunFromParka(c *gin.Context, parameters map[string]interface{}, gp *cmds.GlazeProcessor) error
+	RunFromParka(
+		c *gin.Context,
+		parsedLayers map[string]*layers.ParsedParameterLayer,
+		parameters map[string]interface{},
+		gp *cmds.GlazeProcessor,
+	) error
 }
 
 type SimpleParkaCommand struct {
 	cmds.Command
 }
 
-func (s *SimpleParkaCommand) RunFromParka(c *gin.Context, parameters map[string]interface{}, gp *cmds.GlazeProcessor) error {
-	return s.Command.Run(c, parameters, gp)
+func (s *SimpleParkaCommand) RunFromParka(
+	c *gin.Context,
+	parsedLayers map[string]*layers.ParsedParameterLayer,
+	parameters map[string]interface{},
+	gp *cmds.GlazeProcessor,
+) error {
+	// TODO(manuel, 2023-02-27) Add parsed layers support
+	return s.Command.Run(c, parsedLayers, parameters, gp)
 }
 
 func NewSimpleParkaCommand(c cmds.Command) *SimpleParkaCommand {
@@ -188,15 +200,18 @@ func (s *Server) serveCommands() {
 
 		// GET and POST (?)
 		s.Router.GET(path, func(c *gin.Context) {
+			// TODO(manuel, 2023-02-27) Parse layers
 			flags, err := parseQueryParameters(c, append(description.Flags, description.Arguments...))
 			if err != nil {
 				c.JSON(400, gin.H{"error": err.Error()})
 				return
 			}
 
+			parsedLayers := map[string]*layers.ParsedParameterLayer{}
+
 			of, gp, _ := SetupProcessor()
 
-			err = cmd.RunFromParka(c, flags, gp)
+			err = cmd.RunFromParka(c, parsedLayers, flags, gp)
 			if err != nil {
 				c.JSON(500, gin.H{"error": err.Error()})
 				return
@@ -231,7 +246,9 @@ func (s *Server) serveCommands() {
 
 				of, gp, _ := SetupProcessor()
 
-				err = cmd.RunFromParka(c, flags, gp)
+				// TODO(manuel, 2023-02-27) parse layers
+				parsedLayers := map[string]*layers.ParsedParameterLayer{}
+				err = cmd.RunFromParka(c, parsedLayers, flags, gp)
 				if err != nil {
 					c.JSON(500, gin.H{"error": err.Error()})
 					return

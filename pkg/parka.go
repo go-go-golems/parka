@@ -3,7 +3,6 @@ package pkg
 import (
 	"embed"
 	"github.com/gin-gonic/gin"
-	"github.com/go-go-golems/glazed/pkg/helpers"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -17,24 +16,23 @@ var templateFS embed.FS
 var distFS embed.FS
 
 type StaticPath struct {
-	LocalPath string
-	UrlPath   string
+	fs      http.FileSystem
+	urlPath string
+}
+
+func NewStaticPath(fs http.FileSystem, urlPath string) StaticPath {
+	return StaticPath{
+		fs:      fs,
+		urlPath: urlPath,
+	}
 }
 
 type Server struct {
 	Router   *gin.Engine
 	Commands []ParkaCommand
 
-	devMode             bool
-	devTemplateDir      string
-	devParkaTemplateDir string
-	devStaticDir        string
-
-	// used by HTML() calls to render a template
-	Template *template.Template
-
-	// parka bundled templates
-	ParkaTemplate *template.Template
+	StaticPaths     []StaticPath
+	TemplateLookups []TemplateLookup
 }
 
 type ServerOption = func(*Server)
@@ -45,20 +43,45 @@ func WithCommands(commands ...ParkaCommand) ServerOption {
 	}
 }
 
-func WithDevMode(templateDir string, parkaTemplateDir string, staticDir string) ServerOption {
+func WithTemplateLookups(lookups ...TemplateLookup) ServerOption {
 	return func(s *Server) {
-		s.devMode = true
-		s.devTemplateDir = templateDir
-		s.devParkaTemplateDir = parkaTemplateDir
-		s.devStaticDir = staticDir
+		// prepend lookups to the list
+		s.TemplateLookups = append(lookups, s.TemplateLookups...)
+	}
+}
+
+func WithStaticPaths(paths ...StaticPath) ServerOption {
+	return func(s *Server) {
+		// prepend paths to the list
+	pathLoop:
+		for _, path := range paths {
+			for i, existingPath := range s.StaticPaths {
+				if existingPath.urlPath == path.urlPath {
+					s.StaticPaths[i] = path
+					continue pathLoop
+				}
+			}
+			s.StaticPaths = append(s.StaticPaths, path)
+		}
 	}
 }
 
 func NewServer(options ...ServerOption) (*Server, error) {
 	router := gin.Default()
 
+	parkaLookup, err := LookupTemplateFromFS(templateFS, "web/src/templates", "**/*.tmpl.*")
+	if err != nil {
+		return nil, err
+	}
+
 	s := &Server{
 		Router: router,
+		StaticPaths: []StaticPath{
+			NewStaticPath(NewEmbedFileSystem(distFS, "web/dist"), "/dist"),
+		},
+		TemplateLookups: []TemplateLookup{
+			parkaLookup,
+		},
 	}
 
 	for _, option := range options {
@@ -68,14 +91,8 @@ func NewServer(options ...ServerOption) (*Server, error) {
 	return s, nil
 }
 
-func (s *Server) SetTemplate(t *template.Template) {
-	s.Template = t
-}
-
-func (s *Server) SetParkaTemplate(t *template.Template) {
-	s.ParkaTemplate = t
-}
-
+// EmbedFileSystem is a helper to make an embed FS work as a http.FS,
+// which allows us to serve embed.FS using gin's `Static` middleware.
 type EmbedFileSystem struct {
 	f           http.FileSystem
 	stripPrefix string
@@ -110,35 +127,80 @@ func (e *EmbedFileSystem) Exists(prefix string, path string) bool {
 	return true
 }
 
-func (s *Server) ServeEmbeddedAssets() error {
-	s.Router.StaticFS("/dist", NewEmbedFileSystem(distFS, "web/dist/"))
+// LookupTemplate will iterate through the template lookups until it finds one of the
+// templates given in name.
+func (s *Server) LookupTemplate(name ...string) (*template.Template, error) {
+	var t *template.Template
 
-	t := helpers.CreateHTMLTemplate("templates")
-	err := helpers.ParseHTMLFS(t, templateFS, "**/*.tmpl.*", "web/src/templates/")
-	if err != nil {
-		return err
-	}
-	s.SetParkaTemplate(t)
-	return nil
-}
-
-func (s *Server) Run() error {
-
-	if s.devMode {
-		s.Router.Static("/dist", s.devStaticDir)
-	} else {
-		err := s.ServeEmbeddedAssets()
-		if err != nil {
-			return err
+	for _, lookup := range s.TemplateLookups {
+		t, err := lookup(name...)
+		if err == nil {
+			return t, nil
 		}
 	}
 
+	return t, nil
+}
+
+func (s *Server) serveMarkdownTemplatePage(c *gin.Context, page string, data interface{}) {
+	t, err := s.LookupTemplate(page+".tmpl.md", page+".md")
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Error rendering template")
+		return
+	}
+
+	if t != nil {
+		markdown, err := RenderMarkdownTemplateToHTML(t, nil)
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Error rendering markdown")
+			return
+		}
+
+		baseTemplate, err := s.LookupTemplate("base.tmpl.html")
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Error rendering template")
+			return
+		}
+
+		err = baseTemplate.Execute(
+			c.Writer,
+			map[string]interface{}{
+				"markdown": template.HTML(markdown),
+			})
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Error rendering template")
+			return
+		}
+	} else {
+		t, err = s.LookupTemplate(page+".tmpl.html", page+".html")
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Error rendering template")
+			return
+		}
+		if t == nil {
+			c.String(http.StatusInternalServerError, "Error rendering template")
+			return
+		}
+
+		err := t.Execute(c.Writer, data)
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Error rendering template")
+			return
+		}
+	}
+}
+
+func (s *Server) Run() error {
+	for _, path := range s.StaticPaths {
+		s.Router.StaticFS(path.urlPath, path.fs)
+	}
+
 	s.Router.GET("/", func(c *gin.Context) {
-		s.serveMarkdownTemplate(c, "index", nil)
+		s.serveMarkdownTemplatePage(c, "index", nil)
 	})
 	s.Router.GET("/:page", func(c *gin.Context) {
 		page := c.Param("page")
-		s.serveMarkdownTemplate(c, page, nil)
+		s.serveMarkdownTemplatePage(c, page, nil)
 	})
 
 	s.serveCommands()

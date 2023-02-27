@@ -1,7 +1,5 @@
 # Foo Bar
 
-blabalbla
-
 ```javascript
 Yo
 what ?

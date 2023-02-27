@@ -3,41 +3,26 @@ package pkg
 import (
 	"bytes"
 	"github.com/alecthomas/chroma/v2/formatters/html"
-	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/helpers"
+	"github.com/pkg/errors"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/extension"
 	html2 "github.com/yuin/goldmark/renderer/html"
 	"html/template"
 	"io/fs"
-	"net/http"
 	"os"
+	"strings"
 )
 
-func (s *Server) LoadTemplateFS(_fs fs.FS, patterns ...string) (*template.Template, error) {
-	tmpl := helpers.CreateHTMLTemplate("")
-	t, err := tmpl.ParseFS(_fs, patterns...)
-	if err != nil {
-		return nil, err
-	}
+type TemplateLookup func(name ...string) (*template.Template, error)
 
-	return t, nil
-}
-
-func (s *Server) LookupTemplate(name ...string) (*template.Template, error) {
-	var t *template.Template
-
-	if s.devMode {
-		possibleFileNames := []string{}
+// LookupTemplateFromDirectory will load a template at runtime. This is useful
+// for testing local changes to templates without having to recompile the app.
+func LookupTemplateFromDirectory(dir string) TemplateLookup {
+	return func(name ...string) (*template.Template, error) {
 		for _, n := range name {
-			possibleFileNames = append(possibleFileNames,
-				s.devTemplateDir+"/"+n,
-				s.devParkaTemplateDir+"/"+n,
-			)
-		}
-
-		for _, fileName := range possibleFileNames {
+			fileName := dir + "/" + n
 			// lookup in s.devTemplateDir
 			_, err := os.Stat(fileName)
 			if err == nil {
@@ -45,7 +30,7 @@ func (s *Server) LookupTemplate(name ...string) (*template.Template, error) {
 				if err != nil {
 					return nil, err
 				}
-				t, err = helpers.CreateHTMLTemplate("").Parse(string(b))
+				t, err := helpers.CreateHTMLTemplate("").Parse(string(b))
 				if err != nil {
 					return nil, err
 				}
@@ -53,72 +38,46 @@ func (s *Server) LookupTemplate(name ...string) (*template.Template, error) {
 				return t, nil
 			}
 		}
-	} else {
-		for _, n := range name {
-			// check if markdown file exists
-			t = s.Template.Lookup(n)
-			if t == nil {
-				t = s.ParkaTemplate.Lookup(n)
-			}
-			if t != nil {
-				break
-			}
-		}
+
+		return nil, errors.New("template not found")
 	}
-
-	return t, nil
-
 }
 
-func (s *Server) serveMarkdownTemplate(c *gin.Context, page string, data interface{}) {
-	t, err := s.LookupTemplate(page+".tmpl.md", page+".md")
+func LookupTemplateFromFS(_fs fs.FS, baseDir string, patterns ...string) (TemplateLookup, error) {
+	tmpl, err := LoadTemplateFS(_fs, baseDir, patterns...)
 	if err != nil {
-		c.String(http.StatusInternalServerError, "Error rendering template")
-		return
+		return nil, err
 	}
 
-	if t != nil {
-		markdown, err := s.RenderMarkdownTemplateToHTML(t, nil)
-		if err != nil {
-			c.String(http.StatusInternalServerError, "Error rendering markdown")
-			return
+	return func(name ...string) (*template.Template, error) {
+		for _, n := range name {
+			t := tmpl.Lookup(n)
+			if t != nil {
+				return t, nil
+			}
 		}
 
-		baseTemplate, err := s.LookupTemplate("base.tmpl.html")
-		if err != nil {
-			c.String(http.StatusInternalServerError, "Error rendering template")
-			return
-		}
-
-		err = baseTemplate.Execute(
-			c.Writer,
-			map[string]interface{}{
-				"markdown": template.HTML(markdown),
-			})
-		if err != nil {
-			c.String(http.StatusInternalServerError, "Error rendering template")
-			return
-		}
-	} else {
-		t, err = s.LookupTemplate(page+".tmpl.html", page+".html")
-		if err != nil {
-			c.String(http.StatusInternalServerError, "Error rendering template")
-			return
-		}
-		if t == nil {
-			c.String(http.StatusInternalServerError, "Error rendering template")
-			return
-		}
-
-		err := t.Execute(c.Writer, data)
-		if err != nil {
-			c.String(http.StatusInternalServerError, "Error rendering template")
-			return
-		}
-	}
+		return nil, errors.New("template not found")
+	}, nil
 }
 
-func (s *Server) RenderMarkdownTemplateToHTML(t *template.Template, data interface{}) (string, error) {
+func LoadTemplateFS(_fs fs.FS, baseDir string, patterns ...string) (*template.Template, error) {
+	if !strings.HasSuffix(baseDir, "/") {
+		baseDir += "/"
+	}
+	tmpl := helpers.CreateHTMLTemplate("")
+	var err error
+	for _, p := range patterns {
+		err = helpers.ParseHTMLFS(tmpl, _fs, p, baseDir)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return tmpl, nil
+}
+
+func RenderMarkdownTemplateToHTML(t *template.Template, data interface{}) (string, error) {
 	buf := new(bytes.Buffer)
 	err := t.Execute(buf, data)
 	if err != nil {
@@ -126,10 +85,10 @@ func (s *Server) RenderMarkdownTemplateToHTML(t *template.Template, data interfa
 	}
 	rendered := buf.String()
 
-	return s.RenderMarkdownToHTML(rendered)
+	return RenderMarkdownToHTML(rendered)
 }
 
-func (s *Server) RenderMarkdownToHTML(rendered string) (string, error) {
+func RenderMarkdownToHTML(rendered string) (string, error) {
 	engine := goldmark.New(
 		goldmark.WithExtensions(
 			// add tables

@@ -23,22 +23,39 @@ type JSONMarshaler interface {
 func parseQueryParameters(c *gin.Context, ps []*parameters.ParameterDefinition) (map[string]interface{}, error) {
 	params := make(map[string]interface{})
 	for _, p := range ps {
-		value := c.Query(p.Name)
-		if value == "" {
-			if p.Required {
-				return nil, fmt.Errorf("required parameter '%s' is missing", p.Name)
-			}
-			params[p.Name] = p.Default
-		} else if p.Type != parameters.ParameterTypeStringFromFile && p.Type != parameters.ParameterTypeObjectFromFile {
-			pValue, err := p.ParseParameter([]string{value})
-			if err != nil {
-				return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
-			}
-			params[p.Name] = pValue
-		} else {
+		// TOOD(manuel, 2023-02-26) this is where we catch the fromfile parameters
+		if parameters.IsFileLoadingParameter(p.Type, c.Query(p.Name)) {
 			// TODO(manuel, 2023-02-11) Implement file upload
 			// See https://github.com/go-go-golems/parka/issues/10
-			_ = 123
+
+			value := c.Query(p.Name)
+			if value == "" {
+				if p.Required {
+					return nil, fmt.Errorf("required parameter '%s' is missing", p.Name)
+				}
+				params[p.Name] = p.Default
+			} else {
+				f := strings.NewReader(value)
+				pValue, err := p.ParseFromReader(f, "")
+				if err != nil {
+					return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
+				}
+				params[p.Name] = pValue
+			}
+		} else {
+			value := c.Query(p.Name)
+			if value == "" {
+				if p.Required {
+					return nil, fmt.Errorf("required parameter '%s' is missing", p.Name)
+				}
+				params[p.Name] = p.Default
+			} else {
+				pValue, err := p.ParseParameter([]string{value})
+				if err != nil {
+					return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
+				}
+				params[p.Name] = pValue
+			}
 		}
 
 	}
@@ -146,6 +163,10 @@ func (s *SimpleParkaCommand) RunFromParka(c *gin.Context, parameters map[string]
 	return s.Command.Run(c, parameters, gp)
 }
 
+func NewSimpleParkaCommand(c cmds.Command) *SimpleParkaCommand {
+	return &SimpleParkaCommand{c}
+}
+
 func (s *Server) serveCommands() {
 	apiCmds := []interface{}{}
 
@@ -167,7 +188,7 @@ func (s *Server) serveCommands() {
 
 		// GET and POST (?)
 		s.Router.GET(path, func(c *gin.Context) {
-			flags, err := parseQueryParameters(c, description.Flags)
+			flags, err := parseQueryParameters(c, append(description.Flags, description.Arguments...))
 			if err != nil {
 				c.JSON(400, gin.H{"error": err.Error()})
 				return

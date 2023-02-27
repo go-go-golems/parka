@@ -18,7 +18,7 @@ by exposing the different flags and arguments as HTML forms).
 
 - [x] Serve templated file (test data)
 - [x] Serve tailwind CSS
-- [ ] Integrate glazed.Command and expose as web form / API
+- [-] Integrate glazed.Command and expose as web form / API
 - [ ] Integrate with htmx for dynamic webforms and dynamic apps]
 
 ### 2023-02-25 - Working on exposing glazed commands
@@ -41,12 +41,14 @@ so I will first focus on a code only API.
 
 What I want to achieve today:
 
-- [ ] Reload HTML/JS from disk, not embed, to avoid having to recompile every 2 seconds
+- [x] Reload HTML/JS from disk, not embed, to avoid having to recompile every 2 seconds
   - it seems like that's already how it works? odd
   - this might mean I have to add back the option to serve from embed
 - [ ] Wrap a simple command as both REST+JSON and web form + htmx
+  - does this mean we want to create a webform and go over every parameter?
+  - this could be a template provided by parka already (just pass it a list of parameter definitions and it creates a form)
 - [ ] Wrap a geppetto command to build the rewrite prompting
-- [ ] Build and package the web application for easy deployment on DO
+- [ ] Build and package the web application for easy deployment on DO, using parka as a library
 
 #### Exposing commands as APIs
 

@@ -4,14 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-go-golems/glazed/pkg/cli"
-	"github.com/go-go-golems/glazed/pkg/helpers"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/wesen/parka/pkg"
 	"io"
 	"net/http"
 	"os"
-	"strings"
 )
 
 var ServeCmd = &cobra.Command{
@@ -35,24 +33,26 @@ var ServeCmd = &cobra.Command{
 				Str("assetsDir", "pkg/web/dist").
 				Str("templateDir", "pkg/web/src/templates").
 				Msg("Using assets from disk")
-			serverOptions = append(serverOptions, pkg.WithDevMode(templateDir, "pkg/web/src/templates", "pkg/web/dist"))
+			serverOptions = append(serverOptions,
+				pkg.WithStaticPaths(pkg.NewStaticPath(http.FS(os.DirFS("pkg/web/dist")), "/dist")),
+				pkg.WithTemplateLookups(pkg.LookupTemplateFromDirectory("pkg/web/src/templates")),
+			)
 			cobra.CheckErr(err)
+		}
+
+		if templateDir != "" {
+			if dev {
+				serverOptions = append(serverOptions, pkg.WithTemplateLookups(pkg.LookupTemplateFromDirectory(templateDir)))
+
+			} else {
+				lookup, err := pkg.LookupTemplateFromFS(os.DirFS(templateDir), "**/*.tmpl.*", templateDir)
+				cobra.CheckErr(err)
+				serverOptions = append(serverOptions, pkg.WithTemplateLookups(lookup))
+			}
 		}
 
 		s, _ := pkg.NewServer(serverOptions...)
 
-		if !dev && templateDir != "" {
-			log.Info().Str("templateDir", templateDir).Msg("Using custom template directory")
-
-			t := helpers.CreateHTMLTemplate("templates")
-			if !strings.HasSuffix(templateDir, "/") {
-				templateDir += "/"
-			}
-			err = helpers.ParseHTMLFS(t, os.DirFS(templateDir), "**/*.tmpl.*", templateDir)
-			cobra.CheckErr(err)
-
-			s.SetTemplate(t)
-		}
 		err = s.Run()
 		cobra.CheckErr(err)
 	},

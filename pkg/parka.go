@@ -109,7 +109,7 @@ func NewEmbedFileSystem(f fs.FS, stripPrefix string) *EmbedFileSystem {
 }
 
 func (e *EmbedFileSystem) Open(name string) (http.File, error) {
-	strings.TrimPrefix(name, "/")
+	name = strings.TrimPrefix(name, "/")
 	return e.f.Open(e.stripPrefix + name)
 }
 

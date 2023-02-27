@@ -45,7 +45,7 @@ var ServeCmd = &cobra.Command{
 				serverOptions = append(serverOptions, pkg.WithTemplateLookups(pkg.LookupTemplateFromDirectory(templateDir)))
 
 			} else {
-				lookup, err := pkg.LookupTemplateFromFS(os.DirFS(templateDir), "**/*.tmpl.*", templateDir)
+				lookup, err := pkg.LookupTemplateFromFS(os.DirFS(templateDir), ".", "**/*.tmpl.*")
 				cobra.CheckErr(err)
 				serverOptions = append(serverOptions, pkg.WithTemplateLookups(lookup))
 			}
@@ -98,6 +98,6 @@ func init() {
 	ServeCmd.Flags().Bool("dev", false, "Enable development mode")
 
 	LsServerCmd.PersistentFlags().String("server", "", "Server to list commands from")
-	err := cli.AddGlazedProcessorFlagsToCobraCommand(LsServerCmd, nil)
+	err := cli.AddGlazedProcessorFlagsToCobraCommand(LsServerCmd)
 	cobra.CheckErr(err)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 )
 
@@ -102,7 +103,12 @@ func NewExampleCommand() *ExampleCommand {
 	}
 }
 
-func (e *ExampleCommand) Run(ctx context.Context, ps map[string]interface{}, gp *cmds.GlazeProcessor) error {
+func (e *ExampleCommand) Run(
+	ctx context.Context,
+	parsedLayers map[string]*layers.ParsedParameterLayer,
+	ps map[string]interface{},
+	gp *cmds.GlazeProcessor,
+) error {
 	obj := map[string]interface{}{
 		"test":             ps["test"],
 		"string":           ps["string"],
@@ -140,6 +146,6 @@ func (e *ExampleCommand) Description() *cmds.CommandDescription {
 	return e.description
 }
 
-func (e *ExampleCommand) RunFromParka(c *gin.Context, ps map[string]interface{}, gp *cmds.GlazeProcessor) error {
-	return e.Run(c, ps, gp)
+func (e *ExampleCommand) RunFromParka(c *gin.Context, parsedLayers map[string]*layers.ParsedParameterLayer, ps map[string]interface{}, gp *cmds.GlazeProcessor) error {
+	return e.Run(c, parsedLayers, ps, gp)
 }

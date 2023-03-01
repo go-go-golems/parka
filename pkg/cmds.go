@@ -6,7 +6,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/formatters"
-	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"net/http"
 )
 
@@ -356,7 +355,7 @@ func SetupProcessor() (*formatters.JSONOutputFormatter, *cmds.GlazeProcessor, er
 	// See https://github.com/go-go-golems/parka/issues/8
 
 	of := formatters.NewJSONOutputFormatter(true)
-	gp := cmds.NewGlazeProcessor(of, []middlewares.ObjectMiddleware{})
+	gp := cmds.NewGlazeProcessor(of)
 
 	return of, gp, nil
 }

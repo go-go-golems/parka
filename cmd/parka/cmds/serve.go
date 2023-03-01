@@ -22,8 +22,6 @@ var ServeCmd = &cobra.Command{
 
 		serverOptions := []pkg.ServerOption{}
 
-		serverOptions = append(serverOptions, pkg.WithCommands(NewExampleCommand()))
-
 		dev, _ := cmd.Flags().GetBool("dev")
 		templateDir, err := cmd.Flags().GetString("template-dir")
 		cobra.CheckErr(err)
@@ -52,6 +50,9 @@ var ServeCmd = &cobra.Command{
 		}
 
 		s, _ := pkg.NewServer(serverOptions...)
+
+		s.Router.GET("/api/example", s.HandleSimpleQueryCommand(NewExampleCommand()))
+		s.Router.POST("/api/example", s.HandleSimpleFormCommand(NewExampleCommand()))
 
 		err = s.Run()
 		cobra.CheckErr(err)

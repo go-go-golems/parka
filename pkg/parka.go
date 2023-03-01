@@ -28,20 +28,13 @@ func NewStaticPath(fs http.FileSystem, urlPath string) StaticPath {
 }
 
 type Server struct {
-	Router   *gin.Engine
-	Commands []ParkaCommand
+	Router *gin.Engine
 
 	StaticPaths     []StaticPath
 	TemplateLookups []TemplateLookup
 }
 
 type ServerOption = func(*Server)
-
-func WithCommands(commands ...ParkaCommand) ServerOption {
-	return func(s *Server) {
-		s.Commands = append(s.Commands, commands...)
-	}
-}
 
 func WithTemplateLookups(lookups ...TemplateLookup) ServerOption {
 	return func(s *Server) {
@@ -200,8 +193,6 @@ func (s *Server) Run() error {
 		page := c.Param("page")
 		s.serveMarkdownTemplatePage(c, page, nil)
 	})
-
-	s.serveCommands()
 
 	return s.Router.Run()
 }

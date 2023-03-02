@@ -51,7 +51,9 @@ var ServeCmd = &cobra.Command{
 
 		s, _ := pkg.NewServer(serverOptions...)
 
-		s.Router.GET("/api/example", s.HandleSimpleQueryCommand(NewExampleCommand()))
+		s.Router.GET("/api/example", s.HandleSimpleQueryCommand(
+			NewExampleCommand(),
+			[]pkg.ParserHandlerOption{}))
 		s.Router.POST("/api/example", s.HandleSimpleFormCommand(NewExampleCommand()))
 
 		err = s.Run()

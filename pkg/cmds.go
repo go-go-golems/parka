@@ -185,46 +185,87 @@ func NewParserHandler(options ...ParserHandlerOption) *ParserHandler {
 	return ph
 }
 
-func WithPreParameterDefinitionParser(p ParameterDefinitionParser) ParserHandlerOption {
-	return func(ph *ParserHandler) {
-		ph.ParameterDefinitionParsers = append([]ParameterDefinitionParser{p}, ph.ParameterDefinitionParsers...)
+func NewStaticParameterDefinitionParser(ps map[string]interface{}) ParameterDefinitionParser {
+	return func(
+		c *gin.Context,
+		ps_ map[string]interface{},
+		pds map[string]*parameters.ParameterDefinition,
+	) (map[string]*parameters.ParameterDefinition, error) {
+		// add the static parameters
+		for k, v := range ps {
+			ps_[k] = v
+		}
+
+		// no more parsing after this
+		return map[string]*parameters.ParameterDefinition{}, nil
 	}
 }
 
-func WithPostParameterDefinitionParser(p ParameterDefinitionParser) ParserHandlerOption {
-	return func(ph *ParserHandler) {
-		ph.ParameterDefinitionParsers = append(ph.ParameterDefinitionParsers, p)
+func NewStaticLayerParameterDefinitionParser(l layers.ParameterLayer) ParameterDefinitionParser {
+	return func(
+		c *gin.Context,
+		ps_ map[string]interface{},
+		pds map[string]*parameters.ParameterDefinition,
+	) (map[string]*parameters.ParameterDefinition, error) {
+		// add the static parameters
+		for _, pd := range l.GetParameterDefinitions() {
+			ps_[pd.Name] = pd.Default
+		}
+
+		// no more parsing after this
+		return map[string]*parameters.ParameterDefinition{}, nil
 	}
 }
 
-func WithReplaceParameterDefinitionParser(p ParameterDefinitionParser) ParserHandlerOption {
+func WithPreParameterDefinitionParsers(ps ...ParameterDefinitionParser) ParserHandlerOption {
 	return func(ph *ParserHandler) {
-		ph.ParameterDefinitionParsers = []ParameterDefinitionParser{p}
+		ph.ParameterDefinitionParsers = append(ps, ph.ParameterDefinitionParsers...)
 	}
 }
 
-func WithPreParameterLayerParser(slug string, p ParameterDefinitionParser) ParserHandlerOption {
+func WithPostParameterDefinitionParser(ps ...ParameterDefinitionParser) ParserHandlerOption {
+	return func(ph *ParserHandler) {
+		ph.ParameterDefinitionParsers = append(ph.ParameterDefinitionParsers, ps...)
+	}
+}
+
+func WithReplaceParameterDefinitionParser(ps ...ParameterDefinitionParser) ParserHandlerOption {
+	return func(ph *ParserHandler) {
+		ph.ParameterDefinitionParsers = ps
+	}
+}
+
+func WithPreParameterLayerParser(slug string, ps ...ParameterDefinitionParser) ParserHandlerOption {
 	return func(ph *ParserHandler) {
 		if _, ok := ph.ParameterLayerParsersBySlug[slug]; !ok {
 			ph.ParameterLayerParsersBySlug[slug] = []ParameterDefinitionParser{}
 		}
-		ph.ParameterLayerParsersBySlug[slug] = append([]ParameterDefinitionParser{p}, ph.ParameterLayerParsersBySlug[slug]...)
+		ph.ParameterLayerParsersBySlug[slug] = append(ps, ph.ParameterLayerParsersBySlug[slug]...)
 	}
 }
 
-func WithPostParameterLayerParser(slug string, p ParameterDefinitionParser) ParserHandlerOption {
+func WithPostParameterLayerParser(slug string, ps ...ParameterDefinitionParser) ParserHandlerOption {
 	return func(ph *ParserHandler) {
 		if _, ok := ph.ParameterLayerParsersBySlug[slug]; !ok {
 			ph.ParameterLayerParsersBySlug[slug] = []ParameterDefinitionParser{}
 		}
-		ph.ParameterLayerParsersBySlug[slug] = append(ph.ParameterLayerParsersBySlug[slug], p)
+		ph.ParameterLayerParsersBySlug[slug] = append(ph.ParameterLayerParsersBySlug[slug], ps...)
 	}
 }
 
-func WithReplaceParameterLayerParser(slug string, p ParameterDefinitionParser) ParserHandlerOption {
+func WithReplaceParameterLayerParser(slug string, ps ...ParameterDefinitionParser) ParserHandlerOption {
 	return func(ph *ParserHandler) {
-		ph.ParameterLayerParsersBySlug[slug] = []ParameterDefinitionParser{p}
+		ph.ParameterLayerParsersBySlug[slug] = ps
 	}
+}
+
+func WithCustomizedParameterLayerParser(l layers.ParameterLayer, overrides map[string]interface{}) ParserHandlerOption {
+	slug := l.GetSlug()
+	return WithReplaceParameterLayerParser(
+		slug,
+		NewStaticLayerParameterDefinitionParser(l),
+		NewStaticParameterDefinitionParser(overrides),
+	)
 }
 
 func NewQueryParserHandler(cmd cmds.Command, options ...ParserHandlerOption) *ParserHandler {
@@ -323,10 +364,11 @@ func WithCommandParser(cmd cmds.Command, parserHandler *ParserHandler) ParkaHand
 
 func (s *Server) HandleSimpleQueryCommand(
 	cmd cmds.Command,
+	parserOptions []ParserHandlerOption,
 	handlers ...ParkaHandlerFunc,
 ) gin.HandlerFunc {
 	handlers_ := []ParkaHandlerFunc{
-		WithCommandParser(cmd, NewQueryParserHandler(cmd)),
+		WithCommandParser(cmd, NewQueryParserHandler(cmd, parserOptions...)),
 	}
 	handlers_ = append(handlers_, handlers...)
 	return NewGinHandlerFromParkaHandlers(cmd, handlers_...)

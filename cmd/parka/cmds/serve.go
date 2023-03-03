@@ -33,19 +33,19 @@ var ServeCmd = &cobra.Command{
 				Msg("Using assets from disk")
 			serverOptions = append(serverOptions,
 				pkg.WithStaticPaths(pkg.NewStaticPath(http.FS(os.DirFS("pkg/web/dist")), "/dist")),
-				pkg.WithTemplateLookups(pkg.LookupTemplateFromDirectory("pkg/web/src/templates")),
+				pkg.WithPrependTemplateLookups(pkg.LookupTemplateFromDirectory("pkg/web/src/templates")),
 			)
 			cobra.CheckErr(err)
 		}
 
 		if templateDir != "" {
 			if dev {
-				serverOptions = append(serverOptions, pkg.WithTemplateLookups(pkg.LookupTemplateFromDirectory(templateDir)))
+				serverOptions = append(serverOptions, pkg.WithPrependTemplateLookups(pkg.LookupTemplateFromDirectory(templateDir)))
 
 			} else {
 				lookup, err := pkg.LookupTemplateFromFS(os.DirFS(templateDir), ".", "**/*.tmpl.*")
 				cobra.CheckErr(err)
-				serverOptions = append(serverOptions, pkg.WithTemplateLookups(lookup))
+				serverOptions = append(serverOptions, pkg.WithPrependTemplateLookups(lookup))
 			}
 		}
 
@@ -70,7 +70,12 @@ var LsServerCmd = &cobra.Command{
 
 		resp, err := http.Get(server + "/api/commands")
 		cobra.CheckErr(err)
-		defer resp.Body.Close()
+		defer func(Body io.ReadCloser) {
+			err := Body.Close()
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to close response body")
+			}
+		}(resp.Body)
 
 		// Read the response body
 		body, err := io.ReadAll(resp.Body)

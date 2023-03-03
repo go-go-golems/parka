@@ -40,10 +40,23 @@ type Server struct {
 
 type ServerOption = func(*Server)
 
-func WithTemplateLookups(lookups ...TemplateLookup) ServerOption {
+func WithPrependTemplateLookups(lookups ...TemplateLookup) ServerOption {
 	return func(s *Server) {
 		// prepend lookups to the list
 		s.TemplateLookups = append(lookups, s.TemplateLookups...)
+	}
+}
+
+func WithAppendTemplateLookups(lookups ...TemplateLookup) ServerOption {
+	return func(s *Server) {
+		// append lookups to the list
+		s.TemplateLookups = append(s.TemplateLookups, lookups...)
+	}
+}
+
+func WithReplaceTemplateLookups(lookups ...TemplateLookup) ServerOption {
+	return func(s *Server) {
+		s.TemplateLookups = lookups
 	}
 }
 

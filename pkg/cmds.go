@@ -268,6 +268,16 @@ func WithCustomizedParameterLayerParser(l layers.ParameterLayer, overrides map[s
 	)
 }
 
+func WithGlazeOutputParserOption(gl *cli.GlazedParameterLayers, output string, tableFormat string) ParserHandlerOption {
+	return WithCustomizedParameterLayerParser(
+		gl,
+		map[string]interface{}{
+			"output":       output,
+			"table-format": tableFormat,
+		},
+	)
+}
+
 func NewQueryParserHandler(cmd cmds.Command, options ...ParserHandlerOption) *ParserHandler {
 	d := cmd.Description()
 

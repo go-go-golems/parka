@@ -2,10 +2,12 @@ package pkg
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/formatters"
+	"html/template"
 	"net/http"
 )
 
@@ -131,100 +133,6 @@ func NewParkaContext(cmd cmds.Command) *ParkaContext {
 
 type ParkaHandlerFunc func(*gin.Context, *ParkaContext) error
 
-func HandleParsedParametersFromQuery(
-	ps map[string]*parameters.ParameterDefinition,
-	onlyDefined bool,
-) ParkaHandlerFunc {
-	return func(c *gin.Context, pc *ParkaContext) error {
-		parsedParameters, err := parseQueryFromParameterDefinitions(c, ps, onlyDefined)
-		if err != nil {
-			return err
-		}
-		for k, v := range parsedParameters {
-			pc.ParsedParameters[k] = v
-		}
-
-		return nil
-	}
-}
-
-func HandleParsedLayersFromQuery(
-	layers_ []layers.ParameterLayer,
-	onlyDefined bool,
-) ParkaHandlerFunc {
-	return func(c *gin.Context, pc *ParkaContext) error {
-		for _, layer := range layers_ {
-			parsedParameters, err := parseQueryFromParameterDefinitions(
-				c, layer.GetParameterDefinitions(),
-				onlyDefined,
-			)
-			if err != nil {
-				return err
-			}
-			name := layer.GetName()
-			parsedLayer, ok := pc.ParsedLayers[name]
-			if ok {
-				for k, v := range parsedParameters {
-					parsedLayer.Parameters[k] = v
-				}
-			} else {
-				pc.ParsedLayers[name] = &layers.ParsedParameterLayer{
-					Layer:      layer,
-					Parameters: parsedParameters,
-				}
-			}
-		}
-		return nil
-	}
-}
-
-func HandleParsedParametersFromForm(
-	ps map[string]*parameters.ParameterDefinition,
-	onlyDefined bool,
-) ParkaHandlerFunc {
-	return func(c *gin.Context, pc *ParkaContext) error {
-		parsedParameters, err := parseFormFromParameterDefinitions(c, ps, onlyDefined)
-		if err != nil {
-			return err
-		}
-		for k, v := range parsedParameters {
-			pc.ParsedParameters[k] = v
-		}
-
-		return nil
-	}
-}
-
-func HandleParsedLayersFromForm(
-	layers_ []layers.ParameterLayer,
-	onlyDefined bool,
-) ParkaHandlerFunc {
-	return func(c *gin.Context, pc *ParkaContext) error {
-		for _, layer := range layers_ {
-			parsedParameters, err := parseFormFromParameterDefinitions(
-				c, layer.GetParameterDefinitions(),
-				onlyDefined,
-			)
-			if err != nil {
-				return err
-			}
-			name := layer.GetName()
-			parsedLayer, ok := pc.ParsedLayers[name]
-			if ok {
-				for k, v := range parsedParameters {
-					parsedLayer.Parameters[k] = v
-				}
-			} else {
-				pc.ParsedLayers[name] = &layers.ParsedParameterLayer{
-					Layer:      layer,
-					Parameters: parsedParameters,
-				}
-			}
-		}
-		return nil
-	}
-}
-
 func HandlePrepopulatedParameters(ps map[string]interface{}) ParkaHandlerFunc {
 	return func(c *gin.Context, pc *ParkaContext) error {
 		for k, v := range ps {
@@ -250,51 +158,248 @@ func HandlePrepopulatedParsedLayers(layers_ map[string]*layers.ParsedParameterLa
 	}
 }
 
+// HTMLTemplateHandler is a handler that renders a template
+// and also provides affordances to control what input parameters are passed downstream
+// Its main purpose is to be used as a fragment renderer for htmx calls
+type HTMLTemplateHandler struct {
+	Template *template.Template
+}
+
+type ParserHandler struct {
+	ParameterDefinitionParsers  []ParameterDefinitionParser
+	ParameterLayerParsersBySlug map[string][]ParameterDefinitionParser
+}
+
+type ParserHandlerOption func(*ParserHandler)
+
+func NewParserHandler(options ...ParserHandlerOption) *ParserHandler {
+	ph := &ParserHandler{
+		ParameterDefinitionParsers:  []ParameterDefinitionParser{},
+		ParameterLayerParsersBySlug: map[string][]ParameterDefinitionParser{},
+	}
+
+	for _, option := range options {
+		option(ph)
+	}
+
+	return ph
+}
+
+func NewStaticParameterDefinitionParser(ps map[string]interface{}) ParameterDefinitionParser {
+	return func(
+		c *gin.Context,
+		ps_ map[string]interface{},
+		pds map[string]*parameters.ParameterDefinition,
+	) (map[string]*parameters.ParameterDefinition, error) {
+		// add the static parameters
+		for k, v := range ps {
+			ps_[k] = v
+		}
+
+		// no more parsing after this
+		return map[string]*parameters.ParameterDefinition{}, nil
+	}
+}
+
+func NewStaticLayerParameterDefinitionParser(l layers.ParameterLayer) ParameterDefinitionParser {
+	return func(
+		c *gin.Context,
+		ps_ map[string]interface{},
+		pds map[string]*parameters.ParameterDefinition,
+	) (map[string]*parameters.ParameterDefinition, error) {
+		// add the static parameters
+		for _, pd := range l.GetParameterDefinitions() {
+			ps_[pd.Name] = pd.Default
+		}
+
+		// no more parsing after this
+		return map[string]*parameters.ParameterDefinition{}, nil
+	}
+}
+
+func WithPreParameterDefinitionParsers(ps ...ParameterDefinitionParser) ParserHandlerOption {
+	return func(ph *ParserHandler) {
+		ph.ParameterDefinitionParsers = append(ps, ph.ParameterDefinitionParsers...)
+	}
+}
+
+func WithPostParameterDefinitionParser(ps ...ParameterDefinitionParser) ParserHandlerOption {
+	return func(ph *ParserHandler) {
+		ph.ParameterDefinitionParsers = append(ph.ParameterDefinitionParsers, ps...)
+	}
+}
+
+func WithReplaceParameterDefinitionParser(ps ...ParameterDefinitionParser) ParserHandlerOption {
+	return func(ph *ParserHandler) {
+		ph.ParameterDefinitionParsers = ps
+	}
+}
+
+func WithPreParameterLayerParser(slug string, ps ...ParameterDefinitionParser) ParserHandlerOption {
+	return func(ph *ParserHandler) {
+		if _, ok := ph.ParameterLayerParsersBySlug[slug]; !ok {
+			ph.ParameterLayerParsersBySlug[slug] = []ParameterDefinitionParser{}
+		}
+		ph.ParameterLayerParsersBySlug[slug] = append(ps, ph.ParameterLayerParsersBySlug[slug]...)
+	}
+}
+
+func WithPostParameterLayerParser(slug string, ps ...ParameterDefinitionParser) ParserHandlerOption {
+	return func(ph *ParserHandler) {
+		if _, ok := ph.ParameterLayerParsersBySlug[slug]; !ok {
+			ph.ParameterLayerParsersBySlug[slug] = []ParameterDefinitionParser{}
+		}
+		ph.ParameterLayerParsersBySlug[slug] = append(ph.ParameterLayerParsersBySlug[slug], ps...)
+	}
+}
+
+func WithReplaceParameterLayerParser(slug string, ps ...ParameterDefinitionParser) ParserHandlerOption {
+	return func(ph *ParserHandler) {
+		ph.ParameterLayerParsersBySlug[slug] = ps
+	}
+}
+
+func WithCustomizedParameterLayerParser(l layers.ParameterLayer, overrides map[string]interface{}) ParserHandlerOption {
+	slug := l.GetSlug()
+	return WithReplaceParameterLayerParser(
+		slug,
+		NewStaticLayerParameterDefinitionParser(l),
+		NewStaticParameterDefinitionParser(overrides),
+	)
+}
+
+func WithGlazeOutputParserOption(gl *cli.GlazedParameterLayers, output string, tableFormat string) ParserHandlerOption {
+	return WithCustomizedParameterLayerParser(
+		gl,
+		map[string]interface{}{
+			"output":       output,
+			"table-format": tableFormat,
+		},
+	)
+}
+
+func NewQueryParserHandler(cmd cmds.Command, options ...ParserHandlerOption) *ParserHandler {
+	d := cmd.Description()
+
+	ph := NewParserHandler()
+	ph.ParameterDefinitionParsers = []ParameterDefinitionParser{
+		parseQueryFromParameterDefinitions(false),
+	}
+
+	for _, l := range d.Layers {
+		slug := l.GetSlug()
+		ph.ParameterLayerParsersBySlug[slug] = []ParameterDefinitionParser{
+			parseQueryFromParameterDefinitions(false),
+		}
+	}
+
+	for _, option := range options {
+		option(ph)
+	}
+
+	return ph
+}
+
+func NewFormParserHandler(cmd cmds.Command, options ...ParserHandlerOption) *ParserHandler {
+	d := cmd.Description()
+
+	ph := NewParserHandler()
+	ph.ParameterDefinitionParsers = []ParameterDefinitionParser{
+		parseFormFromParameterDefinitions(false),
+	}
+
+	for _, l := range d.Layers {
+		slug := l.GetSlug()
+		ph.ParameterLayerParsersBySlug[slug] = []ParameterDefinitionParser{
+			parseFormFromParameterDefinitions(false),
+		}
+	}
+
+	for _, option := range options {
+		option(ph)
+	}
+
+	return ph
+}
+
+func WithCommandParser(cmd cmds.Command, parserHandler *ParserHandler) ParkaHandlerFunc {
+	d := cmd.Description()
+
+	var err error
+
+	return func(c *gin.Context, pc *ParkaContext) error {
+		pds := map[string]*parameters.ParameterDefinition{}
+		for _, p := range d.Flags {
+			pds[p.Name] = p
+		}
+		for _, p := range d.Arguments {
+			pds[p.Name] = p
+		}
+
+		for _, o := range parserHandler.ParameterDefinitionParsers {
+			pds, err = o(c, pc.ParsedParameters, pds)
+			if err != nil {
+				return err
+			}
+		}
+
+		for _, l := range d.Layers {
+			slug := l.GetSlug()
+			parsers, ok := parserHandler.ParameterLayerParsersBySlug[slug]
+			if !ok {
+				continue
+			}
+
+			_, ok = pc.ParsedLayers[slug]
+			if !ok {
+				pc.ParsedLayers[slug] = &layers.ParsedParameterLayer{
+					Layer:      l,
+					Parameters: map[string]interface{}{},
+				}
+			}
+
+			pds = l.GetParameterDefinitions()
+
+			for _, o := range parsers {
+				pds, err = o(c, pc.ParsedLayers[slug].Parameters, pds)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	}
+}
+
+func (s *Server) HandleSimpleQueryCommand(
+	cmd cmds.Command,
+	parserOptions []ParserHandlerOption,
+	handlers ...ParkaHandlerFunc,
+) gin.HandlerFunc {
+	handlers_ := []ParkaHandlerFunc{
+		WithCommandParser(cmd, NewQueryParserHandler(cmd, parserOptions...)),
+	}
+	handlers_ = append(handlers_, handlers...)
+	return NewGinHandlerFromParkaHandlers(cmd, handlers_...)
+}
+
 // TODO(manuel, 2023-02-28) We want to provide a handler to catch errors while parsing parameters
 
 func (s *Server) HandleSimpleFormCommand(
 	cmd cmds.Command,
 	handlers ...ParkaHandlerFunc,
 ) gin.HandlerFunc {
-	d := cmd.Description()
-	pds := map[string]*parameters.ParameterDefinition{}
-	for _, p := range d.Flags {
-		pds[p.Name] = p
+	handlers_ := []ParkaHandlerFunc{
+		WithCommandParser(cmd, NewFormParserHandler(cmd)),
 	}
-	for _, p := range d.Arguments {
-		pds[p.Name] = p
-	}
-
-	pdHandler := HandleParsedParametersFromForm(pds, false)
-	layersHandler := HandleParsedLayersFromForm(d.Layers, false)
-
-	return NewGinHandlerFromParkaHandlers(cmd, handlers, pdHandler, layersHandler)
-}
-
-func (s *Server) HandleSimpleQueryCommand(
-	cmd cmds.Command,
-	handlers ...ParkaHandlerFunc,
-) gin.HandlerFunc {
-	d := cmd.Description()
-	pds := map[string]*parameters.ParameterDefinition{}
-	for _, p := range d.Flags {
-		pds[p.Name] = p
-	}
-	for _, p := range d.Arguments {
-		pds[p.Name] = p
-	}
-
-	pdHandler := HandleParsedParametersFromQuery(pds, false)
-	layersHandler := HandleParsedLayersFromQuery(d.Layers, false)
-
-	return NewGinHandlerFromParkaHandlers(cmd, handlers, pdHandler, layersHandler)
+	handlers_ = append(handlers_, handlers...)
+	return NewGinHandlerFromParkaHandlers(cmd, handlers_...)
 }
 
 func NewGinHandlerFromParkaHandlers(
 	cmd cmds.Command,
-	handlers []ParkaHandlerFunc,
-	pdHandler ParkaHandlerFunc,
-	layersHandler ParkaHandlerFunc,
+	handlers ...ParkaHandlerFunc,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// NOTE(manuel, 2023-02-28) Add initial middleware handlers here
@@ -303,27 +408,15 @@ func NewGinHandlerFromParkaHandlers(
 		// context before passing it downstream
 		pc := NewParkaContext(cmd)
 
-		err := pdHandler(c, pc)
-		if err != nil {
-			_ = c.AbortWithError(http.StatusBadRequest, err)
-			return
-		}
-
-		err = layersHandler(c, pc)
-		if err != nil {
-			_ = c.AbortWithError(http.StatusBadRequest, err)
-			return
-		}
-
 		for _, h := range handlers {
-			err = h(c, pc)
+			err := h(c, pc)
 			if err != nil {
 				_ = c.AbortWithError(http.StatusBadRequest, err)
 				return
 			}
 		}
 
-		of, gp, err := SetupProcessor()
+		gp, of, err := SetupProcessor(pc)
 		if err != nil {
 			_ = c.AbortWithError(http.StatusInternalServerError, err)
 			return
@@ -334,28 +427,60 @@ func NewGinHandlerFromParkaHandlers(
 			return
 		}
 
+		// TODO(manuel, 2023-03-02) We might want to switch on the requested content type here too
+
+		var contentType string
+
+		switch of_ := of.(type) {
+		case *formatters.JSONOutputFormatter:
+			contentType = "application/json"
+		case *formatters.CSVOutputFormatter:
+			contentType = "text/csv"
+		case *formatters.TableOutputFormatter:
+			//exhaustive:ignore
+			switch of_.TableFormat {
+			case "html":
+				contentType = "text/html"
+			case "markdown":
+				contentType = "text/markdown"
+			default:
+			}
+		case *formatters.YAMLOutputFormatter:
+			contentType = "application/x-yaml"
+		case *formatters.TemplateFormatter:
+			// TODO(manuel, 2023-03-02) Unclear how to render HTML templates or text templates here
+			// probably the best idea is to have the formatter return a content type anyway
+			contentType = "text/html"
+		}
+
 		// get gp output
-		_, err = of.Output()
+		s, err := of.Output()
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
 
-		rows := []map[string]interface{}{}
-		for _, row := range of.Table.Rows {
-			rows = append(rows, row.GetValues())
+		c.Status(200)
+		c.Writer.Header().Set("Content-Type", contentType)
+		_, err = c.Writer.Write([]byte(s))
+		if err != nil {
+			_ = c.AbortWithError(http.StatusInternalServerError, err)
+			return
 		}
-
-		c.JSON(200, rows)
 	}
 }
 
-func SetupProcessor() (*formatters.JSONOutputFormatter, *cmds.GlazeProcessor, error) {
+func SetupProcessor(pc *ParkaContext) (*cmds.GlazeProcessor, formatters.OutputFormatter, error) {
 	// TODO(manuel, 2023-02-11) For now, create a raw JSON output formatter. We will want more nuance here
 	// See https://github.com/go-go-golems/parka/issues/8
+
+	l, ok := pc.ParsedLayers["glazed"]
+	if ok {
+		return cli.SetupProcessor(l.Parameters)
+	}
 
 	of := formatters.NewJSONOutputFormatter(true)
 	gp := cmds.NewGlazeProcessor(of)
 
-	return of, gp, nil
+	return gp, of, nil
 }

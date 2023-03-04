@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"embed"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"html/template"
 	"io/fs"
@@ -32,14 +33,30 @@ type Server struct {
 
 	StaticPaths     []StaticPath
 	TemplateLookups []TemplateLookup
+
+	Port    uint16
+	Address string
 }
 
 type ServerOption = func(*Server)
 
-func WithTemplateLookups(lookups ...TemplateLookup) ServerOption {
+func WithPrependTemplateLookups(lookups ...TemplateLookup) ServerOption {
 	return func(s *Server) {
 		// prepend lookups to the list
 		s.TemplateLookups = append(lookups, s.TemplateLookups...)
+	}
+}
+
+func WithAppendTemplateLookups(lookups ...TemplateLookup) ServerOption {
+	return func(s *Server) {
+		// append lookups to the list
+		s.TemplateLookups = append(s.TemplateLookups, lookups...)
+	}
+}
+
+func WithReplaceTemplateLookups(lookups ...TemplateLookup) ServerOption {
+	return func(s *Server) {
+		s.TemplateLookups = lookups
 	}
 }
 
@@ -56,6 +73,18 @@ func WithStaticPaths(paths ...StaticPath) ServerOption {
 			}
 			s.StaticPaths = append(s.StaticPaths, path)
 		}
+	}
+}
+
+func WithPort(port uint16) ServerOption {
+	return func(s *Server) {
+		s.Port = port
+	}
+}
+
+func WithAddress(address string) ServerOption {
+	return func(s *Server) {
+		s.Address = address
 	}
 }
 
@@ -194,5 +223,6 @@ func (s *Server) Run() error {
 		s.serveMarkdownTemplatePage(c, page, nil)
 	})
 
-	return s.Router.Run()
+	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
+	return s.Router.Run(addr)
 }

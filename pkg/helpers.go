@@ -13,53 +13,64 @@ import (
 	"strings"
 )
 
-func parseQueryFromParameterDefinitions(
+// ParameterDefinitionParser can be used to intercept parsing certain values.
+// If a parameter shouldn't be handled by a follow up step, return a new hashmap
+// with the key deleted
+type ParameterDefinitionParser func(
 	c *gin.Context,
-	pd map[string]*parameters.ParameterDefinition,
-	onlyDefined bool,
-) (map[string]interface{}, error) {
-	ps := make(map[string]interface{})
+	ps map[string]interface{},
+	pds map[string]*parameters.ParameterDefinition,
+) (map[string]*parameters.ParameterDefinition, error)
 
-	for _, p := range pd {
-		if parameters.IsFileLoadingParameter(p.Type, c.Query(p.Name)) {
-			// if the parameter is supposed to be read from a file, we will just pass in the query parameters
-			// as a placeholder here
-			value := c.Query(p.Name)
-			if value == "" {
-				if p.Required {
-					return nil, errors.Errorf("required parameter '%s' is missing", p.Name)
-				}
-				if !onlyDefined {
-					ps[p.Name] = p.Default
+func parseQueryFromParameterDefinitions(
+	onlyDefined bool,
+) ParameterDefinitionParser {
+	return func(c *gin.Context,
+		ps map[string]interface{},
+		pd map[string]*parameters.ParameterDefinition,
+	) (map[string]*parameters.ParameterDefinition, error) {
+
+		for _, p := range pd {
+			if parameters.IsFileLoadingParameter(p.Type, c.Query(p.Name)) {
+				// if the parameter is supposed to be read from a file, we will just pass in the query parameters
+				// as a placeholder here
+				value := c.Query(p.Name)
+				if value == "" {
+					if p.Required {
+						return nil, errors.Errorf("required parameter '%s' is missing", p.Name)
+					}
+					if !onlyDefined {
+						ps[p.Name] = p.Default
+					}
+				} else {
+					f := strings.NewReader(value)
+					pValue, err := p.ParseFromReader(f, "")
+					if err != nil {
+						return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
+					}
+					ps[p.Name] = pValue
 				}
 			} else {
-				f := strings.NewReader(value)
-				pValue, err := p.ParseFromReader(f, "")
-				if err != nil {
-					return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
+				value := c.Query(p.Name)
+				if value == "" {
+					if p.Required {
+						return nil, fmt.Errorf("required parameter '%s' is missing", p.Name)
+					}
+					if !onlyDefined {
+						ps[p.Name] = p.Default
+					}
+				} else {
+					pValue, err := p.ParseParameter([]string{value})
+					if err != nil {
+						return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
+					}
+					ps[p.Name] = pValue
 				}
-				ps[p.Name] = pValue
-			}
-		} else {
-			value := c.Query(p.Name)
-			if value == "" {
-				if p.Required {
-					return nil, fmt.Errorf("required parameter '%s' is missing", p.Name)
-				}
-				if !onlyDefined {
-					ps[p.Name] = p.Default
-				}
-			} else {
-				pValue, err := p.ParseParameter([]string{value})
-				if err != nil {
-					return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
-				}
-				ps[p.Name] = pValue
 			}
 		}
-	}
 
-	return ps, nil
+		return pd, nil
+	}
 }
 
 func parseStringFromFile(c *gin.Context, name string) (string, error) {
@@ -118,42 +129,44 @@ func parseObjectFromFile(c *gin.Context, name string) (map[string]interface{}, e
 }
 
 func parseFormFromParameterDefinitions(
-	c *gin.Context,
-	ps map[string]*parameters.ParameterDefinition,
 	onlyDefined bool,
-) (map[string]interface{}, error) {
-	params := make(map[string]interface{})
+) ParameterDefinitionParser {
+	return func(c *gin.Context,
+		ps map[string]interface{},
+		pd map[string]*parameters.ParameterDefinition,
+	) (map[string]*parameters.ParameterDefinition, error) {
 
-	for _, p := range ps {
-		value := c.PostForm(p.Name)
-		// TODO(manuel, 2023-02-28) is this enough to check if a file is missing?
-		if value == "" {
-			if p.Required {
-				return nil, fmt.Errorf("required parameter '%s' is missing", p.Name)
+		for _, p := range pd {
+			value := c.PostForm(p.Name)
+			// TODO(manuel, 2023-02-28) is this enough to check if a file is missing?
+			if value == "" {
+				if p.Required {
+					return nil, fmt.Errorf("required parameter '%s' is missing", p.Name)
+				}
+				if !onlyDefined {
+					ps[p.Name] = p.Default
+				}
+			} else if p.Type != parameters.ParameterTypeStringFromFile && p.Type != parameters.ParameterTypeObjectFromFile {
+				pValue, err := p.ParseParameter([]string{value})
+				if err != nil {
+					return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
+				}
+				ps[p.Name] = pValue
+			} else if p.Type == parameters.ParameterTypeStringFromFile {
+				s, err := parseStringFromFile(c, p.Name)
+				if err != nil {
+					return nil, err
+				}
+				ps[p.Name] = s
+			} else if p.Type == parameters.ParameterTypeObjectFromFile {
+				obj, err := parseObjectFromFile(c, p.Name)
+				if err != nil {
+					return nil, err
+				}
+				ps[p.Name] = obj
 			}
-			if !onlyDefined {
-				params[p.Name] = p.Default
-			}
-		} else if p.Type != parameters.ParameterTypeStringFromFile && p.Type != parameters.ParameterTypeObjectFromFile {
-			pValue, err := p.ParseParameter([]string{value})
-			if err != nil {
-				return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
-			}
-			params[p.Name] = pValue
-		} else if p.Type == parameters.ParameterTypeStringFromFile {
-			s, err := parseStringFromFile(c, p.Name)
-			if err != nil {
-				return nil, err
-			}
-			params[p.Name] = s
-		} else if p.Type == parameters.ParameterTypeObjectFromFile {
-			obj, err := parseObjectFromFile(c, p.Name)
-			if err != nil {
-				return nil, err
-			}
-			params[p.Name] = obj
 		}
-	}
 
-	return params, nil
+		return pd, nil
+	}
 }

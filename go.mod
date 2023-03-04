@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/alecthomas/chroma/v2 v2.2.0
 	github.com/gin-gonic/gin v1.9.0
-	github.com/go-go-golems/glazed v0.2.25
+	github.com/go-go-golems/glazed v0.2.30
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.29.0
 	github.com/spf13/cobra v1.6.1
@@ -19,6 +19,7 @@ require (
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible // indirect
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de // indirect
+	github.com/bmatcuk/doublestar/v4 v4.6.0 // indirect
 	github.com/bytedance/sonic v1.8.0 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
 	github.com/dlclark/regexp2 v1.7.0 // indirect
@@ -57,7 +58,6 @@ require (
 	github.com/tj/go-naturaldate v1.3.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.9 // indirect
-	github.com/wesen/filepathx v1.0.1-0.20230227021146-d1c2e34eff6e // indirect
 	golang.org/x/arch v0.0.0-20210923205945-b76863e36670 // indirect
 	golang.org/x/crypto v0.5.0 // indirect
 	golang.org/x/net v0.7.0 // indirect

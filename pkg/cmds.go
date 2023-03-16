@@ -116,14 +116,14 @@ type JSONMarshaler interface {
 // and can be worked upon by ParkaHandlerFuncs.
 type ParkaContext struct {
 	// Cmd is the command that will be executed
-	Cmd cmds.Command
+	Cmd cmds.GlazeCommand
 	// ParsedLayers contains the map of parsed layers parsed so far
 	ParsedLayers map[string]*layers.ParsedParameterLayer
 	// ParsedParameters contains the map of parsed parameters parsed so far
 	ParsedParameters map[string]interface{}
 }
 
-func NewParkaContext(cmd cmds.Command) *ParkaContext {
+func NewParkaContext(cmd cmds.GlazeCommand) *ParkaContext {
 	return &ParkaContext{
 		Cmd:              cmd,
 		ParsedLayers:     map[string]*layers.ParsedParameterLayer{},
@@ -278,7 +278,7 @@ func WithGlazeOutputParserOption(gl *cli.GlazedParameterLayers, output string, t
 	)
 }
 
-func NewQueryParserHandler(cmd cmds.Command, options ...ParserHandlerOption) *ParserHandler {
+func NewQueryParserHandler(cmd cmds.GlazeCommand, options ...ParserHandlerOption) *ParserHandler {
 	d := cmd.Description()
 
 	ph := NewParserHandler()
@@ -300,7 +300,7 @@ func NewQueryParserHandler(cmd cmds.Command, options ...ParserHandlerOption) *Pa
 	return ph
 }
 
-func NewFormParserHandler(cmd cmds.Command, options ...ParserHandlerOption) *ParserHandler {
+func NewFormParserHandler(cmd cmds.GlazeCommand, options ...ParserHandlerOption) *ParserHandler {
 	d := cmd.Description()
 
 	ph := NewParserHandler()
@@ -322,7 +322,7 @@ func NewFormParserHandler(cmd cmds.Command, options ...ParserHandlerOption) *Par
 	return ph
 }
 
-func WithCommandParser(cmd cmds.Command, parserHandler *ParserHandler) ParkaHandlerFunc {
+func WithCommandParser(cmd cmds.GlazeCommand, parserHandler *ParserHandler) ParkaHandlerFunc {
 	d := cmd.Description()
 
 	var err error
@@ -373,7 +373,7 @@ func WithCommandParser(cmd cmds.Command, parserHandler *ParserHandler) ParkaHand
 }
 
 func (s *Server) HandleSimpleQueryCommand(
-	cmd cmds.Command,
+	cmd cmds.GlazeCommand,
 	parserOptions []ParserHandlerOption,
 	handlers ...ParkaHandlerFunc,
 ) gin.HandlerFunc {
@@ -387,7 +387,7 @@ func (s *Server) HandleSimpleQueryCommand(
 // TODO(manuel, 2023-02-28) We want to provide a handler to catch errors while parsing parameters
 
 func (s *Server) HandleSimpleFormCommand(
-	cmd cmds.Command,
+	cmd cmds.GlazeCommand,
 	handlers ...ParkaHandlerFunc,
 ) gin.HandlerFunc {
 	handlers_ := []ParkaHandlerFunc{
@@ -398,7 +398,7 @@ func (s *Server) HandleSimpleFormCommand(
 }
 
 func NewGinHandlerFromParkaHandlers(
-	cmd cmds.Command,
+	cmd cmds.GlazeCommand,
 	handlers ...ParkaHandlerFunc,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {

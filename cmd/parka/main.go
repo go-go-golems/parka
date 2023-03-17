@@ -11,6 +11,8 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+	// Add viper, initLogger, helpSystem, all that jazz
+
 	rootCmd.AddCommand(cmds.ServeCmd)
 	rootCmd.AddCommand(cmds.LsServerCmd)
 }

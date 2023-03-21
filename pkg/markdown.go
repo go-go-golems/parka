@@ -3,7 +3,7 @@ package pkg
 import (
 	"bytes"
 	"github.com/alecthomas/chroma/v2/formatters/html"
-	"github.com/go-go-golems/glazed/pkg/helpers"
+	"github.com/go-go-golems/glazed/pkg/helpers/templating"
 	"github.com/pkg/errors"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark-highlighting/v2"
@@ -30,7 +30,7 @@ func LookupTemplateFromDirectory(dir string) TemplateLookup {
 				if err != nil {
 					return nil, err
 				}
-				t, err := helpers.CreateHTMLTemplate("").Parse(string(b))
+				t, err := templating.CreateHTMLTemplate("").Parse(string(b))
 				if err != nil {
 					return nil, err
 				}
@@ -65,10 +65,10 @@ func LoadTemplateFS(_fs fs.FS, baseDir string, patterns ...string) (*template.Te
 	if !strings.HasSuffix(baseDir, "/") {
 		baseDir += "/"
 	}
-	tmpl := helpers.CreateHTMLTemplate("")
+	tmpl := templating.CreateHTMLTemplate("")
 	var err error
 	for _, p := range patterns {
-		err = helpers.ParseHTMLFS(tmpl, _fs, p, baseDir)
+		err = templating.ParseHTMLFS(tmpl, _fs, p, baseDir)
 		if err != nil {
 			return nil, err
 		}

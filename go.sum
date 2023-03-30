@@ -90,8 +90,8 @@ github.com/gin-gonic/gin v1.9.0/go.mod h1:W1Me9+hsUSyj3CePGrd1/QrKJMSJ1Tu/0hFEH8
 github.com/go-gl/glfw v0.0.0-20190409004039-e6da0acd62b1/go.mod h1:vR7hzQXu2zJy9AVAgeJqvqgH9Q5CA+iKCZ2gyEVpxRU=
 github.com/go-gl/glfw/v3.3/glfw v0.0.0-20191125211704-12ad95a8df72/go.mod h1:tQ2UAYgL5IevRw8kRxooKSPJfGvJ9fJQFa0TUsXzTg8=
 github.com/go-gl/glfw/v3.3/glfw v0.0.0-20200222043503-6f7a984d4dc4/go.mod h1:tQ2UAYgL5IevRw8kRxooKSPJfGvJ9fJQFa0TUsXzTg8=
-github.com/go-go-golems/glazed v0.2.58 h1:BP2RxKiqk9eIdgWYHJkDUesoF++EJCtXcf2tqlC6CKo=
-github.com/go-go-golems/glazed v0.2.58/go.mod h1:Pz0PliywEn8lAMP6DH0+d3czZEOwgq2xzKQfmXA/Zfw=
+github.com/go-go-golems/glazed v0.2.63 h1:zDjqZW9pelkxV5qN3RCQYrR6p5WpucymWL+e4y4KzKU=
+github.com/go-go-golems/glazed v0.2.63/go.mod h1:Pz0PliywEn8lAMP6DH0+d3czZEOwgq2xzKQfmXA/Zfw=
 github.com/go-playground/assert/v2 v2.2.0 h1:JvknZsQTYeFEAhQwI4qEt9cyV5ONwRHC+lYKSsYSR8s=
 github.com/go-playground/locales v0.14.1 h1:EWaQ/wswjilfKLTECiXz7Rh+3BjFhfDFKv/oXslEjJA=
 github.com/go-playground/locales v0.14.1/go.mod h1:hxrqLVvrK65+Rwrd5Fc6F2O76J/NuW9t0sjnWqG1slY=

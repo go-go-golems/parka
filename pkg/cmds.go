@@ -7,6 +7,11 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/formatters"
+	"github.com/go-go-golems/glazed/pkg/formatters/csv"
+	"github.com/go-go-golems/glazed/pkg/formatters/json"
+	"github.com/go-go-golems/glazed/pkg/formatters/table"
+	template2 "github.com/go-go-golems/glazed/pkg/formatters/template"
+	"github.com/go-go-golems/glazed/pkg/formatters/yaml"
 	"html/template"
 	"net/http"
 )
@@ -432,11 +437,11 @@ func NewGinHandlerFromParkaHandlers(
 		var contentType string
 
 		switch of_ := of.(type) {
-		case *formatters.JSONOutputFormatter:
+		case *json.OutputFormatter:
 			contentType = "application/json"
-		case *formatters.CSVOutputFormatter:
+		case *csv.OutputFormatter:
 			contentType = "text/csv"
-		case *formatters.TableOutputFormatter:
+		case *table.OutputFormatter:
 			//exhaustive:ignore
 			switch of_.TableFormat {
 			case "html":
@@ -445,9 +450,9 @@ func NewGinHandlerFromParkaHandlers(
 				contentType = "text/markdown"
 			default:
 			}
-		case *formatters.YAMLOutputFormatter:
+		case *yaml.OutputFormatter:
 			contentType = "application/x-yaml"
-		case *formatters.TemplateFormatter:
+		case *template2.OutputFormatter:
 			// TODO(manuel, 2023-03-02) Unclear how to render HTML templates or text templates here
 			// probably the best idea is to have the formatter return a content type anyway
 			contentType = "text/html"
@@ -479,7 +484,9 @@ func SetupProcessor(pc *ParkaContext) (*cmds.GlazeProcessor, formatters.OutputFo
 		return cli.SetupProcessor(l.Parameters)
 	}
 
-	of := formatters.NewJSONOutputFormatter(true)
+	of := json.NewOutputFormatter(
+		json.WithOutputIndividualRows(true),
+	)
 	gp := cmds.NewGlazeProcessor(of)
 
 	return gp, of, nil

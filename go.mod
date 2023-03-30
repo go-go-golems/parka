@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/alecthomas/chroma/v2 v2.2.0
 	github.com/gin-gonic/gin v1.9.0
-	github.com/go-go-golems/glazed v0.2.51
+	github.com/go-go-golems/glazed v0.2.58
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.29.0
 	github.com/spf13/cobra v1.6.1

@@ -214,7 +214,9 @@ func NewStaticLayerParameterDefinitionParser(l layers.ParameterLayer) ParameterD
 	) (map[string]*parameters.ParameterDefinition, error) {
 		// add the static parameters
 		for _, pd := range l.GetParameterDefinitions() {
-			ps_[pd.Name] = pd.Default
+			if pd.Default != nil {
+				ps_[pd.Name] = pd.Default
+			}
 		}
 
 		// no more parsing after this

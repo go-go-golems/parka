@@ -128,6 +128,40 @@ func NewGinHandlerFromCommandHandlers(cmd cmds.GlazeCommand, opts *HandleOptions
 
 		c.Status(200)
 		c.Writer.Header().Set("Content-Type", contentType)
+		if contentType == "text/html" {
+			s = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DataTables Example</title>
+    <!-- DataTables CSS -->
+
+    <link rel="stylesheet" href="//cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/foundation/6.4.3/css/foundation.min.css">
+	<link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.foundation.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="//cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+</head>
+<body>` + s + `
+    <script>
+        $(document).ready(function() {
+           $('table').DataTable({
+               "paging": true,
+               "searching": true,
+               "ordering": true,
+               "info": true,
+               "autoWidth": false,
+               "responsive": true
+           });
+        });
+    </script>
+</body>
+</html>
+`
+
+		}
 		_, err = c.Writer.Write([]byte(s))
 		if err != nil {
 			_ = c.AbortWithError(http.StatusInternalServerError, err)

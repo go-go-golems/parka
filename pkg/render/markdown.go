@@ -1,4 +1,4 @@
-package pkg
+package render
 
 import (
 	"bytes"
@@ -15,6 +15,9 @@ import (
 	"strings"
 )
 
+// TemplateLookup is a function that will lookup a template by name.
+// It is use as an interface to allow different ways of loading templates to be provided
+// to a parka application.
 type TemplateLookup func(name ...string) (*template.Template, error)
 
 // LookupTemplateFromDirectory will load a template at runtime. This is useful
@@ -43,6 +46,7 @@ func LookupTemplateFromDirectory(dir string) TemplateLookup {
 	}
 }
 
+// LookupTemplateFromFS will load a template from a fs.FS.
 func LookupTemplateFromFS(_fs fs.FS, baseDir string, patterns ...string) (TemplateLookup, error) {
 	tmpl, err := LoadTemplateFS(_fs, baseDir, patterns...)
 	if err != nil {
@@ -61,6 +65,7 @@ func LookupTemplateFromFS(_fs fs.FS, baseDir string, patterns ...string) (Templa
 	}, nil
 }
 
+// LoadTemplateFS will load a template from a fs.FS.
 func LoadTemplateFS(_fs fs.FS, baseDir string, patterns ...string) (*template.Template, error) {
 	if !strings.HasSuffix(baseDir, "/") {
 		baseDir += "/"

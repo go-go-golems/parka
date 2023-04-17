@@ -13,19 +13,58 @@ import (
 	"net/http"
 )
 
-func NewGinHandlerFromCommandHandlers(
-	cmd cmds.GlazeCommand,
-	// NOTE(manuel, 2023-04-16) Weird to use the ... here
-	handlers ...CommandHandlerFunc,
-) gin.HandlerFunc {
+// CreateProcessorFunc is a simple func type to create a cmds.GlazeProcessor and formatters.OutputFormatter out of a CommandContext.
+type CreateProcessorFunc func(c *gin.Context, pc *CommandContext) (*cmds.GlazeProcessor, formatters.OutputFormatter, error)
+
+type HandleOptions struct {
+	ParserOptions   []ParserOption
+	Handlers        []CommandHandlerFunc
+	CreateProcessor CreateProcessorFunc
+}
+
+type HandleOption func(*HandleOptions)
+
+func NewHandleOptions(options []HandleOption) *HandleOptions {
+	opts := &HandleOptions{}
+	for _, option := range options {
+		option(opts)
+	}
+	return opts
+}
+
+func WithParserOptions(parserOptions ...ParserOption) HandleOption {
+	return func(o *HandleOptions) {
+		o.ParserOptions = parserOptions
+	}
+}
+
+func WithHandlers(handlers ...CommandHandlerFunc) HandleOption {
+	return func(o *HandleOptions) {
+		o.Handlers = handlers
+	}
+}
+
+func WithCreateProcessor(createProcessor CreateProcessorFunc) HandleOption {
+	return func(o *HandleOptions) {
+		o.CreateProcessor = createProcessor
+	}
+}
+
+// NewGinHandlerFromCommandHandlers returns a gin.HandlerFunc that is responsible for
+// running the provided command, parsing the necessary context from the provided handlers.
+// This context is then used to create a cmds.Processor and to provide
+// the necessary parameters and layers to the command, calling Run.
+//
+// TODO(manuel, 2023-04-16) Here we want to pass handlers that can modify the resulting output
+// For example, take the HTML and add a page around it. Take the response and render it into a template
+// (although that might be able to get done with the standard setup).
+//
+// NOTE(manuel, 2023-04-16)
+func NewGinHandlerFromCommandHandlers(cmd cmds.GlazeCommand, opts *HandleOptions) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// NOTE(manuel, 2023-02-28) Add initial middleware handlers here
-		//
-		// It probably makes sense to give the user control over the initial parka
-		// context before passing it downstream
 		pc := NewCommandContext(cmd)
 
-		for _, h := range handlers {
+		for _, h := range opts.Handlers {
 			err := h(c, pc)
 			if err != nil {
 				_ = c.AbortWithError(http.StatusBadRequest, err)
@@ -33,7 +72,16 @@ func NewGinHandlerFromCommandHandlers(
 			}
 		}
 
-		gp, of, err := SetupProcessor(pc)
+		var gp *cmds.GlazeProcessor
+		var of formatters.OutputFormatter
+		var err error
+		if opts.CreateProcessor != nil {
+			// TODO(manuel, 2023-03-02) We might want to switch on the requested content type here too
+			// This would be done by passing in a handler that configures the glazed layer accordingly.
+			gp, of, err = opts.CreateProcessor(c, pc)
+		} else {
+			gp, of, err = SetupProcessor(pc)
+		}
 		if err != nil {
 			_ = c.AbortWithError(http.StatusInternalServerError, err)
 			return
@@ -44,7 +92,8 @@ func NewGinHandlerFromCommandHandlers(
 			return
 		}
 
-		// TODO(manuel, 2023-03-02) We might want to switch on the requested content type here too
+		// NOTE(manuel, 2023-04-16) API design wise, we might want to reuse gin.HandlerFunc here for lower processing
+		// For example, computing the response (?) I'm not sure this makes sense
 
 		var contentType string
 
@@ -61,6 +110,7 @@ func NewGinHandlerFromCommandHandlers(
 			case "markdown":
 				contentType = "text/markdown"
 			default:
+				contentType = "text/plain"
 			}
 		case *yaml.OutputFormatter:
 			contentType = "application/x-yaml"
@@ -70,7 +120,6 @@ func NewGinHandlerFromCommandHandlers(
 			contentType = "text/html"
 		}
 
-		// get gp output
 		s, err := of.Output()
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
@@ -87,10 +136,9 @@ func NewGinHandlerFromCommandHandlers(
 	}
 }
 
+// SetupProcessor creates a new cmds.GlazeProcessor. It uses the parsed layer glazed if present, and return
+// a simple JsonOutputFormatter and standard glazed processor otherwise.
 func SetupProcessor(pc *CommandContext) (*cmds.GlazeProcessor, formatters.OutputFormatter, error) {
-	// TODO(manuel, 2023-02-11) For now, create a raw JSON output formatter. We will want more nuance here
-	// See https://github.com/go-go-golems/parka/issues/8
-
 	l, ok := pc.ParsedLayers["glazed"]
 	if ok {
 		return cli.SetupProcessor(l.Parameters)

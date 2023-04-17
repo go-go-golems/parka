@@ -20,29 +20,27 @@ type HTMLTemplateHandler struct {
 
 func (s *Server) HandleSimpleQueryCommand(
 	cmd cmds.GlazeCommand,
-	// NOTE(manuel, 2023-04-16) The better API would be to pass in a list of HandlerOptions
-
-	// This parser handler business is maybe too over-generified, all handlers are currently parser
-	// handlers except for the template handler.
-	parserOptions []glazed.ParserOption,
-	handlers ...glazed.CommandHandlerFunc,
+	options ...glazed.HandleOption,
 ) gin.HandlerFunc {
-	handlers_ := []glazed.CommandHandlerFunc{
-		glazed.NewCommandHandlerFunc(cmd, glazed.NewCommandQueryParser(cmd, parserOptions...)),
-	}
-	handlers_ = append(handlers_, handlers...)
-	return glazed.NewGinHandlerFromCommandHandlers(cmd, handlers_...)
+	opts := glazed.NewHandleOptions(options)
+	opts.Handlers = append(opts.Handlers,
+		glazed.NewCommandHandlerFunc(cmd, glazed.NewCommandQueryParser(cmd, opts.ParserOptions...)),
+	)
+	return glazed.NewGinHandlerFromCommandHandlers(cmd, opts)
 }
 
 // TODO(manuel, 2023-02-28) We want to provide a handler to catch errors while parsing parameters
 
 func (s *Server) HandleSimpleFormCommand(
 	cmd cmds.GlazeCommand,
-	handlers ...glazed.CommandHandlerFunc,
+	options ...glazed.HandleOption,
 ) gin.HandlerFunc {
-	handlers_ := []glazed.CommandHandlerFunc{
-		glazed.NewCommandHandlerFunc(cmd, glazed.NewCommandFormParser(cmd)),
+	opts := &glazed.HandleOptions{}
+	for _, option := range options {
+		option(opts)
 	}
-	handlers_ = append(handlers_, handlers...)
-	return glazed.NewGinHandlerFromCommandHandlers(cmd, handlers_...)
+	opts.Handlers = append(opts.Handlers,
+		glazed.NewCommandHandlerFunc(cmd, glazed.NewCommandFormParser(cmd, opts.ParserOptions...)),
+	)
+	return glazed.NewGinHandlerFromCommandHandlers(cmd, opts)
 }

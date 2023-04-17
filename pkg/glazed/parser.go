@@ -325,3 +325,10 @@ func WithGlazeOutputParserOption(gl *cli.GlazedParameterLayers, output string, t
 		},
 	)
 }
+
+func WithStaticLayer(slug string, overrides map[string]interface{}) ParserOption {
+	return WithReplaceLayerParser(
+		slug,
+		NewStaticParserFunc(overrides),
+	)
+}

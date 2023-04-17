@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/parka/pkg"
-	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -53,9 +52,8 @@ var ServeCmd = &cobra.Command{
 
 		s, _ := pkg.NewServer(serverOptions...)
 
-		s.Router.GET("/api/example", s.HandleSimpleQueryCommand(
-			NewExampleCommand(),
-			[]glazed.ParserOption{}))
+		s.Router.GET("/api/example", s.HandleSimpleQueryCommand(NewExampleCommand()))
+
 		s.Router.POST("/api/example", s.HandleSimpleFormCommand(NewExampleCommand()))
 
 		err = s.Run()

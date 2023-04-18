@@ -86,7 +86,7 @@ var LsServerCmd = &cobra.Command{
 		err = json.Unmarshal(body, &cmds)
 		cobra.CheckErr(err)
 
-		gp, of, err := cli.CreateGlazedProcessorFromCobra(cmd)
+		gp, err := cli.CreateGlazedProcessorFromCobra(cmd)
 		cobra.CheckErr(err)
 
 		for _, cmd := range cmds {
@@ -94,7 +94,7 @@ var LsServerCmd = &cobra.Command{
 			cobra.CheckErr(err)
 		}
 
-		s, err := of.Output()
+		s, err := gp.OutputFormatter().Output()
 		cobra.CheckErr(err)
 		fmt.Print(s)
 	},

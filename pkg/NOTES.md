@@ -31,11 +31,32 @@ We want to be able to:
 - validate incoming parameters
 - hide / make immutable a set of command parameters (for example, connection settings)
 
-### API design: ParkaHandlerFunc
+### API design: CommandHandlerFunc
 
 Ultimately, when a request comes in to the API, we want to go through all the
 "middlewares" and ultimately get a map of parsed layers and a map of parameters,
 and call Run on the underlying glaze.Command.
+
+#### CommandHandlerFunc - parsing incoming requests into a command's parameters and layers
+
+This is done through the `CommandHandlerFunc` type, which is a function that
+takes a `*gin.Context` and a `*CommandContext` and is allowed to modify both as
+it does its thing.
+
+A `CommandContext` is a struct that has a reference to the `GlazeCommand` and keeps
+track of the parsed layers and parameters.
+
+Basically, by iterating through the `CommandHandlerFunc` stored in a `HandleOptions`
+struct, the gin handler slowly builds up all the necessary parameters and parsed layers
+necessary to run the glaze command.
+
+#### CreateProcessorFunc - creating the output formatter
+
+We also have something called a `CreateProcessorFunc`, which is a function that
+takes a `*gin.Context` and a `*CommandContext` and returns a `glaze.Processor`.
+This allows us to override what output formatter is created, depending on the request.
+The default handler will process the parsed parameters for the `glazed` layer, just 
+as it would on the command line. If nothing is set, it would create a JSON output formatter.
 
 ### API design: Parsing parameters
 
@@ -119,6 +140,15 @@ out the individual layers to give some feedback on the request.
  - this might not be good for SimpleCommand (but maybe?)
  - there might be something there to be done with the layer wrapper discussed in the section
    below
+
+### Using CreateProcessorFunc to create the output formatter
+
+2023-04-17 
+
+I am building a simple CreateProcessorFunc that returns an OutputFormatter() that
+uses the standard formatter to output HTML (but I might change that to a template entirely,
+it depends on being able to access the column headers) and have it output some HTML that renders
+the response to HTML using DataTables.
 
 ## Problem 4: Easily configuring parka handlers (declaratively?)
 

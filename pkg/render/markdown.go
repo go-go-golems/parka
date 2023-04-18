@@ -42,7 +42,7 @@ func LookupTemplateFromDirectory(dir string) TemplateLookup {
 			}
 		}
 
-		return nil, errors.New("template not found")
+		return nil, errors.New("templateFS not found")
 	}
 }
 
@@ -61,7 +61,7 @@ func LookupTemplateFromFS(_fs fs.FS, baseDir string, patterns ...string) (Templa
 			}
 		}
 
-		return nil, errors.New("template not found")
+		return nil, errors.New("templateFS not found")
 	}, nil
 }
 

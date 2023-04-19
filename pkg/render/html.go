@@ -6,10 +6,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/formatters"
 	"github.com/go-go-golems/glazed/pkg/formatters/table"
 	"github.com/go-go-golems/parka/pkg/glazed"
+	"github.com/go-go-golems/parka/pkg/render/layout"
 	"github.com/pkg/errors"
 	"html/template"
 )
@@ -99,45 +99,6 @@ func NewHTMLTemplateProcessor(
 	return ret, nil
 }
 
-type FormField struct {
-	Name    string
-	Value   interface{}
-	Type    parameters.ParameterType
-	Default interface{}
-	Help    string
-}
-
-func ComputeFormFields(
-	layout [][]string,
-	parameters map[string]*parameters.ParameterDefinition,
-	values map[string]interface{},
-) ([][]FormField, error) {
-	rows := [][]FormField{}
-	for _, row := range layout {
-		currentRow := []FormField{}
-		for _, name := range row {
-			parameter, ok := parameters[name]
-			if !ok {
-				return nil, errors.Errorf("parameter %s not found", name)
-			}
-			value, ok := values[name]
-			if !ok {
-				value = nil
-			}
-			currentRow = append(currentRow, FormField{
-				Name:    name,
-				Value:   value,
-				Type:    parameter.Type,
-				Default: parameter.Default,
-				Help:    parameter.Help,
-			})
-		}
-		rows = append(rows, currentRow)
-	}
-
-	return rows, nil
-}
-
 func (H *HTMLTemplateProcessor) OutputFormatter() formatters.OutputFormatter {
 	return H.of
 }
@@ -187,30 +148,16 @@ func NewTemplateLookupCreateProcessorFunc(
 			return nil, contextType, err
 		}
 
-		description := pc.Cmd.Description()
-
-		flags := description.Flags
-		flagsMap := map[string]*parameters.ParameterDefinition{}
-		for _, flag := range flags {
-			flagsMap[flag.Name] = flag
-		}
-
-		// we are gathering only the flags of the command itself, and here we would also
-		// greenlight individual layers
-		flagParameters, err := parameters.GatherParametersFromMap(pc.ParsedParameters, flagsMap)
-		if err != nil {
-			return nil, contextType, err
-		}
-
-		formFields, err := ComputeFormFields(description.Layout, flagsMap, flagParameters)
+		// NOTE(manuel, 2023-04-19) This layout structure is probably something we should extract out to glazed, as it can also be used for a bubbletea interface.
+		layout, err := layout.ComputeLayout(pc)
 		if err != nil {
 			return nil, contextType, err
 		}
 
 		gp2, err := NewHTMLTemplateProcessor(gp, t, WithHTMLTemplateOutputFormatterData(
 			map[string]interface{}{
-				"Command":    pc.Cmd.Description(),
-				"FormFields": formFields,
+				"Command": pc.Cmd.Description(),
+				"Layout":  layout,
 			}))
 		if err != nil {
 			return nil, contextType, err

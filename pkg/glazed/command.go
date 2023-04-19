@@ -30,6 +30,54 @@ func NewCommandContext(cmd cmds.GlazeCommand) *CommandContext {
 	}
 }
 
+// GetAllParameterDefinitions returns a map of all parameter definitions for the command.
+// This includes flags, arguments and all layers.
+func (pc *CommandContext) GetAllParameterDefinitions() map[string]*parameters.ParameterDefinition {
+	description := pc.Cmd.Description()
+
+	ret := pc.GetFlagsAndArgumentsParameterDefinitions()
+
+	for _, l := range description.Layers {
+		for _, p := range l.GetParameterDefinitions() {
+			ret[p.Name] = p
+		}
+	}
+
+	return ret
+}
+
+func (pc *CommandContext) GetFlagsAndArgumentsParameterDefinitions() map[string]*parameters.ParameterDefinition {
+	ret := map[string]*parameters.ParameterDefinition{}
+
+	description := pc.Cmd.Description()
+
+	for _, f := range description.Flags {
+		ret[f.Name] = f
+	}
+
+	for _, a := range description.Arguments {
+		ret[a.Name] = a
+	}
+
+	return ret
+}
+
+func (pc *CommandContext) GetAllParameterValues() map[string]interface{} {
+	ret := map[string]interface{}{}
+
+	for k, v := range pc.ParsedParameters {
+		ret[k] = v
+	}
+
+	for _, l := range pc.ParsedLayers {
+		for k, v := range l.Parameters {
+			ret[k] = v
+		}
+	}
+
+	return ret
+}
+
 // CommandHandlerFunc mirrors gin's HandlerFunc, but also gets passed a CommandContext.
 // That allows it to reuse data from the gin.Context, most importantly the request itself.
 type CommandHandlerFunc func(*gin.Context, *CommandContext) error

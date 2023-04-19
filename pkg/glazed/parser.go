@@ -38,10 +38,10 @@ func NewQueryParserFunc(onlyDefined bool) ParserFunc {
 	) (map[string]*parameters.ParameterDefinition, error) {
 
 		for _, p := range pd {
-			if parameters.IsFileLoadingParameter(p.Type, c.Query(p.Name)) {
+			value := c.Query(p.Name)
+			if parameters.IsFileLoadingParameter(p.Type, value) {
 				// if the parameter is supposed to be read from a file, we will just pass in the query parameters
 				// as a placeholder here
-				value := c.Query(p.Name)
 				if value == "" {
 					if p.Required {
 						return nil, errors.Errorf("required parameter '%s' is missing", p.Name)
@@ -58,7 +58,6 @@ func NewQueryParserFunc(onlyDefined bool) ParserFunc {
 					ps[p.Name] = pValue
 				}
 			} else {
-				value := c.Query(p.Name)
 				if value == "" {
 					if p.Required {
 						return nil, fmt.Errorf("required parameter '%s' is missing", p.Name)
@@ -67,7 +66,13 @@ func NewQueryParserFunc(onlyDefined bool) ParserFunc {
 						ps[p.Name] = p.Default
 					}
 				} else {
-					pValue, err := p.ParseParameter([]string{value})
+					var values []string
+					if parameters.IsListParameter(p.Type) {
+						values = strings.Split(value, ",")
+					} else {
+						values = []string{value}
+					}
+					pValue, err := p.ParseParameter(values)
 					if err != nil {
 						return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
 					}
@@ -98,7 +103,13 @@ func NewFormParserFunc(onlyDefined bool) ParserFunc {
 					ps[p.Name] = p.Default
 				}
 			} else if !parameters.IsFileLoadingParameter(p.Type, value) {
-				pValue, err := p.ParseParameter([]string{value})
+				v := []string{value}
+				if p.Type == parameters.ParameterTypeStringList ||
+					p.Type == parameters.ParameterTypeIntegerList ||
+					p.Type == parameters.ParameterTypeFloatList {
+					v = strings.Split(value, ",")
+				}
+				pValue, err := p.ParseParameter(v)
 				if err != nil {
 					return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
 				}

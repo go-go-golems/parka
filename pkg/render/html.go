@@ -8,7 +8,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/formatters"
 	"github.com/go-go-golems/glazed/pkg/formatters/table"
-	"github.com/go-go-golems/glazed/pkg/helpers/templating"
 	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/pkg/errors"
 	"html/template"
@@ -75,54 +74,64 @@ func (H *HTMLTemplateProcessor) OutputFormatter() formatters.OutputFormatter {
 	return H.of
 }
 
+// NewTemplateLookupCreateProcessorFunc creates a CreateProcessorFunc based on a TemplateLookup
+// and a template name.
+func NewTemplateLookupCreateProcessorFunc(lookup TemplateLookup, templateName string) glazed.CreateProcessorFunc {
+	return func(c *gin.Context, pc *glazed.CommandContext) (
+		cmds.Processor,
+		string, // content type
+		error,
+	) {
+		contextType := "text/html"
+
+		// lookup on every request, not up front.
+		//
+		// NOTE(manuel, 2023-04-19) This currently is nailed to a single static templateName passed at configuration time.
+		// potentially, templateName could also be dynamic based on the incoming request, but we'll leave
+		// that flexibility for later.
+		t, err := lookup(templateName)
+		if err != nil {
+			return nil, contextType, err
+		}
+
+		// NOTE(manuel, 2023-04-18) We use glazed to render the actual HTML table.
+		// But really, we could allow the user to specify the actual HTML rendering as well.
+		// This is currently just a convenience to get started.
+		l, ok := pc.ParsedLayers["glazed"]
+		l.Parameters["output"] = "table"
+		l.Parameters["table-format"] = "html"
+
+		var gp *cmds.GlazeProcessor
+
+		if ok {
+			gp, err = cli.SetupProcessor(l.Parameters)
+		} else {
+			gp, err = cli.SetupProcessor(map[string]interface{}{
+				"output":       "table",
+				"table-format": "html",
+			})
+		}
+
+		if err != nil {
+			return nil, contextType, err
+		}
+
+		gp2, err := NewHTMLTemplateProcessor(gp, t)
+		if err != nil {
+			return nil, contextType, err
+		}
+		return gp2, contextType, nil
+	}
+}
+
 //go:embed templates/*
 var templateFS embed.FS
 
-func RenderDataTables(c *gin.Context, pc *glazed.CommandContext) (
-	cmds.Processor,
-	string, // content type
-	error,
-) {
-	contextType := "text/html"
-
-	l, ok := pc.ParsedLayers["glazed"]
-	l.Parameters["output"] = "table"
-	l.Parameters["table-format"] = "html"
-
-	var gp *cmds.GlazeProcessor
-	var err error
-
-	if ok {
-		gp, err = cli.SetupProcessor(l.Parameters)
-	} else {
-		gp, err = cli.SetupProcessor(map[string]interface{}{
-			"output":       "table",
-			"table-format": "html",
-		})
-	}
-
+func NewDataTablesCreateProcessorFunc() (glazed.CreateProcessorFunc, error) {
+	templateLookup, err := LookupTemplateFromFSReloadable(templateFS, "templates/", "templates/**/*.tmpl.html")
 	if err != nil {
-		return nil, contextType, err
+		return nil, err
 	}
 
-	// NOTE(manuel, 2023-04-18) This loading could potentially be done outside of the Render call (such as not to load this on every call)
-	// Potentially, we should use the Watcher and implement a watcher that reloads templates on demand...
-	//
-	// See https://github.com/go-go-golems/parka/issues/26
-	t := templating.CreateHTMLTemplate("data-tables")
-	err = templating.ParseHTMLFS(t, templateFS, "templates/**/*.tmpl.html", "templates/")
-	if err != nil {
-		return nil, contextType, err
-	}
-
-	tTables := t.Lookup("data-tables.tmpl.html")
-	if tTables == nil {
-		return nil, contextType, errors.New("could not find data-tables template")
-	}
-
-	gp2, err := NewHTMLTemplateProcessor(gp, tTables)
-	if err != nil {
-		return nil, contextType, err
-	}
-	return gp2, contextType, nil
+	return NewTemplateLookupCreateProcessorFunc(templateLookup, "data-tables.tmpl.html"), nil
 }

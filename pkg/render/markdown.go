@@ -46,7 +46,33 @@ func LookupTemplateFromDirectory(dir string) TemplateLookup {
 	}
 }
 
+// LookupTemplateFromFSReloadable will load a template from a fs.FS.
+//
+// NOTE: this loads the entire template directory into memory on every lookup.
+// This is not great for performance, but it is useful for development.
+func LookupTemplateFromFSReloadable(_fs fs.FS, baseDir string, patterns ...string) (TemplateLookup, error) {
+	return func(name ...string) (*template.Template, error) {
+		tmpl, err := LoadTemplateFS(_fs, baseDir, patterns...)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, n := range name {
+			t := tmpl.Lookup(n)
+			if t != nil {
+				return t, nil
+			}
+		}
+
+		return nil, errors.New("templateFS not found")
+	}, nil
+}
+
 // LookupTemplateFromFS will load a template from a fs.FS.
+//
+// NOTE: this loads the entire template directory into memory at startup. Files modified
+// later on won't be refreshed. If you want to reload the entire directory on each template lookup,
+// use LookupTemplateFromFSReloadable.
 func LookupTemplateFromFS(_fs fs.FS, baseDir string, patterns ...string) (TemplateLookup, error) {
 	tmpl, err := LoadTemplateFS(_fs, baseDir, patterns...)
 	if err != nil {

@@ -92,15 +92,15 @@ func ComputeLayout(
 		)
 		ret.Sections = append(ret.Sections, flagSection)
 
-		for _, l := range description.Layers {
-			pds = l.GetParameterDefinitions()
-			section := NewSectionFromParameterDefinitions(
-				pds, values,
-				WithSectionTitle(l.GetName()),
-				WithSectionShortDescription(l.GetDescription()),
-			)
-			ret.Sections = append(ret.Sections, section)
-		}
+		//for _, l := range description.Layers {
+		//	pds = l.GetParameterDefinitions()
+		//	section := NewSectionFromParameterDefinitions(
+		//		pds, values,
+		//		WithSectionTitle(l.GetName()),
+		//		WithSectionShortDescription(l.GetDescription()),
+		//	)
+		//	ret.Sections = append(ret.Sections, section)
+		//}
 	} else {
 		allParameterDefinitions := pc.GetAllParameterDefinitions()
 
@@ -215,12 +215,16 @@ func NewSectionFromParameterDefinitions(
 		if !ok {
 			value = nil
 		}
+		help := pd.Help
+		if help == "" {
+			help = pd.Name
+		}
 		currentRow.Inputs = append(currentRow.Inputs, Input{
 			Name:    name,
 			Value:   value,
 			Type:    string(pd.Type),
 			Default: pd.Default,
-			Help:    pd.Help,
+			Help:    help,
 			Options: choicesToOptions(pd.Choices),
 		})
 		if len(currentRow.Inputs) == 3 {

@@ -99,6 +99,45 @@ func NewHTMLTemplateProcessor(
 	return ret, nil
 }
 
+type FormField struct {
+	Name    string
+	Value   interface{}
+	Type    parameters.ParameterType
+	Default interface{}
+	Help    string
+}
+
+func ComputeFormFields(
+	layout [][]string,
+	parameters map[string]*parameters.ParameterDefinition,
+	values map[string]interface{},
+) ([][]FormField, error) {
+	rows := [][]FormField{}
+	for _, row := range layout {
+		currentRow := []FormField{}
+		for _, name := range row {
+			parameter, ok := parameters[name]
+			if !ok {
+				return nil, errors.Errorf("parameter %s not found", name)
+			}
+			value, ok := values[name]
+			if !ok {
+				value = nil
+			}
+			currentRow = append(currentRow, FormField{
+				Name:    name,
+				Value:   value,
+				Type:    parameter.Type,
+				Default: parameter.Default,
+				Help:    parameter.Help,
+			})
+		}
+		rows = append(rows, currentRow)
+	}
+
+	return rows, nil
+}
+
 func (H *HTMLTemplateProcessor) OutputFormatter() formatters.OutputFormatter {
 	return H.of
 }
@@ -149,6 +188,7 @@ func NewTemplateLookupCreateProcessorFunc(
 		}
 
 		description := pc.Cmd.Description()
+
 		flags := description.Flags
 		flagsMap := map[string]*parameters.ParameterDefinition{}
 		for _, flag := range flags {
@@ -162,10 +202,15 @@ func NewTemplateLookupCreateProcessorFunc(
 			return nil, contextType, err
 		}
 
+		formFields, err := ComputeFormFields(description.Layout, flagsMap, flagParameters)
+		if err != nil {
+			return nil, contextType, err
+		}
+
 		gp2, err := NewHTMLTemplateProcessor(gp, t, WithHTMLTemplateOutputFormatterData(
 			map[string]interface{}{
-				"Command": pc.Cmd.Description(),
-				"Values":  flagParameters,
+				"Command":    pc.Cmd.Description(),
+				"FormFields": formFields,
 			}))
 		if err != nil {
 			return nil, contextType, err

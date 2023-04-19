@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/formatters"
 	"github.com/go-go-golems/glazed/pkg/formatters/table"
 	"github.com/go-go-golems/parka/pkg/glazed"
@@ -22,15 +23,33 @@ import (
 // a template to be added in the back in the front.
 type HTMLTemplateOutputFormatter struct {
 	*table.OutputFormatter
-
-	t *template.Template
+	t    *template.Template
+	data map[string]interface{}
 }
 
-func NewHTMLTemplateOutputFormatter(t *template.Template, of *table.OutputFormatter) *HTMLTemplateOutputFormatter {
-	return &HTMLTemplateOutputFormatter{
+type HTMLTemplateOutputFormatterOption func(*HTMLTemplateOutputFormatter)
+
+func WithHTMLTemplateOutputFormatterData(data map[string]interface{}) HTMLTemplateOutputFormatterOption {
+	return func(of *HTMLTemplateOutputFormatter) {
+		of.data = data
+	}
+}
+
+func NewHTMLTemplateOutputFormatter(
+	t *template.Template,
+	of *table.OutputFormatter,
+	options ...HTMLTemplateOutputFormatterOption,
+) *HTMLTemplateOutputFormatter {
+	ret := &HTMLTemplateOutputFormatter{
 		OutputFormatter: of,
 		t:               t,
 	}
+
+	for _, option := range options {
+		option(ret)
+	}
+
+	return ret
 }
 
 func (H *HTMLTemplateOutputFormatter) Output() (string, error) {
@@ -39,10 +58,14 @@ func (H *HTMLTemplateOutputFormatter) Output() (string, error) {
 		return "", err
 	}
 
+	data := map[string]interface{}{}
+	for k, v := range H.data {
+		data[k] = v
+	}
+	data["Table"] = template.HTML(res)
+
 	buf := new(bytes.Buffer)
-	err = H.t.Execute(buf, map[string]interface{}{
-		"Table": template.HTML(res),
-	})
+	err = H.t.Execute(buf, data)
 
 	if err != nil {
 		return "", err
@@ -57,17 +80,23 @@ type HTMLTemplateProcessor struct {
 	of *HTMLTemplateOutputFormatter
 }
 
-func NewHTMLTemplateProcessor(gp *cmds.GlazeProcessor, t *template.Template) (*HTMLTemplateProcessor, error) {
+func NewHTMLTemplateProcessor(
+	gp *cmds.GlazeProcessor,
+	t *template.Template,
+	options ...HTMLTemplateOutputFormatterOption,
+) (*HTMLTemplateProcessor, error) {
 	parentOf, ok := gp.OutputFormatter().(*table.OutputFormatter)
 	if !ok {
 		return nil, errors.New("parent output formatter is not a table output formatter")
 	}
 
-	of := NewHTMLTemplateOutputFormatter(t, parentOf)
-	return &HTMLTemplateProcessor{
+	of := NewHTMLTemplateOutputFormatter(t, parentOf, options...)
+
+	ret := &HTMLTemplateProcessor{
 		GlazeProcessor: gp,
 		of:             of,
-	}, nil
+	}
+	return ret, nil
 }
 
 func (H *HTMLTemplateProcessor) OutputFormatter() formatters.OutputFormatter {
@@ -76,7 +105,10 @@ func (H *HTMLTemplateProcessor) OutputFormatter() formatters.OutputFormatter {
 
 // NewTemplateLookupCreateProcessorFunc creates a CreateProcessorFunc based on a TemplateLookup
 // and a template name.
-func NewTemplateLookupCreateProcessorFunc(lookup TemplateLookup, templateName string) glazed.CreateProcessorFunc {
+func NewTemplateLookupCreateProcessorFunc(
+	lookup TemplateLookup,
+	templateName string,
+) glazed.CreateProcessorFunc {
 	return func(c *gin.Context, pc *glazed.CommandContext) (
 		cmds.Processor,
 		string, // content type
@@ -116,7 +148,25 @@ func NewTemplateLookupCreateProcessorFunc(lookup TemplateLookup, templateName st
 			return nil, contextType, err
 		}
 
-		gp2, err := NewHTMLTemplateProcessor(gp, t)
+		description := pc.Cmd.Description()
+		flags := description.Flags
+		flagsMap := map[string]*parameters.ParameterDefinition{}
+		for _, flag := range flags {
+			flagsMap[flag.Name] = flag
+		}
+
+		// we are gathering only the flags of the command itself, and here we would also
+		// greenlight individual layers
+		flagParameters, err := parameters.GatherParametersFromMap(pc.ParsedParameters, flagsMap)
+		if err != nil {
+			return nil, contextType, err
+		}
+
+		gp2, err := NewHTMLTemplateProcessor(gp, t, WithHTMLTemplateOutputFormatterData(
+			map[string]interface{}{
+				"Command": pc.Cmd.Description(),
+				"Values":  flagParameters,
+			}))
 		if err != nil {
 			return nil, contextType, err
 		}

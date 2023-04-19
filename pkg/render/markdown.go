@@ -1,4 +1,4 @@
-package pkg
+package render
 
 import (
 	"bytes"
@@ -15,6 +15,9 @@ import (
 	"strings"
 )
 
+// TemplateLookup is a function that will lookup a template by name.
+// It is use as an interface to allow different ways of loading templates to be provided
+// to a parka application.
 type TemplateLookup func(name ...string) (*template.Template, error)
 
 // LookupTemplateFromDirectory will load a template at runtime. This is useful
@@ -39,10 +42,37 @@ func LookupTemplateFromDirectory(dir string) TemplateLookup {
 			}
 		}
 
-		return nil, errors.New("template not found")
+		return nil, errors.New("templateFS not found")
 	}
 }
 
+// LookupTemplateFromFSReloadable will load a template from a fs.FS.
+//
+// NOTE: this loads the entire template directory into memory on every lookup.
+// This is not great for performance, but it is useful for development.
+func LookupTemplateFromFSReloadable(_fs fs.FS, baseDir string, patterns ...string) (TemplateLookup, error) {
+	return func(name ...string) (*template.Template, error) {
+		tmpl, err := LoadTemplateFS(_fs, baseDir, patterns...)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, n := range name {
+			t := tmpl.Lookup(n)
+			if t != nil {
+				return t, nil
+			}
+		}
+
+		return nil, errors.New("templateFS not found")
+	}, nil
+}
+
+// LookupTemplateFromFS will load a template from a fs.FS.
+//
+// NOTE: this loads the entire template directory into memory at startup. Files modified
+// later on won't be refreshed. If you want to reload the entire directory on each template lookup,
+// use LookupTemplateFromFSReloadable.
 func LookupTemplateFromFS(_fs fs.FS, baseDir string, patterns ...string) (TemplateLookup, error) {
 	tmpl, err := LoadTemplateFS(_fs, baseDir, patterns...)
 	if err != nil {
@@ -57,10 +87,11 @@ func LookupTemplateFromFS(_fs fs.FS, baseDir string, patterns ...string) (Templa
 			}
 		}
 
-		return nil, errors.New("template not found")
+		return nil, errors.New("templateFS not found")
 	}, nil
 }
 
+// LoadTemplateFS will load a template from a fs.FS.
 func LoadTemplateFS(_fs fs.FS, baseDir string, patterns ...string) (*template.Template, error) {
 	if !strings.HasSuffix(baseDir, "/") {
 		baseDir += "/"

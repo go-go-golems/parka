@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/parka/pkg"
+	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"io"
@@ -33,17 +34,17 @@ var ServeCmd = &cobra.Command{
 				Msg("Using assets from disk")
 			serverOptions = append(serverOptions,
 				pkg.WithStaticPaths(pkg.NewStaticPath(http.FS(os.DirFS("pkg/web/dist")), "/dist")),
-				pkg.WithPrependTemplateLookups(pkg.LookupTemplateFromDirectory("pkg/web/src/templates")),
+				pkg.WithPrependTemplateLookups(render.LookupTemplateFromDirectory("pkg/web/src/templates")),
 			)
 			cobra.CheckErr(err)
 		}
 
 		if templateDir != "" {
 			if dev {
-				serverOptions = append(serverOptions, pkg.WithPrependTemplateLookups(pkg.LookupTemplateFromDirectory(templateDir)))
+				serverOptions = append(serverOptions, pkg.WithPrependTemplateLookups(render.LookupTemplateFromDirectory(templateDir)))
 
 			} else {
-				lookup, err := pkg.LookupTemplateFromFS(os.DirFS(templateDir), ".", "**/*.tmpl.*")
+				lookup, err := render.LookupTemplateFromFS(os.DirFS(templateDir), ".", "**/*.tmpl.*")
 				cobra.CheckErr(err)
 				serverOptions = append(serverOptions, pkg.WithPrependTemplateLookups(lookup))
 			}
@@ -51,9 +52,8 @@ var ServeCmd = &cobra.Command{
 
 		s, _ := pkg.NewServer(serverOptions...)
 
-		s.Router.GET("/api/example", s.HandleSimpleQueryCommand(
-			NewExampleCommand(),
-			[]pkg.ParserHandlerOption{}))
+		s.Router.GET("/api/example", s.HandleSimpleQueryCommand(NewExampleCommand()))
+
 		s.Router.POST("/api/example", s.HandleSimpleFormCommand(NewExampleCommand()))
 
 		err = s.Run()
@@ -86,7 +86,7 @@ var LsServerCmd = &cobra.Command{
 		err = json.Unmarshal(body, &cmds)
 		cobra.CheckErr(err)
 
-		gp, of, err := cli.CreateGlazedProcessorFromCobra(cmd)
+		gp, err := cli.CreateGlazedProcessorFromCobra(cmd)
 		cobra.CheckErr(err)
 
 		for _, cmd := range cmds {
@@ -94,7 +94,7 @@ var LsServerCmd = &cobra.Command{
 			cobra.CheckErr(err)
 		}
 
-		s, err := of.Output()
+		s, err := gp.OutputFormatter().Output()
 		cobra.CheckErr(err)
 		fmt.Print(s)
 	},

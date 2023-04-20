@@ -6,20 +6,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Command.Name}} - {{.Command.Short}}</title>
 
-    <!-- DataTables, Milligram CSS -->
+    <!-- DataTables CSS -->
     <link rel="stylesheet" href="//cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.4.1/milligram.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.foundation.min.css">
 
-    <!-- DataTables, jQuery and jQuery Validation Plugin -->
+    <!-- jQuery and jQuery Validation Plugin -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.19.3/jquery.validate.min.js"></script>
     <script src="//cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
 </head>
 <body>
-
 {{ define "form-widget" }}
-<div {{ if .Id }}id="{{.Id}}"{{end}} {{ if .Classes }}class="{{.Classes }}"{{end}} {{ if .CSS }} style="{{.CSS}}"{{end}}>
+<div {{ if .Id }}id="{{.Id}}" {{end}} {{ if .Classes }}class="{{.Classes }}" {{end}} {{ if .CSS }} style="{{.CSS}}"
+     {{end}}>
     <!-- types can be string, int, float, bool, date, choice -->
     {{ if eq .Type "string" }}
     <label for="{{.Name}}">{{.Help}}</label>
@@ -40,13 +40,15 @@
     </div>
     {{ else if eq .Type "date" }}
     <label for="{{.Name}}">{{.Help}}</label>
-    <input type="date" name="{{.Name}}" {{if .Value}}value="{{.Value | toDate}}"{{end}}>
+    <input type="date" name="{{.Name}}" {{if .Value}}value="{{.Value | toDate}}" {{end}}>
     {{ else if eq .Type "choice" }}
     <label for="{{.Name}}">{{.Help}}</label>
     <select name="{{.Name}}">
         {{ $parent := . }}
         {{range $choice := .Options}}
-        <option value="{{$choice.Value}}" label="{{$choice.Label}}" {{if eq $choice.Value $parent.Value}}selected{{end}}>{{$choice.Label}} - {{$parent.Value}}</option>
+        <option value="{{$choice.Value}}" label="{{$choice.Label}}" {{if eq $choice.Value
+                $parent.Value}}selected{{end}}>{{$choice.Label}} - {{$parent.Value}}
+        </option>
         {{end}}
     </select>
     {{ else }}
@@ -64,7 +66,8 @@
     <form id="form" action="{{.Command.Name}}" method="get">
         <fieldset>
             {{range $section := .Layout.Sections}}
-            <div class="row" {{if $section.Classes}}class="{{$section.Classes}}"{{end}} {{if $section.Style}}style="{{$section.Style}}"{{end}}>
+            <div class="row" {{if $section.Classes}}class="{{$section.Classes}}" {{end}} {{if
+                 $section.Style}}style="{{$section.Style}}" {{end}}>
                 <div class="columns">
                     {{if $section.Title}}<h3>{{$section.Title}}</h3>{{end}}
                     {{if $section.ShortDescription}}
@@ -76,7 +79,8 @@
                 </div>
             </div>
             {{range $row := $section.Rows}}
-            <div class="row" {{if $row.Classes}}class="{{$row.Classes}}"{{end}} {{if $row.Style}}style="{{$row.Style}}"{{end}}>
+            <div class="row" {{if $row.Classes}}class="{{$row.Classes}}" {{end}} {{if $row.Style}}style="{{$row.Style}}"
+                 {{end}}>
                 {{range $field := $row.Inputs}}
                 <div class="column">
                     {{ template "form-widget" $field }}
@@ -87,8 +91,9 @@
             {{end}}
         </fieldset>
         <div class="row">
-            <div class="columns">
-                <input type="submit" value="Submit">
+            <div class="column column-25"><input type="submit" value="Submit">
+            </div>
+            <div class="column column-25"><a id="reset-form" href="#">Reset</a>
             </div>
         </div>
     </form>
@@ -127,7 +132,7 @@
         var form = $('#form');
 
         // Attach a change event listener to all form inputs
-        form.find('input, select').on('change', function() {
+        form.find('input, select').on('change', function () {
             // Submit the form
             form.submit();
         });
@@ -156,6 +161,9 @@
                 window.location.href = window.location.href.split('?')[0] + '?' + query;
             }
         });
+
+        const url = window.location.href;
+        document.getElementById('reset-form').href = url.split('?')[0];
     });
 </script>
 </body>

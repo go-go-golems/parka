@@ -129,6 +129,8 @@ func NewTemplateLookupCreateProcessorFunc(
 		// NOTE(manuel, 2023-04-18) We use glazed to render the actual HTML table.
 		// But really, we could allow the user to specify the actual HTML rendering as well.
 		// This is currently just a convenience to get started.
+		//
+		// They can actually do that by passing in their own glazed.CreateProcessorFunc.
 		l, ok := pc.ParsedLayers["glazed"]
 		l.Parameters["output"] = "table"
 		l.Parameters["table-format"] = "html"
@@ -149,7 +151,7 @@ func NewTemplateLookupCreateProcessorFunc(
 		}
 
 		// NOTE(manuel, 2023-04-19) This layout structure is probably something we should extract out to glazed, as it can also be used for a bubbletea interface.
-		layout, err := layout.ComputeLayout(pc)
+		layout_, err := layout.ComputeLayout(pc)
 		if err != nil {
 			return nil, contextType, err
 		}
@@ -157,7 +159,7 @@ func NewTemplateLookupCreateProcessorFunc(
 		gp2, err := NewHTMLTemplateProcessor(gp, t, WithHTMLTemplateOutputFormatterData(
 			map[string]interface{}{
 				"Command": pc.Cmd.Description(),
-				"Layout":  layout,
+				"Layout":  layout_,
 			}))
 		if err != nil {
 			return nil, contextType, err

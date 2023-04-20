@@ -3,6 +3,7 @@ package glazed
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/alias"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 )
@@ -169,6 +170,19 @@ func NewCommandFormParser(cmd cmds.GlazeCommand, options ...ParserOption) *Parse
 func NewCommandHandlerFunc(cmd cmds.GlazeCommand, parserHandler *Parser) CommandHandlerFunc {
 	d := cmd.Description()
 
+	defaults := map[string]string{}
+
+	// check if we are an aliase
+	alias_, ok := cmd.(*alias.CommandAlias)
+	if ok {
+		defaults = alias_.Flags
+		for idx, v := range alias_.Arguments {
+			if len(d.Arguments) <= idx {
+				defaults[d.Arguments[idx].Name] = v
+			}
+		}
+	}
+
 	var err error
 
 	return func(c *gin.Context, pc *CommandContext) error {
@@ -181,7 +195,7 @@ func NewCommandHandlerFunc(cmd cmds.GlazeCommand, parserHandler *Parser) Command
 		}
 
 		for _, o := range parserHandler.Parsers {
-			pds, err = o(c, pc.ParsedParameters, pds)
+			pds, err = o(c, defaults, pc.ParsedParameters, pds)
 			if err != nil {
 				return err
 			}
@@ -205,7 +219,7 @@ func NewCommandHandlerFunc(cmd cmds.GlazeCommand, parserHandler *Parser) Command
 			pds = l.GetParameterDefinitions()
 
 			for _, o := range parsers {
-				pds, err = o(c, pc.ParsedLayers[slug].Parameters, pds)
+				pds, err = o(c, defaults, pc.ParsedLayers[slug].Parameters, pds)
 				if err != nil {
 					return err
 				}

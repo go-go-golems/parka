@@ -92,6 +92,11 @@ func ComputeLayout(
 		)
 		ret.Sections = append(ret.Sections, flagSection)
 
+		// This code would add a section for all layers, in the form.
+		// I don't think this is super useful in the context of Parka,
+		// and can be overriden with layouts if you really want.
+		//
+		//
 		//for _, l := range description.Layers {
 		//	pds = l.GetParameterDefinitions()
 		//	section := NewSectionFromParameterDefinitions(

@@ -31,7 +31,12 @@ type HTMLTemplateOutputFormatterOption func(*HTMLTemplateOutputFormatter)
 
 func WithHTMLTemplateOutputFormatterData(data map[string]interface{}) HTMLTemplateOutputFormatterOption {
 	return func(of *HTMLTemplateOutputFormatter) {
-		of.data = data
+		if of.data == nil {
+			of.data = map[string]interface{}{}
+		}
+		for k, v := range data {
+			of.data[k] = v
+		}
 	}
 }
 
@@ -103,11 +108,12 @@ func (H *HTMLTemplateProcessor) OutputFormatter() formatters.OutputFormatter {
 	return H.of
 }
 
-// NewTemplateLookupCreateProcessorFunc creates a CreateProcessorFunc based on a TemplateLookup
+// NewHTMLTemplateLookupCreateProcessorFunc creates a CreateProcessorFunc based on a TemplateLookup
 // and a template name.
-func NewTemplateLookupCreateProcessorFunc(
+func NewHTMLTemplateLookupCreateProcessorFunc(
 	lookup TemplateLookup,
 	templateName string,
+	options ...HTMLTemplateOutputFormatterOption,
 ) glazed.CreateProcessorFunc {
 	return func(c *gin.Context, pc *glazed.CommandContext) (
 		cmds.Processor,
@@ -156,11 +162,16 @@ func NewTemplateLookupCreateProcessorFunc(
 			return nil, contextType, err
 		}
 
-		gp2, err := NewHTMLTemplateProcessor(gp, t, WithHTMLTemplateOutputFormatterData(
-			map[string]interface{}{
-				"Command": pc.Cmd.Description(),
-				"Layout":  layout_,
-			}))
+		options_ := []HTMLTemplateOutputFormatterOption{
+			WithHTMLTemplateOutputFormatterData(
+				map[string]interface{}{
+					"Command": pc.Cmd.Description(),
+					"Layout":  layout_,
+				}),
+		}
+		options_ = append(options_, options...)
+
+		gp2, err := NewHTMLTemplateProcessor(gp, t, options_...)
 		if err != nil {
 			return nil, contextType, err
 		}
@@ -177,5 +188,5 @@ func NewDataTablesCreateProcessorFunc() (glazed.CreateProcessorFunc, error) {
 		return nil, err
 	}
 
-	return NewTemplateLookupCreateProcessorFunc(templateLookup, "data-tables.tmpl.html"), nil
+	return NewHTMLTemplateLookupCreateProcessorFunc(templateLookup, "data-tables.tmpl.html"), nil
 }

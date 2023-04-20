@@ -1,10 +1,12 @@
 package pkg
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/parka/pkg/render"
+	"golang.org/x/sync/errgroup"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -258,7 +260,7 @@ func (s *Server) serveMarkdownTemplatePage(c *gin.Context, page string, data int
 }
 
 // Run will start the server and listen on the given address and port.
-func (s *Server) Run() error {
+func (s *Server) Run(ctx context.Context) error {
 	for _, path := range s.StaticPaths {
 		s.Router.StaticFS(path.urlPath, path.fs)
 	}
@@ -272,5 +274,20 @@ func (s *Server) Run() error {
 	})
 
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
-	return s.Router.Run(addr)
+
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: s.Router,
+	}
+
+	eg := errgroup.Group{}
+	eg.Go(func() error {
+		<-ctx.Done()
+		return srv.Shutdown(ctx)
+	})
+	eg.Go(func() error {
+		return srv.ListenAndServe()
+	})
+
+	return eg.Wait()
 }

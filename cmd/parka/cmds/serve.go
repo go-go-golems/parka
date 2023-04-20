@@ -1,9 +1,11 @@
 package cmds
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/go-go-golems/glazed/pkg/cli"
+	"github.com/go-go-golems/glazed/pkg/helpers"
 	"github.com/go-go-golems/parka/pkg"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/rs/zerolog/log"
@@ -56,7 +58,17 @@ var ServeCmd = &cobra.Command{
 
 		s.Router.POST("/api/example", s.HandleSimpleFormCommand(NewExampleCommand()))
 
-		err = s.Run()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		go func() {
+			err := helpers.CancelOnSignal(ctx, os.Interrupt, cancel)
+			if err != nil && err != context.Canceled {
+				fmt.Println(err)
+			}
+		}()
+		err = s.Run(ctx)
+
 		cobra.CheckErr(err)
 	},
 }

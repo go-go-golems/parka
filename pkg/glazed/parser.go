@@ -24,6 +24,9 @@ import (
 // with the key deleted.
 type ParserFunc func(
 	c *gin.Context,
+	// This is not pretty, but it's needed to handle aliases until https://github.com/go-go-golems/glazed/issues/287
+	// is built.
+	defaults map[string]string,
 	ps map[string]interface{},
 	pds map[string]*parameters.ParameterDefinition,
 ) (map[string]*parameters.ParameterDefinition, error)
@@ -33,12 +36,13 @@ type ParserFunc func(
 func NewQueryParserFunc(onlyDefined bool) ParserFunc {
 	return func(
 		c *gin.Context,
+		defaults map[string]string,
 		ps map[string]interface{},
 		pd map[string]*parameters.ParameterDefinition,
 	) (map[string]*parameters.ParameterDefinition, error) {
 
 		for _, p := range pd {
-			value := c.Query(p.Name)
+			value := c.DefaultQuery(p.Name, defaults[p.Name])
 			if parameters.IsFileLoadingParameter(p.Type, value) {
 				// if the parameter is supposed to be read from a file, we will just pass in the query parameters
 				// as a placeholder here
@@ -88,12 +92,13 @@ func NewQueryParserFunc(onlyDefined bool) ParserFunc {
 // NewFormParserFunc returns a ParserFunc that takes an incoming multipart Form, and can thus also handle uploaded files.
 func NewFormParserFunc(onlyDefined bool) ParserFunc {
 	return func(c *gin.Context,
+		defaults map[string]string,
 		ps map[string]interface{},
 		pd map[string]*parameters.ParameterDefinition,
 	) (map[string]*parameters.ParameterDefinition, error) {
 
 		for _, p := range pd {
-			value := c.PostForm(p.Name)
+			value := c.DefaultPostForm(p.Name, defaults[p.Name])
 			// TODO(manuel, 2023-02-28) is this enough to check if a file is missing?
 			if value == "" {
 				if p.Required {
@@ -210,6 +215,7 @@ func ParseObjectFromFile(c *gin.Context, name string) (map[string]interface{}, e
 func NewStaticParserFunc(ps map[string]interface{}) ParserFunc {
 	return func(
 		c *gin.Context,
+		_ map[string]string,
 		ps_ map[string]interface{},
 		pds map[string]*parameters.ParameterDefinition,
 	) (map[string]*parameters.ParameterDefinition, error) {
@@ -230,6 +236,7 @@ func NewStaticParserFunc(ps map[string]interface{}) ParserFunc {
 func NewStaticLayerParserFunc(l layers.ParameterLayer) ParserFunc {
 	return func(
 		c *gin.Context,
+		_ map[string]string,
 		ps_ map[string]interface{},
 		pds map[string]*parameters.ParameterDefinition,
 	) (map[string]*parameters.ParameterDefinition, error) {

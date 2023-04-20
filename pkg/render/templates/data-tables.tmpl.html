@@ -6,17 +6,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Command.Name}} - {{.Command.Short}}</title>
 
-    <!-- DataTables CSS -->
+    <!-- DataTables, Milligram CSS -->
     <link rel="stylesheet" href="//cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.4.1/milligram.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.foundation.min.css">
 
-    <!-- jQuery and jQuery Validation Plugin -->
+    <!-- DataTables, jQuery and jQuery Validation Plugin -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.19.3/jquery.validate.min.js"></script>
     <script src="//cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
 </head>
 <body>
+
 {{ define "form-widget" }}
 <div {{ if .Id }}id="{{.Id}}"{{end}} {{ if .Classes }}class="{{.Classes }}"{{end}} {{ if .CSS }} style="{{.CSS}}"{{end}}>
     <!-- types can be string, int, float, bool, date, choice -->

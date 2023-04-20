@@ -84,7 +84,7 @@ func ComputeLayout(
 
 	values := pc.GetAllParameterValues()
 
-	if len(layout.Sections) == 0 {
+	if layout == nil || len(layout.Sections) == 0 {
 		pds := pc.GetFlagsAndArgumentsParameterDefinitions()
 		flagSection := NewSectionFromParameterDefinitions(
 			pds, values,

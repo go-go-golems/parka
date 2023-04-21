@@ -97,7 +97,13 @@
             </div>
         </div>
     </form>
-
+    <div class="row">
+        {{ range $link := .Links }}
+        <div class="column">
+            <a class="{{ $link.Class }}" href="{{ $link.Href }}" target="_blank">{{ $link.Text }}</a>
+        </div>
+        {{ end }}
+    </div>
     <hr>
     {{.Table}}
 </div>
@@ -164,6 +170,12 @@
 
         const url = window.location.href;
         document.getElementById('reset-form').href = url.split('?')[0];
+
+        // add query string to all links with class download as well
+        const links = document.getElementsByClassName('download');
+        for (let i = 0; i < links.length; i++) {
+            links[i].href += '?' + getQueryString();
+        }
     });
 </script>
 </body>

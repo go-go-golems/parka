@@ -236,14 +236,28 @@ func NewStaticParserFunc(ps map[string]interface{}) ParserFunc {
 func NewStaticLayerParserFunc(l layers.ParameterLayer) ParserFunc {
 	return func(
 		c *gin.Context,
-		_ map[string]string,
+		defaults map[string]string,
 		ps_ map[string]interface{},
 		pds map[string]*parameters.ParameterDefinition,
 	) (map[string]*parameters.ParameterDefinition, error) {
 		// add the static parameters
 		for _, pd := range l.GetParameterDefinitions() {
-			if pd.Default != nil {
-				ps_[pd.Name] = pd.Default
+			// here we need to parse the default
+			default_, ok := defaults[pd.Name]
+			if ok {
+				vs := []string{default_}
+				if parameters.IsListParameter(pd.Type) {
+					vs = strings.Split(default_, ",")
+				}
+				v, err := pd.ParseParameter(vs)
+				if err != nil {
+					return nil, fmt.Errorf("error parsing default value for parameter '%s': %v", pd.Name, err)
+				}
+				ps_[pd.Name] = v
+			} else {
+				if pd.Default != nil {
+					ps_[pd.Name] = pd.Default
+				}
 			}
 		}
 

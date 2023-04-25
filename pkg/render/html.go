@@ -182,11 +182,13 @@ func NewHTMLTemplateLookupCreateProcessorFunc(
 //go:embed templates/*
 var templateFS embed.FS
 
-func NewDefaultCreateProcessorFunc() (glazed.CreateProcessorFunc, error) {
+func NewDefaultCreateProcessorFunc(
+	options ...HTMLTemplateOutputFormatterOption,
+) (glazed.CreateProcessorFunc, error) {
 	templateLookup, err := LookupTemplateFromFSReloadable(templateFS, "templates/", "templates/**/*.tmpl.html")
 	if err != nil {
 		return nil, err
 	}
 
-	return NewHTMLTemplateLookupCreateProcessorFunc(templateLookup, "data-tables.tmpl.html"), nil
+	return NewHTMLTemplateLookupCreateProcessorFunc(templateLookup, "data-tables.tmpl.html", options...), nil
 }

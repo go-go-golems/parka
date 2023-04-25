@@ -33,32 +33,27 @@ func NewCommandContext(cmd cmds.GlazeCommand) *CommandContext {
 
 // GetAllParameterDefinitions returns a map of all parameter definitions for the command.
 // This includes flags, arguments and all layers.
-func (pc *CommandContext) GetAllParameterDefinitions() map[string]*parameters.ParameterDefinition {
+func (pc *CommandContext) GetAllParameterDefinitions() []*parameters.ParameterDefinition {
 	description := pc.Cmd.Description()
 
 	ret := pc.GetFlagsAndArgumentsParameterDefinitions()
 
 	for _, l := range description.Layers {
 		for _, p := range l.GetParameterDefinitions() {
-			ret[p.Name] = p
+			ret = append(ret, p)
 		}
 	}
 
 	return ret
 }
 
-func (pc *CommandContext) GetFlagsAndArgumentsParameterDefinitions() map[string]*parameters.ParameterDefinition {
-	ret := map[string]*parameters.ParameterDefinition{}
+func (pc *CommandContext) GetFlagsAndArgumentsParameterDefinitions() []*parameters.ParameterDefinition {
+	ret := []*parameters.ParameterDefinition{}
 
 	description := pc.Cmd.Description()
 
-	for _, f := range description.Flags {
-		ret[f.Name] = f
-	}
-
-	for _, a := range description.Arguments {
-		ret[a.Name] = a
-	}
+	ret = append(ret, description.Flags...)
+	ret = append(ret, description.Arguments...)
 
 	return ret
 }

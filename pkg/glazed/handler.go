@@ -55,6 +55,32 @@ func WithCreateProcessor(createProcessor CreateProcessorFunc) HandleOption {
 	}
 }
 
+func CreateJSONProcessor(c *gin.Context, pc *CommandContext) (
+	cmds.Processor,
+	string, // content type
+	error,
+) {
+	l, ok := pc.ParsedLayers["glazed"]
+	l.Parameters["output"] = "json"
+
+	var gp *cmds.GlazeProcessor
+	var err error
+
+	if ok {
+		gp, err = cli.SetupProcessor(l.Parameters)
+	} else {
+		gp, err = cli.SetupProcessor(map[string]interface{}{
+			"output": "json",
+		})
+	}
+
+	if err != nil {
+		return nil, "", err
+	}
+
+	return gp, "application/json", nil
+}
+
 // GinHandleGlazedCommand returns a gin.HandlerFunc that is responsible for
 // running the provided command, parsing the necessary context from the provided handlers.
 // This context is then used to create a cmds.Processor and to provide

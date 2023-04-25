@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"github.com/gin-gonic/contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/rs/zerolog/log"
@@ -138,6 +139,13 @@ func WithDefaultParkaStaticPaths() ServerOption {
 	return WithStaticPaths(
 		NewStaticPath(NewEmbedFileSystem(distFS, "web/dist"), "/dist"),
 	)
+}
+
+func WithGzip() ServerOption {
+	return func(s *Server) error {
+		s.Router.Use(gzip.Gzip(gzip.DefaultCompression))
+		return nil
+	}
 }
 
 // NewServer will create a new Server with the given options.

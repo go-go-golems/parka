@@ -4,8 +4,10 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"github.com/gin-gonic/contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/parka/pkg/render"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"html/template"
 	"io/fs"
@@ -50,14 +52,15 @@ type Server struct {
 	Address string
 }
 
-type ServerOption = func(*Server)
+type ServerOption = func(*Server) error
 
 // WithPrependTemplateLookups will prepend the given template lookups to the list of lookups,
 // ensuring that they will be found before whatever templates might already be in the list.
 func WithPrependTemplateLookups(lookups ...render.TemplateLookup) ServerOption {
-	return func(s *Server) {
+	return func(s *Server) error {
 		// prepend lookups to the list
 		s.TemplateLookups = append(lookups, s.TemplateLookups...)
+		return nil
 	}
 }
 
@@ -65,23 +68,25 @@ func WithPrependTemplateLookups(lookups ...render.TemplateLookup) ServerOption {
 // but they will be found after whatever templates might already be in the list. This is great
 // for providing fallback templates.
 func WithAppendTemplateLookups(lookups ...render.TemplateLookup) ServerOption {
-	return func(s *Server) {
+	return func(s *Server) error {
 		// append lookups to the list
 		s.TemplateLookups = append(s.TemplateLookups, lookups...)
+		return nil
 	}
 }
 
 // WithReplaceTemplateLookups will replace any existing template lookups with the given ones.
 func WithReplaceTemplateLookups(lookups ...render.TemplateLookup) ServerOption {
-	return func(s *Server) {
+	return func(s *Server) error {
 		s.TemplateLookups = lookups
+		return nil
 	}
 }
 
 // WithStaticPaths will add the given static paths to the list of static paths.
 // If a path with the same URL path already exists, it will be replaced.
 func WithStaticPaths(paths ...StaticPath) ServerOption {
-	return func(s *Server) {
+	return func(s *Server) error {
 		// prepend paths to the list
 	pathLoop:
 		for _, path := range paths {
@@ -93,20 +98,53 @@ func WithStaticPaths(paths ...StaticPath) ServerOption {
 			}
 			s.StaticPaths = append(s.StaticPaths, path)
 		}
+
+		return nil
 	}
 }
 
 // WithPort will set the port that the server will listen on.
 func WithPort(port uint16) ServerOption {
-	return func(s *Server) {
+	return func(s *Server) error {
 		s.Port = port
+		return nil
 	}
 }
 
 // WithAddress will set the address that the server will listen on.
 func WithAddress(address string) ServerOption {
-	return func(s *Server) {
+	return func(s *Server) error {
 		s.Address = address
+		return nil
+	}
+}
+
+func WithFailOption(err error) ServerOption {
+	return func(_ *Server) error {
+		return err
+	}
+}
+
+func WithDefaultParkaLookup() ServerOption {
+	// this should be overloaded too
+	parkaLookup, err := render.LookupTemplateFromFS(templateFS, "web/src/templates", "**/*.tmpl.*")
+	if err != nil {
+		return WithFailOption(err)
+	}
+
+	return WithAppendTemplateLookups(parkaLookup)
+}
+
+func WithDefaultParkaStaticPaths() ServerOption {
+	return WithStaticPaths(
+		NewStaticPath(NewEmbedFileSystem(distFS, "web/dist"), "/dist"),
+	)
+}
+
+func WithGzip() ServerOption {
+	return func(s *Server) error {
+		s.Router.Use(gzip.Gzip(gzip.DefaultCompression))
+		return nil
 	}
 }
 
@@ -117,23 +155,17 @@ func WithAddress(address string) ServerOption {
 func NewServer(options ...ServerOption) (*Server, error) {
 	router := gin.Default()
 
-	parkaLookup, err := render.LookupTemplateFromFS(templateFS, "web/src/templates", "**/*.tmpl.*")
-	if err != nil {
-		return nil, err
-	}
-
 	s := &Server{
-		Router: router,
-		StaticPaths: []StaticPath{
-			NewStaticPath(NewEmbedFileSystem(distFS, "web/dist"), "/dist"),
-		},
-		TemplateLookups: []render.TemplateLookup{
-			parkaLookup,
-		},
+		Router:          router,
+		StaticPaths:     []StaticPath{},
+		TemplateLookups: []render.TemplateLookup{},
 	}
 
 	for _, option := range options {
-		option(s)
+		err := option(s)
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply option: %w", err)
+		}
 	}
 
 	return s, nil
@@ -192,6 +224,10 @@ func (s *Server) LookupTemplate(name ...string) (*template.Template, error) {
 
 	for _, lookup := range s.TemplateLookups {
 		t, err := lookup(name...)
+		if err != nil {
+			log.Warn().Err(err).Strs("name", name).Msg("failed to lookup template, skipping")
+
+		}
 		if err == nil {
 			return t, nil
 		}

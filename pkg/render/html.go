@@ -7,6 +7,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/formatters"
+	"github.com/go-go-golems/glazed/pkg/formatters/json"
 	"github.com/go-go-golems/glazed/pkg/formatters/table"
 	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/render/layout"
@@ -25,9 +26,18 @@ type HTMLTemplateOutputFormatter struct {
 	*table.OutputFormatter
 	t    *template.Template
 	data map[string]interface{}
+	// renderAsJavascript means that we will render the table into the toplevel element
+	// `tableData` in javascript, and not call the parent output formatter
+	renderAsJavascript bool
 }
 
 type HTMLTemplateOutputFormatterOption func(*HTMLTemplateOutputFormatter)
+
+func WithJavascriptRendering() HTMLTemplateOutputFormatterOption {
+	return func(of *HTMLTemplateOutputFormatter) {
+		of.renderAsJavascript = true
+	}
+}
 
 func WithHTMLTemplateOutputFormatterData(data map[string]interface{}) HTMLTemplateOutputFormatterOption {
 	return func(of *HTMLTemplateOutputFormatter) {
@@ -58,19 +68,32 @@ func NewHTMLTemplateOutputFormatter(
 }
 
 func (H *HTMLTemplateOutputFormatter) Output() (string, error) {
-	res, err := H.OutputFormatter.Output()
-	if err != nil {
-		return "", err
-	}
-
 	data := map[string]interface{}{}
 	for k, v := range H.data {
 		data[k] = v
 	}
-	data["Table"] = template.HTML(res)
+	data["Columns"] = H.OutputFormatter.Table.Columns
+	data["Table"] = H.OutputFormatter.Table
+	data["RenderAsJavascript"] = H.renderAsJavascript
+
+	if H.renderAsJavascript {
+		jsonOutputFormatter := json.NewOutputFormatter(json.WithTable(H.OutputFormatter.Table))
+		output, err := jsonOutputFormatter.Output()
+		if err != nil {
+			return "", err
+		}
+		data["JSTable"] = template.JS(output)
+	} else {
+		res, err := H.OutputFormatter.Output()
+		if err != nil {
+			return "", err
+		}
+
+		data["HTMLTable"] = template.HTML(res)
+	}
 
 	buf := new(bytes.Buffer)
-	err = H.t.Execute(buf, data)
+	err := H.t.Execute(buf, data)
 
 	if err != nil {
 		return "", err
@@ -182,7 +205,7 @@ func NewHTMLTemplateLookupCreateProcessorFunc(
 //go:embed templates/*
 var templateFS embed.FS
 
-func NewDefaultCreateProcessorFunc(
+func NewDataTablesHTMLTemplateCreateProcessorFunc(
 	options ...HTMLTemplateOutputFormatterOption,
 ) (glazed.CreateProcessorFunc, error) {
 	templateLookup, err := LookupTemplateFromFSReloadable(templateFS, "templates/", "templates/**/*.tmpl.html")

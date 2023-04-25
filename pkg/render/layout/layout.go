@@ -108,6 +108,11 @@ func ComputeLayout(
 		//}
 	} else {
 		allParameterDefinitions := pc.GetAllParameterDefinitions()
+		allParameterDefinitionsByName := map[string]*parameters.ParameterDefinition{}
+
+		for _, pd := range allParameterDefinitions {
+			allParameterDefinitionsByName[pd.Name] = pd
+		}
 
 		for _, section_ := range layout.Sections {
 			section := &Section{
@@ -124,7 +129,7 @@ func ComputeLayout(
 				}
 
 				for _, input_ := range row_.Inputs {
-					pd, ok := allParameterDefinitions[input_.Name]
+					pd, ok := allParameterDefinitionsByName[input_.Name]
 					if !ok {
 						return nil, fmt.Errorf("parameter %s not found", input_.Name)
 					}
@@ -201,7 +206,7 @@ func choicesToOptions(choices []string) []Option {
 }
 
 func NewSectionFromParameterDefinitions(
-	pds map[string]*parameters.ParameterDefinition,
+	pds []*parameters.ParameterDefinition,
 	values map[string]interface{},
 	options ...SectionOption) *Section {
 	section := &Section{

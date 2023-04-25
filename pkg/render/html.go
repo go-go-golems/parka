@@ -67,7 +67,9 @@ func (H *HTMLTemplateOutputFormatter) Output() (string, error) {
 	for k, v := range H.data {
 		data[k] = v
 	}
-	data["Table"] = template.HTML(res)
+	data["Columns"] = H.OutputFormatter.Table.Columns
+	data["Table"] = H.OutputFormatter.Table
+	data["HTMLTable"] = template.HTML(res)
 
 	buf := new(bytes.Buffer)
 	err = H.t.Execute(buf, data)

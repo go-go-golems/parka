@@ -146,7 +146,10 @@
             }
             // iterate over json[0] and return { "data": element } for each element
             return Object.keys(json[0]).map(function (key) {
-                return {"data": key};
+                return {
+                    "data": key,
+                    "title": key,
+                };
             });
         }
 

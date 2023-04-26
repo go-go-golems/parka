@@ -24,7 +24,8 @@ func (s *Server) HandleSimpleQueryCommand(
 ) gin.HandlerFunc {
 	opts := glazed.NewHandleOptions(options)
 	opts.Handlers = append(opts.Handlers,
-		glazed.NewCommandHandlerFunc(cmd, glazed.NewCommandQueryParser(cmd, opts.ParserOptions...)),
+		glazed.NewCommandHandlerFunc(cmd,
+			glazed.NewCommandQueryParser(cmd, opts.ParserOptions...)),
 	)
 	return glazed.GinHandleGlazedCommand(cmd, opts)
 }

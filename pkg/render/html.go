@@ -185,11 +185,19 @@ func NewHTMLTemplateLookupCreateProcessorFunc(
 			return nil, contextType, err
 		}
 
+		description := pc.Cmd.Description()
+
+		longHTML, err := RenderMarkdownToHTML(description.Long)
+		if err != nil {
+			return nil, contextType, err
+		}
+
 		options_ := []HTMLTemplateOutputFormatterOption{
 			WithHTMLTemplateOutputFormatterData(
 				map[string]interface{}{
-					"Command": pc.Cmd.Description(),
-					"Layout":  layout_,
+					"Command":         description,
+					"LongDescription": template.HTML(longHTML),
+					"Layout":          layout_,
 				}),
 		}
 		options_ = append(options_, options...)

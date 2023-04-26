@@ -242,6 +242,9 @@ func NewSectionFromParameterDefinitions(
 			currentRow = Row{}
 		}
 	}
+	if len(currentRow.Inputs) > 0 {
+		section.Rows = append(section.Rows, currentRow)
+	}
 
 	return section
 }

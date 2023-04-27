@@ -1,18 +1,21 @@
 package render
 
 import (
-	"bytes"
+	"context"
 	"embed"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cli"
-	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/formatters"
 	"github.com/go-go-golems/glazed/pkg/formatters/json"
 	"github.com/go-go-golems/glazed/pkg/formatters/table"
+	"github.com/go-go-golems/glazed/pkg/processor"
 	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/render/layout"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
+	"golang.org/x/sync/errgroup"
 	"html/template"
+	"io"
 )
 
 // This file contains a variety of output renderers for HTML output.
@@ -67,7 +70,56 @@ func NewHTMLTemplateOutputFormatter(
 	return ret
 }
 
-func (H *HTMLTemplateOutputFormatter) Output() (string, error) {
+func StartFormatIntoChannel[T interface{ ~string }](
+	ctx context.Context,
+	formatter formatters.OutputFormatter,
+) <-chan T {
+	reader, writer := io.Pipe()
+	c := make(chan T)
+
+	eg, ctx2 := errgroup.WithContext(ctx)
+
+	eg.Go(func() error {
+		defer close(c)
+
+		// read 8k chunks from reader
+		buf := make([]byte, 8192)
+		for {
+			select {
+			case <-ctx2.Done():
+				return nil
+			default:
+				n, err := reader.Read(buf)
+				if err != nil {
+					return err
+				}
+
+				c <- T(buf[:n])
+			}
+		}
+	})
+
+	eg.Go(func() error {
+		err := formatter.Output(ctx2, writer)
+		defer writer.Close()
+		if err != nil {
+			writer.CloseWithError(err)
+			return err
+		}
+		return nil
+	})
+
+	go func() {
+		err := eg.Wait()
+		if err != nil {
+			log.Error().Err(err).Msg("error in stream formatter")
+		}
+	}()
+
+	return c
+}
+
+func (H *HTMLTemplateOutputFormatter) Output(ctx context.Context, w io.Writer) error {
 	data := map[string]interface{}{}
 	for k, v := range H.data {
 		data[k] = v
@@ -78,38 +130,30 @@ func (H *HTMLTemplateOutputFormatter) Output() (string, error) {
 
 	if H.renderAsJavascript {
 		jsonOutputFormatter := json.NewOutputFormatter(json.WithTable(H.OutputFormatter.Table))
-		output, err := jsonOutputFormatter.Output()
-		if err != nil {
-			return "", err
-		}
-		data["JSTable"] = template.JS(output)
+		c := StartFormatIntoChannel[template.JS](ctx, jsonOutputFormatter)
+		data["JSTableStream"] = c
 	} else {
-		res, err := H.OutputFormatter.Output()
-		if err != nil {
-			return "", err
-		}
-
-		data["HTMLTable"] = template.HTML(res)
+		c := StartFormatIntoChannel[template.HTML](ctx, H.OutputFormatter)
+		data["HTMLTableStream"] = c
 	}
 
-	buf := new(bytes.Buffer)
-	err := H.t.Execute(buf, data)
+	err := H.t.Execute(w, data)
 
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return buf.String(), err
+	return err
 }
 
 type HTMLTemplateProcessor struct {
-	*cmds.GlazeProcessor
+	*processor.GlazeProcessor
 
 	of *HTMLTemplateOutputFormatter
 }
 
 func NewHTMLTemplateProcessor(
-	gp *cmds.GlazeProcessor,
+	gp *processor.GlazeProcessor,
 	t *template.Template,
 	options ...HTMLTemplateOutputFormatterOption,
 ) (*HTMLTemplateProcessor, error) {
@@ -139,7 +183,7 @@ func NewHTMLTemplateLookupCreateProcessorFunc(
 	options ...HTMLTemplateOutputFormatterOption,
 ) glazed.CreateProcessorFunc {
 	return func(c *gin.Context, pc *glazed.CommandContext) (
-		cmds.Processor,
+		processor.Processor,
 		string, // content type
 		error,
 	) {
@@ -164,7 +208,7 @@ func NewHTMLTemplateLookupCreateProcessorFunc(
 		l.Parameters["output"] = "table"
 		l.Parameters["table-format"] = "html"
 
-		var gp *cmds.GlazeProcessor
+		var gp *processor.GlazeProcessor
 
 		if ok {
 			gp, err = cli.SetupProcessor(l.Parameters)

@@ -6,6 +6,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/processor"
 )
 
 type ExampleCommand struct {
@@ -107,7 +108,7 @@ func (e *ExampleCommand) Run(
 	ctx context.Context,
 	parsedLayers map[string]*layers.ParsedParameterLayer,
 	ps map[string]interface{},
-	gp cmds.Processor,
+	gp processor.Processor,
 ) error {
 	obj := map[string]interface{}{
 		"test":             ps["test"],
@@ -123,12 +124,12 @@ func (e *ExampleCommand) Run(
 		"float_list":       ps["float_list"],
 		"choice":           ps["choice"],
 	}
-	err := gp.ProcessInputObject(obj)
+	err := gp.ProcessInputObject(ctx, obj)
 	if err != nil {
 		return err
 	}
 
-	err = gp.ProcessInputObject(map[string]interface{}{
+	err = gp.ProcessInputObject(ctx, map[string]interface{}{
 		"test":  "test",
 		"test2": []int{123, 123, 123, 123},
 		"test3": map[string]interface{}{
@@ -146,6 +147,6 @@ func (e *ExampleCommand) Description() *cmds.CommandDescription {
 	return e.description
 }
 
-func (e *ExampleCommand) RunFromParka(c *gin.Context, parsedLayers map[string]*layers.ParsedParameterLayer, ps map[string]interface{}, gp *cmds.GlazeProcessor) error {
+func (e *ExampleCommand) RunFromParka(c *gin.Context, parsedLayers map[string]*layers.ParsedParameterLayer, ps map[string]interface{}, gp *processor.GlazeProcessor) error {
 	return e.Run(c, parsedLayers, ps, gp)
 }

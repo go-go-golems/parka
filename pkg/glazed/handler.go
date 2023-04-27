@@ -97,7 +97,7 @@ func GinHandleGlazedCommand(
 	opts *HandleOptions,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		contentType, s, err := runGlazeCommand(c, cmd, opts)
+		err := runGlazeCommand(c, cmd, opts)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
@@ -106,12 +106,6 @@ func GinHandleGlazedCommand(
 		}
 
 		c.Status(200)
-		c.Writer.Header().Set("Content-Type", contentType)
-		_, err = c.Writer.Write([]byte(s))
-		if err != nil {
-			_ = c.AbortWithError(http.StatusInternalServerError, err)
-			return
-		}
 	}
 }
 
@@ -125,7 +119,7 @@ func GinHandleGlazedCommandWithOutputFile(
 	opts *HandleOptions,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		contentType, s, err := runGlazeCommand(c, cmd, opts)
+		err := runGlazeCommand(c, cmd, opts)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
@@ -134,7 +128,6 @@ func GinHandleGlazedCommandWithOutputFile(
 		}
 
 		c.Status(200)
-		c.Writer.Header().Set("Content-Type", contentType)
 
 		f, err := os.Open(outputFile)
 		if err != nil {
@@ -148,7 +141,6 @@ func GinHandleGlazedCommandWithOutputFile(
 
 		_, err = io.Copy(c.Writer, f)
 		if err != nil {
-			_, err = c.Writer.Write([]byte(s))
 			if err != nil {
 				_ = c.AbortWithError(http.StatusInternalServerError, err)
 				return
@@ -157,13 +149,13 @@ func GinHandleGlazedCommandWithOutputFile(
 	}
 }
 
-func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions) (string, string, error) {
+func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions) error {
 	pc := NewCommandContext(cmd)
 
 	for _, h := range opts.Handlers {
 		err := h(c, pc)
 		if err != nil {
-			return "", "", err
+			return err
 		}
 	}
 
@@ -180,12 +172,12 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 		gp, err = SetupProcessor(pc)
 	}
 	if err != nil {
-		return "", "", err
+		return err
 	}
 
 	err = cmd.Run(c, pc.ParsedLayers, pc.ParsedParameters, gp)
 	if err != nil {
-		return "", "", err
+		return err
 	}
 
 	// NOTE(manuel, 2023-04-16) API design wise, we might want to reuse gin.HandlerFunc here for lower processing
@@ -218,12 +210,13 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 		}
 	}
 
-	s, err := of.Output(c)
+	err = of.Output(c, c.Writer)
 	if err != nil {
-		return "", "", err
+		return err
 	}
+	c.Writer.Header().Set("Content-Type", contentType)
 
-	return contentType, s, err
+	return err
 }
 
 // SetupProcessor creates a new cmds.GlazeProcessor. It uses the parsed layer glazed if present, and return

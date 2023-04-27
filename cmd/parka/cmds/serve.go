@@ -108,9 +108,8 @@ var LsServerCmd = &cobra.Command{
 			cobra.CheckErr(err)
 		}
 
-		s, err := gp.OutputFormatter().Output(ctx)
+		err = gp.OutputFormatter().Output(ctx, os.Stdout)
 		cobra.CheckErr(err)
-		fmt.Print(s)
 	},
 }
 

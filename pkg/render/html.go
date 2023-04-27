@@ -112,7 +112,9 @@ func StartFormatIntoChannel[T interface{ ~string }](
 	go func() {
 		err := eg.Wait()
 		if err != nil {
-			log.Error().Err(err).Msg("error in stream formatter")
+			if err != io.EOF {
+				log.Error().Err(err).Msg("error in stream formatter")
+			}
 		}
 	}()
 

@@ -77,6 +77,8 @@ var LsServerCmd = &cobra.Command{
 	Use:   "ls",
 	Short: "List a server's commands",
 	Run: func(cmd *cobra.Command, args []string) {
+		ctx := cmd.Context()
+
 		server, err := cmd.Flags().GetString("server")
 		cobra.CheckErr(err)
 
@@ -102,11 +104,11 @@ var LsServerCmd = &cobra.Command{
 		cobra.CheckErr(err)
 
 		for _, cmd := range cmds {
-			err = gp.ProcessInputObject(cmd)
+			err = gp.ProcessInputObject(ctx, cmd)
 			cobra.CheckErr(err)
 		}
 
-		s, err := gp.OutputFormatter().Output()
+		s, err := gp.OutputFormatter().Output(ctx)
 		cobra.CheckErr(err)
 		fmt.Print(s)
 	},

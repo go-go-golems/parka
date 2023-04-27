@@ -2,13 +2,14 @@ package render
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cli"
-	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/formatters"
 	"github.com/go-go-golems/glazed/pkg/formatters/json"
 	"github.com/go-go-golems/glazed/pkg/formatters/table"
+	"github.com/go-go-golems/glazed/pkg/processor"
 	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/render/layout"
 	"github.com/pkg/errors"
@@ -67,7 +68,7 @@ func NewHTMLTemplateOutputFormatter(
 	return ret
 }
 
-func (H *HTMLTemplateOutputFormatter) Output() (string, error) {
+func (H *HTMLTemplateOutputFormatter) Output(ctx context.Context) (string, error) {
 	data := map[string]interface{}{}
 	for k, v := range H.data {
 		data[k] = v
@@ -78,13 +79,13 @@ func (H *HTMLTemplateOutputFormatter) Output() (string, error) {
 
 	if H.renderAsJavascript {
 		jsonOutputFormatter := json.NewOutputFormatter(json.WithTable(H.OutputFormatter.Table))
-		output, err := jsonOutputFormatter.Output()
+		output, err := jsonOutputFormatter.Output(ctx)
 		if err != nil {
 			return "", err
 		}
 		data["JSTable"] = template.JS(output)
 	} else {
-		res, err := H.OutputFormatter.Output()
+		res, err := H.OutputFormatter.Output(ctx)
 		if err != nil {
 			return "", err
 		}
@@ -103,13 +104,13 @@ func (H *HTMLTemplateOutputFormatter) Output() (string, error) {
 }
 
 type HTMLTemplateProcessor struct {
-	*cmds.GlazeProcessor
+	*processor.GlazeProcessor
 
 	of *HTMLTemplateOutputFormatter
 }
 
 func NewHTMLTemplateProcessor(
-	gp *cmds.GlazeProcessor,
+	gp *processor.GlazeProcessor,
 	t *template.Template,
 	options ...HTMLTemplateOutputFormatterOption,
 ) (*HTMLTemplateProcessor, error) {
@@ -139,7 +140,7 @@ func NewHTMLTemplateLookupCreateProcessorFunc(
 	options ...HTMLTemplateOutputFormatterOption,
 ) glazed.CreateProcessorFunc {
 	return func(c *gin.Context, pc *glazed.CommandContext) (
-		cmds.Processor,
+		processor.Processor,
 		string, // content type
 		error,
 	) {
@@ -164,7 +165,7 @@ func NewHTMLTemplateLookupCreateProcessorFunc(
 		l.Parameters["output"] = "table"
 		l.Parameters["table-format"] = "html"
 
-		var gp *cmds.GlazeProcessor
+		var gp *processor.GlazeProcessor
 
 		if ok {
 			gp, err = cli.SetupProcessor(l.Parameters)

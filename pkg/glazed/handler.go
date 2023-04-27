@@ -9,6 +9,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/formatters/table"
 	"github.com/go-go-golems/glazed/pkg/formatters/template"
 	"github.com/go-go-golems/glazed/pkg/formatters/yaml"
+	"github.com/go-go-golems/glazed/pkg/processor"
 	"io"
 	"net/http"
 	"os"
@@ -16,7 +17,7 @@ import (
 
 // CreateProcessorFunc is a simple func type to create a cmds.GlazeProcessor and formatters.OutputFormatter out of a CommandContext.
 type CreateProcessorFunc func(c *gin.Context, pc *CommandContext) (
-	cmds.Processor,
+	processor.Processor,
 	string, // content type
 	error,
 )
@@ -56,14 +57,14 @@ func WithCreateProcessor(createProcessor CreateProcessorFunc) HandleOption {
 }
 
 func CreateJSONProcessor(c *gin.Context, pc *CommandContext) (
-	cmds.Processor,
+	processor.Processor,
 	string, // content type
 	error,
 ) {
 	l, ok := pc.ParsedLayers["glazed"]
 	l.Parameters["output"] = "json"
 
-	var gp *cmds.GlazeProcessor
+	var gp *processor.GlazeProcessor
 	var err error
 
 	if ok {
@@ -166,7 +167,7 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 		}
 	}
 
-	var gp cmds.Processor
+	var gp processor.Processor
 
 	var contentType string
 
@@ -217,7 +218,7 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 		}
 	}
 
-	s, err := of.Output()
+	s, err := of.Output(c)
 	if err != nil {
 		return "", "", err
 	}
@@ -227,7 +228,7 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 
 // SetupProcessor creates a new cmds.GlazeProcessor. It uses the parsed layer glazed if present, and return
 // a simple JsonOutputFormatter and standard glazed processor otherwise.
-func SetupProcessor(pc *CommandContext) (*cmds.GlazeProcessor, error) {
+func SetupProcessor(pc *CommandContext) (*processor.GlazeProcessor, error) {
 	l, ok := pc.ParsedLayers["glazed"]
 	if ok {
 		gp, err := cli.SetupProcessor(l.Parameters)
@@ -237,7 +238,7 @@ func SetupProcessor(pc *CommandContext) (*cmds.GlazeProcessor, error) {
 	of := json.NewOutputFormatter(
 		json.WithOutputIndividualRows(true),
 	)
-	gp := cmds.NewGlazeProcessor(of)
+	gp := processor.NewGlazeProcessor(of)
 
 	return gp, nil
 }

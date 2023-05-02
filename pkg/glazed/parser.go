@@ -13,6 +13,7 @@ import (
 	"io"
 	"mime/multipart"
 	"strings"
+	"time"
 )
 
 // ParserFunc is used to parse parameters out of a gin.Context (meaning
@@ -67,7 +68,22 @@ func NewQueryParserFunc(onlyDefined bool) ParserFunc {
 						return nil, fmt.Errorf("required parameter '%s' is missing", p.Name)
 					}
 					if !onlyDefined {
-						ps[p.Name] = p.Default
+						if p.Type == parameters.ParameterTypeDate {
+							switch v := p.Default.(type) {
+							case string:
+								parsedDate, err := parameters.ParseDate(v)
+								if err != nil {
+									return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
+								}
+
+								ps[p.Name] = parsedDate
+							case time.Time:
+								ps[p.Name] = v
+
+							}
+						} else {
+							ps[p.Name] = p.Default
+						}
 					}
 				} else {
 					var values []string
@@ -105,7 +121,22 @@ func NewFormParserFunc(onlyDefined bool) ParserFunc {
 					return nil, fmt.Errorf("required parameter '%s' is missing", p.Name)
 				}
 				if !onlyDefined {
-					ps[p.Name] = p.Default
+					if p.Type == parameters.ParameterTypeDate {
+						switch v := p.Default.(type) {
+						case string:
+							parsedDate, err := parameters.ParseDate(v)
+							if err != nil {
+								return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
+							}
+
+							ps[p.Name] = parsedDate
+						case time.Time:
+							ps[p.Name] = v
+
+						}
+					} else {
+						ps[p.Name] = p.Default
+					}
 				}
 			} else if !parameters.IsFileLoadingParameter(p.Type, value) {
 				v := []string{value}

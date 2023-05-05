@@ -6,7 +6,7 @@ require (
 	github.com/alecthomas/chroma/v2 v2.2.0
 	github.com/gin-gonic/contrib v0.0.0-20221130124618-7e01895a63f2
 	github.com/gin-gonic/gin v1.9.0
-	github.com/go-go-golems/glazed v0.2.76
+	github.com/go-go-golems/glazed v0.2.77
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.29.0
 	github.com/spf13/cobra v1.6.1
@@ -68,7 +68,7 @@ require (
 	github.com/subosito/gotenv v1.4.2 // indirect
 	github.com/tj/go-naturaldate v1.3.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
-	github.com/ugorji/go/codec v1.2.9 // indirect
+	github.com/ugorji/go/codec v1.2.11 // indirect
 	github.com/xuri/efp v0.0.0-20220603152613-6918739fd470 // indirect
 	github.com/xuri/excelize/v2 v2.7.0 // indirect
 	github.com/xuri/nfp v0.0.0-20220409054826-5e722a1d9e22 // indirect

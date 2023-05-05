@@ -27,6 +27,7 @@ type StaticPath struct {
 	urlPath string
 }
 
+// NewStaticPath creates a new StaticPath that will serve files from the given http.FileSystem.
 func NewStaticPath(fs http.FileSystem, urlPath string) StaticPath {
 	return StaticPath{
 		fs:      fs,
@@ -34,20 +35,24 @@ func NewStaticPath(fs http.FileSystem, urlPath string) StaticPath {
 	}
 }
 
+// AddPrefixPathFS is a helper wrapper that will a prefix to each incoming filename that is to be opened.
+// This is useful for embedFS which will keep their prefix. For example, mounting the embed fs go:embed static
+// will retain the static/* prefix, while the static gin handler will strip it.
 type AddPrefixPathFS struct {
-	fs      fs.FS
-	addPath string
+	fs     fs.FS
+	prefix string
 }
 
-func NewAddPrefixPathFS(fs fs.FS, addPath string) AddPrefixPathFS {
+// NewAddPrefixPathFS creates a new AddPrefixPathFS that will add the given prefix to each file that is opened..
+func NewAddPrefixPathFS(fs fs.FS, prefix string) AddPrefixPathFS {
 	return AddPrefixPathFS{
-		fs:      fs,
-		addPath: addPath,
+		fs:     fs,
+		prefix: prefix,
 	}
 }
 
 func (s AddPrefixPathFS) Open(name string) (fs.File, error) {
-	return s.fs.Open(s.addPath + name)
+	return s.fs.Open(s.prefix + name)
 }
 
 // Server is the main class that parka uses to serve static and templated content.

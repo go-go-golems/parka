@@ -34,6 +34,22 @@ func NewStaticPath(fs http.FileSystem, urlPath string) StaticPath {
 	}
 }
 
+type AddPrefixPathFS struct {
+	fs      fs.FS
+	addPath string
+}
+
+func NewAddPrefixPathFS(fs fs.FS, addPath string) AddPrefixPathFS {
+	return AddPrefixPathFS{
+		fs:      fs,
+		addPath: addPath,
+	}
+}
+
+func (s AddPrefixPathFS) Open(name string) (fs.File, error) {
+	return s.fs.Open(s.addPath + name)
+}
+
 // Server is the main class that parka uses to serve static and templated content.
 // It is a wrapper around gin.Engine.
 //

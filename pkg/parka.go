@@ -246,7 +246,7 @@ func (s *Server) LookupTemplate(name ...string) (*template.Template, error) {
 	for _, lookup := range s.TemplateLookups {
 		t, err := lookup(name...)
 		if err != nil {
-			log.Warn().Err(err).Strs("name", name).Msg("failed to lookup template, skipping")
+			log.Debug().Err(err).Strs("name", name).Msg("failed to lookup template, skipping")
 
 		}
 		if err == nil {

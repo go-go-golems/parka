@@ -12,7 +12,6 @@ import (
 	"html/template"
 	"io/fs"
 	"os"
-	"strings"
 )
 
 // TemplateLookup is a function that will lookup a template by name.
@@ -93,16 +92,10 @@ func LookupTemplateFromFS(_fs fs.FS, baseDir string, patterns ...string) (Templa
 
 // LoadTemplateFS will load a template from a fs.FS.
 func LoadTemplateFS(_fs fs.FS, baseDir string, patterns ...string) (*template.Template, error) {
-	if !strings.HasSuffix(baseDir, "/") {
-		baseDir += "/"
-	}
 	tmpl := templating.CreateHTMLTemplate("")
-	var err error
-	for _, p := range patterns {
-		err = templating.ParseHTMLFS(tmpl, _fs, p, baseDir)
-		if err != nil {
-			return nil, err
-		}
+	err := templating.ParseHTMLFS(tmpl, _fs, patterns, baseDir)
+	if err != nil {
+		return nil, err
 	}
 
 	return tmpl, nil

@@ -271,7 +271,7 @@ func (s *Server) LookupTemplate(name ...string) (*template.Template, error) {
 func (s *Server) serveMarkdownTemplatePage(c *gin.Context, page string, data interface{}) {
 	t, err := s.LookupTemplate(page+".tmpl.md", page+".md")
 	if err != nil {
-		c.String(http.StatusInternalServerError, "Error rendering template")
+		c.String(http.StatusInternalServerError, "Error looking up template")
 		return
 	}
 
@@ -325,10 +325,18 @@ func (s *Server) Run(ctx context.Context) error {
 	s.Router.GET("/", func(c *gin.Context) {
 		s.serveMarkdownTemplatePage(c, "index", nil)
 	})
-	s.Router.GET("/:page", func(c *gin.Context) {
-		page := c.Param("page")
-		s.serveMarkdownTemplatePage(c, page, nil)
-	})
+
+	// match all remaining paths to the templates
+	s.Router.Use(
+		func(c *gin.Context) {
+			rawPath := c.Request.URL.Path
+			if len(rawPath) > 0 && rawPath[0] == '/' {
+				trimmedPath := rawPath[1:]
+				s.serveMarkdownTemplatePage(c, trimmedPath, nil)
+				return
+			}
+			c.Next()
+		})
 
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
 

@@ -1,6 +1,7 @@
 package glazed
 
 import (
+	"bytes"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -26,9 +27,25 @@ type HandleOptions struct {
 	ParserOptions   []ParserOption
 	Handlers        []CommandHandlerFunc
 	CreateProcessor CreateProcessorFunc
+	Writer          io.Writer
 }
 
 type HandleOption func(*HandleOptions)
+
+func (h *HandleOptions) Copy(options ...HandleOption) *HandleOptions {
+	ret := &HandleOptions{
+		ParserOptions:   h.ParserOptions,
+		Handlers:        h.Handlers,
+		CreateProcessor: h.CreateProcessor,
+		Writer:          h.Writer,
+	}
+
+	for _, option := range options {
+		option(ret)
+	}
+
+	return ret
+}
 
 func NewHandleOptions(options []HandleOption) *HandleOptions {
 	opts := &HandleOptions{}
@@ -50,13 +67,19 @@ func WithHandlers(handlers ...CommandHandlerFunc) HandleOption {
 	}
 }
 
+func WithWriter(w io.Writer) HandleOption {
+	return func(o *HandleOptions) {
+		o.Writer = w
+	}
+}
+
 func WithCreateProcessor(createProcessor CreateProcessorFunc) HandleOption {
 	return func(o *HandleOptions) {
 		o.CreateProcessor = createProcessor
 	}
 }
 
-func CreateJSONProcessor(c *gin.Context, pc *CommandContext) (
+func CreateJSONProcessor(_ *gin.Context, pc *CommandContext) (
 	processor.Processor,
 	string, // content type
 	error,
@@ -119,7 +142,9 @@ func GinHandleGlazedCommandWithOutputFile(
 	opts *HandleOptions,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		err := runGlazeCommand(c, cmd, opts)
+		buf := &bytes.Buffer{}
+		opts_ := opts.Copy(WithWriter(buf))
+		err := runGlazeCommand(c, cmd, opts_)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
@@ -134,8 +159,9 @@ func GinHandleGlazedCommandWithOutputFile(
 			_ = c.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
-		// Handle error
-		defer f.Close()
+		defer func(f *os.File) {
+			_ = f.Close()
+		}(f)
 
 		c.Writer.Header().Set("Content-Disposition", "attachment; filename="+fileName)
 
@@ -210,11 +236,18 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 		}
 	}
 
-	err = of.Output(c, c.Writer)
+	if opts.Writer == nil {
+		c.Writer.Header().Set("Content-Type", contentType)
+	}
+
+	var writer io.Writer = c.Writer
+	if opts.Writer != nil {
+		writer = opts.Writer
+	}
+	err = of.Output(c, writer)
 	if err != nil {
 		return err
 	}
-	c.Writer.Header().Set("Content-Type", contentType)
 
 	return err
 }

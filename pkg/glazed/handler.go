@@ -79,7 +79,7 @@ func WithCreateProcessor(createProcessor CreateProcessorFunc) HandleOption {
 	}
 }
 
-func CreateJSONProcessor(c *gin.Context, pc *CommandContext) (
+func CreateJSONProcessor(_ *gin.Context, pc *CommandContext) (
 	processor.Processor,
 	string, // content type
 	error,

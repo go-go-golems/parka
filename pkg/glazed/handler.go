@@ -1,6 +1,7 @@
 package glazed
 
 import (
+	"bytes"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -26,9 +27,19 @@ type HandleOptions struct {
 	ParserOptions   []ParserOption
 	Handlers        []CommandHandlerFunc
 	CreateProcessor CreateProcessorFunc
+	Writer          io.Writer
 }
 
 type HandleOption func(*HandleOptions)
+
+func (h *HandleOptions) Copy(options ...HandleOption) *HandleOptions {
+	return &HandleOptions{
+		ParserOptions:   h.ParserOptions,
+		Handlers:        h.Handlers,
+		CreateProcessor: h.CreateProcessor,
+		Writer:          h.Writer,
+	}
+}
 
 func NewHandleOptions(options []HandleOption) *HandleOptions {
 	opts := &HandleOptions{}
@@ -47,6 +58,12 @@ func WithParserOptions(parserOptions ...ParserOption) HandleOption {
 func WithHandlers(handlers ...CommandHandlerFunc) HandleOption {
 	return func(o *HandleOptions) {
 		o.Handlers = handlers
+	}
+}
+
+func WithWriter(w io.Writer) HandleOption {
+	return func(o *HandleOptions) {
+		o.Writer = w
 	}
 }
 
@@ -119,7 +136,9 @@ func GinHandleGlazedCommandWithOutputFile(
 	opts *HandleOptions,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		err := runGlazeCommand(c, cmd, opts)
+		buf := &bytes.Buffer{}
+		opts_ := opts.Copy(WithWriter(buf))
+		err := runGlazeCommand(c, cmd, opts_)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
@@ -210,11 +229,17 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 		}
 	}
 
-	err = of.Output(c, c.Writer)
+	var writer io.Writer = c.Writer
+	if opts.Writer != nil {
+		writer = opts.Writer
+	}
+	err = of.Output(c, writer)
 	if err != nil {
 		return err
 	}
-	c.Writer.Header().Set("Content-Type", contentType)
+	if opts.Writer == nil {
+		c.Writer.Header().Set("Content-Type", contentType)
+	}
 
 	return err
 }

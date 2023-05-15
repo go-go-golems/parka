@@ -236,6 +236,10 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 		}
 	}
 
+	if opts.Writer == nil {
+		c.Writer.Header().Set("Content-Type", contentType)
+	}
+
 	var writer io.Writer = c.Writer
 	if opts.Writer != nil {
 		writer = opts.Writer
@@ -243,9 +247,6 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 	err = of.Output(c, writer)
 	if err != nil {
 		return err
-	}
-	if opts.Writer == nil {
-		c.Writer.Header().Set("Content-Type", contentType)
 	}
 
 	return err

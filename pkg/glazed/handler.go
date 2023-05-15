@@ -33,12 +33,18 @@ type HandleOptions struct {
 type HandleOption func(*HandleOptions)
 
 func (h *HandleOptions) Copy(options ...HandleOption) *HandleOptions {
-	return &HandleOptions{
+	ret := &HandleOptions{
 		ParserOptions:   h.ParserOptions,
 		Handlers:        h.Handlers,
 		CreateProcessor: h.CreateProcessor,
 		Writer:          h.Writer,
 	}
+
+	for _, option := range options {
+		option(ret)
+	}
+
+	return ret
 }
 
 func NewHandleOptions(options []HandleOption) *HandleOptions {
@@ -153,8 +159,9 @@ func GinHandleGlazedCommandWithOutputFile(
 			_ = c.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
-		// Handle error
-		defer f.Close()
+		defer func(f *os.File) {
+			_ = f.Close()
+		}(f)
 
 		c.Writer.Header().Set("Content-Disposition", "attachment; filename="+fileName)
 

@@ -4,11 +4,11 @@ import (
 	"context"
 	"embed"
 	"github.com/gin-gonic/gin"
-	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/formatters"
 	"github.com/go-go-golems/glazed/pkg/formatters/json"
 	"github.com/go-go-golems/glazed/pkg/formatters/table"
 	"github.com/go-go-golems/glazed/pkg/processor"
+	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/render/layout"
 	"github.com/pkg/errors"
@@ -213,9 +213,9 @@ func NewHTMLTemplateLookupCreateProcessorFunc(
 		var gp *processor.GlazeProcessor
 
 		if ok {
-			gp, err = cli.SetupProcessor(l.Parameters)
+			gp, err = settings.SetupProcessor(l.Parameters)
 		} else {
-			gp, err = cli.SetupProcessor(map[string]interface{}{
+			gp, err = settings.SetupProcessor(map[string]interface{}{
 				"output":       "table",
 				"table-format": "html",
 			})

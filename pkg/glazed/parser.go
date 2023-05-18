@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
@@ -379,7 +379,7 @@ func WithCustomizedParameterLayerParser(l layers.ParameterLayer, overrides map[s
 	)
 }
 
-func WithGlazeOutputParserOption(gl *cli.GlazedParameterLayers, output string, tableFormat string) ParserOption {
+func WithGlazeOutputParserOption(gl *settings.GlazedParameterLayers, output string, tableFormat string) ParserOption {
 	return WithCustomizedParameterLayerParser(
 		gl,
 		map[string]interface{}{

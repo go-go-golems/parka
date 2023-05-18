@@ -3,7 +3,6 @@ package glazed
 import (
 	"bytes"
 	"github.com/gin-gonic/gin"
-	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/formatters/csv"
 	"github.com/go-go-golems/glazed/pkg/formatters/json"
@@ -11,6 +10,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/formatters/template"
 	"github.com/go-go-golems/glazed/pkg/formatters/yaml"
 	"github.com/go-go-golems/glazed/pkg/processor"
+	"github.com/go-go-golems/glazed/pkg/settings"
 	"io"
 	"net/http"
 	"os"
@@ -91,9 +91,9 @@ func CreateJSONProcessor(_ *gin.Context, pc *CommandContext) (
 	var err error
 
 	if ok {
-		gp, err = cli.SetupProcessor(l.Parameters)
+		gp, err = settings.SetupProcessor(l.Parameters)
 	} else {
-		gp, err = cli.SetupProcessor(map[string]interface{}{
+		gp, err = settings.SetupProcessor(map[string]interface{}{
 			"output": "json",
 		})
 	}
@@ -257,7 +257,7 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 func SetupProcessor(pc *CommandContext) (*processor.GlazeProcessor, error) {
 	l, ok := pc.ParsedLayers["glazed"]
 	if ok {
-		gp, err := cli.SetupProcessor(l.Parameters)
+		gp, err := settings.SetupProcessor(l.Parameters)
 		return gp, err
 	}
 

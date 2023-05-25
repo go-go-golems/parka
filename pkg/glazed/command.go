@@ -162,12 +162,17 @@ func NewCommandFormParser(cmd cmds.GlazeCommand, options ...ParserOption) *Parse
 	return ph
 }
 
+// NewCommandHandlerFunc creates a CommandHandlerFunc using the given Parser struct.
+// This first establishes a set of defaults by loading them from an alias definition.
+//
+// When the CommandHandler is invoked, we first gather all the parameterDefinitions from the
+// cmd (fresh on every invocation, because the parsers are allowed to modify them).
 func NewCommandHandlerFunc(cmd cmds.GlazeCommand, parserHandler *Parser) CommandHandlerFunc {
 	d := cmd.Description()
 
 	defaults := map[string]string{}
 
-	// check if we are an aliase
+	// check if we are an alias
 	alias_, ok := cmd.(*alias.CommandAlias)
 	if ok {
 		defaults = alias_.Flags
@@ -178,9 +183,36 @@ func NewCommandHandlerFunc(cmd cmds.GlazeCommand, parserHandler *Parser) Command
 		}
 	}
 
+	// TODO(manuel, 2023-05-25) This is where we should handle default values provided from the config file, for example
+	//
+	// See https://github.com/go-go-golems/sqleton/issues/161
+	//
+	// We should clearly establish a precedence scheme, something like:
+	// - alias defaults (loaded from repository)
+	// - overwritten by defaults set in code
+	// - overwritten by defaults set from config file
+	//
+	// See also https://github.com/go-go-golems/glazed/issues/139
+	//
+	// ## hack notes
+	//
+	// I think that parser handler could actually override / fill out the defaults here,
+	// since we just pass the map around. That's probably not the smart way to do it though,
+	// and would warrant revisiting.
+	//
+	// Actually, the parsers return updated ParameterDefinitions, which means that we should be
+	// able to override the defaults in those directly.
 	var err error
 
 	return func(c *gin.Context, pc *CommandContext) error {
+		// Gather the ParameterDefinitions from the command description
+		// from scratch, because the parsers are allowed to modify the `pds` map.
+		//
+		// NOTE(2023-05-25, manuel) I wonder if we need `defaults` at all then.
+		// We could just as well store the defaults in the pds itself, since it seems
+		// that we only set them from the alias anyway (plus that seems broken...).
+		//
+		// See https://github.com/go-go-golems/sqleton/issues/151
 		pds := map[string]*parameters.ParameterDefinition{}
 		for _, p := range d.Flags {
 			pds[p.Name] = p

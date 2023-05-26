@@ -2,6 +2,7 @@ package render
 
 import (
 	"context"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -49,6 +50,8 @@ type Renderer struct {
 	// MarkdownBaseTemplateName is used to wrap markdown that was rendered into HTML into a top-level page
 	// NOTE(manuel, 2023-05-26) Maybe this should be a templateLookup that always returns the same template?
 	MarkdownBaseTemplateName string
+
+	IndexTemplateName string
 }
 
 type RendererOption func(r *Renderer) error
@@ -101,6 +104,13 @@ func WithAppendTemplateLookups(lookups ...TemplateLookup) RendererOption {
 	}
 }
 
+func WithIndexTemplateName(name string) RendererOption {
+	return func(r *Renderer) error {
+		r.IndexTemplateName = name
+		return nil
+	}
+}
+
 // WithReplaceTemplateLookups will replace any existing template lookups with the given ones.
 func WithReplaceTemplateLookups(lookups ...TemplateLookup) RendererOption {
 	return func(s *Renderer) error {
@@ -110,7 +120,9 @@ func WithReplaceTemplateLookups(lookups ...TemplateLookup) RendererOption {
 }
 
 func NewRenderer(opts ...RendererOption) (*Renderer, error) {
-	r := &Renderer{}
+	r := &Renderer{
+		IndexTemplateName: "index",
+	}
 
 	for _, opt := range opts {
 		err := opt(r)
@@ -140,6 +152,16 @@ func (r *Renderer) LookupTemplate(name ...string) (*template.Template, error) {
 
 	return t, nil
 
+}
+
+// NoPageFoundError is returned by Render if no template was found, in which case
+// the Render is skipped and moves on to the next middleware.
+type NoPageFoundError struct {
+	Page string
+}
+
+func (e *NoPageFoundError) Error() string {
+	return fmt.Sprintf("no page found for %s", e.Page)
 }
 
 // Render a given page with the given data.
@@ -195,7 +217,7 @@ func (r *Renderer) Render(ctx context.Context, w io.Writer, page string, data ma
 			return errors.Wrap(err, "error looking up template")
 		}
 		if t == nil {
-			return errors.New("no template found")
+			return &NoPageFoundError{Page: page}
 		}
 
 		err := t.Execute(w, data)
@@ -208,8 +230,16 @@ func (r *Renderer) Render(ctx context.Context, w io.Writer, page string, data ma
 
 func (r *Renderer) HandleWithTemplate(templateName string, data map[string]interface{}) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if c.Writer.Written() {
+			c.Next()
+			return
+		}
 		err := r.Render(c, c.Writer, templateName, data)
 		if err != nil {
+			if _, ok := err.(*NoPageFoundError); ok {
+				c.Next()
+				return
+			}
 			_ = c.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
@@ -222,12 +252,24 @@ func (r *Renderer) Handle(data map[string]interface{}) gin.HandlerFunc {
 
 func (r *Renderer) HandleWithTrimPrefix(prefix string, data map[string]interface{}) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if c.Writer.Written() {
+			c.Next()
+			return
+		}
+		// check if context is already finished
 		rawPath := c.Request.URL.Path
 		if len(rawPath) > 0 && rawPath[0] == '/' {
 			trimmedPath := rawPath[1:]
 			trimmedPath = strings.TrimPrefix(trimmedPath, prefix)
+			if trimmedPath == "" || strings.HasSuffix(trimmedPath, "/") {
+				trimmedPath += "index"
+			}
 			err := r.Render(c, c.Writer, trimmedPath, data)
 			if err != nil {
+				if _, ok := err.(*NoPageFoundError); ok {
+					c.Next()
+					return
+				}
 				_ = c.AbortWithError(http.StatusInternalServerError, err)
 				return
 			}

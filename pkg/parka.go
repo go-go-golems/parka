@@ -241,10 +241,11 @@ func (s *Server) Run(ctx context.Context) error {
 		s.Router.StaticFS(path.urlPath, path.fs)
 	}
 
-	s.Router.GET("/", s.DefaultRenderer.HandleWithTemplate("index", nil))
-
 	// match all remaining paths to the templates
-	s.Router.Use(s.DefaultRenderer.Handle(nil))
+	if s.DefaultRenderer != nil {
+		s.Router.GET("/", s.DefaultRenderer.HandleWithTemplate("index", nil))
+		s.Router.Use(s.DefaultRenderer.Handle(nil))
+	}
 
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
 

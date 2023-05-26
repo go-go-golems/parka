@@ -12,8 +12,6 @@ import (
 	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/render/layout"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
-	"golang.org/x/sync/errgroup"
 	"html/template"
 	"io"
 )
@@ -70,57 +68,6 @@ func NewHTMLTemplateOutputFormatter(
 	return ret
 }
 
-func StartFormatIntoChannel[T interface{ ~string }](
-	ctx context.Context,
-	formatter formatters.OutputFormatter,
-) <-chan T {
-	reader, writer := io.Pipe()
-	c := make(chan T)
-
-	eg, ctx2 := errgroup.WithContext(ctx)
-
-	eg.Go(func() error {
-		defer close(c)
-
-		// read 8k chunks from reader
-		buf := make([]byte, 8192)
-		for {
-			select {
-			case <-ctx2.Done():
-				return nil
-			default:
-				n, err := reader.Read(buf)
-				if err != nil {
-					return err
-				}
-
-				c <- T(buf[:n])
-			}
-		}
-	})
-
-	eg.Go(func() error {
-		err := formatter.Output(ctx2, writer)
-		defer writer.Close()
-		if err != nil {
-			writer.CloseWithError(err)
-			return err
-		}
-		return nil
-	})
-
-	go func() {
-		err := eg.Wait()
-		if err != nil {
-			if err != io.EOF {
-				log.Error().Err(err).Msg("error in stream formatter")
-			}
-		}
-	}()
-
-	return c
-}
-
 func (H *HTMLTemplateOutputFormatter) Output(ctx context.Context, w io.Writer) error {
 	data := map[string]interface{}{}
 	for k, v := range H.data {
@@ -132,10 +79,10 @@ func (H *HTMLTemplateOutputFormatter) Output(ctx context.Context, w io.Writer) e
 
 	if H.renderAsJavascript {
 		jsonOutputFormatter := json.NewOutputFormatter(json.WithTable(H.OutputFormatter.Table))
-		c := StartFormatIntoChannel[template.JS](ctx, jsonOutputFormatter)
+		c := formatters.StartFormatIntoChannel[template.JS](ctx, jsonOutputFormatter)
 		data["JSTableStream"] = c
 	} else {
-		c := StartFormatIntoChannel[template.HTML](ctx, H.OutputFormatter)
+		c := formatters.StartFormatIntoChannel[template.HTML](ctx, H.OutputFormatter)
 		data["HTMLTableStream"] = c
 	}
 

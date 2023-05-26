@@ -6,7 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
-	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
@@ -260,11 +259,13 @@ func NewStaticParserFunc(ps map[string]interface{}) ParserFunc {
 	}
 }
 
-// NewStaticLayerParserFunc returns a parser that adds the given static parameters to the parameter map,
-// based on the parameters of the given layer.
+// NewDefaultsFromLayerParserFunc returns a parser that adds the default values from the given
+// layers.ParameterLayer to the parameter map (if they haven't been set in the `defaults` map first,
+// which needs to be replaced anyway.
 //
 // NOTE(manuel, 2023-04-16) How this actually relate to the ParkaContext...
-func NewStaticLayerParserFunc(l layers.ParameterLayer) ParserFunc {
+// NOTE(manuel, 2023-05-25) We shouldn't be dealing with the `defaults` map here
+func NewDefaultsFromLayerParserFunc(l layers.ParameterLayer) ParserFunc {
 	return func(
 		c *gin.Context,
 		defaults map[string]string,
@@ -328,24 +329,33 @@ func NewParser(options ...ParserOption) *Parser {
 }
 
 // NOTE(manuel, 2023-04-16) This might be better called WithPrependParserFunc ? What is a better name for ParserFunc.
+
+// WithPrependParser adds the given ParserFunc to the beginning of the list of parsers.
+// Be mindful that this can later on be overwritten by a WithReplaceParser.
 func WithPrependParser(ps ...ParserFunc) ParserOption {
 	return func(ph *Parser) {
 		ph.Parsers = append(ps, ph.Parsers...)
 	}
 }
 
+// WithAppendParser adds the given ParserFunc to the end of the list of parsers.
+// Be mindful that this can later on be overwritten by a WithReplaceParser.
 func WithAppendParser(ps ...ParserFunc) ParserOption {
 	return func(ph *Parser) {
 		ph.Parsers = append(ph.Parsers, ps...)
 	}
 }
 
+// WithReplaceParser replaces the list of parsers with the given ParserFunc.
+// This will remove all previously added prepend, replace, append parsers.
 func WithReplaceParser(ps ...ParserFunc) ParserOption {
 	return func(ph *Parser) {
 		ph.Parsers = ps
 	}
 }
 
+// WithPrependLayerParser adds the given ParserFunc to the beginning of the list of layer parsers.
+// Be mindful that this can later on be overwritten by a WithReplaceLayerParser.
 func WithPrependLayerParser(slug string, ps ...ParserFunc) ParserOption {
 	return func(ph *Parser) {
 		if _, ok := ph.LayerParsersBySlug[slug]; !ok {
@@ -355,6 +365,8 @@ func WithPrependLayerParser(slug string, ps ...ParserFunc) ParserOption {
 	}
 }
 
+// WithAppendLayerParser adds the given ParserFunc to the end of the list of layer parsers.
+// Be mindful that this can later on be overwritten by a WithReplaceLayerParser.
 func WithAppendLayerParser(slug string, ps ...ParserFunc) ParserOption {
 	return func(ph *Parser) {
 		if _, ok := ph.LayerParsersBySlug[slug]; !ok {
@@ -364,33 +376,50 @@ func WithAppendLayerParser(slug string, ps ...ParserFunc) ParserOption {
 	}
 }
 
+// WithReplaceLayerParser replaces the list of layer parsers with the given ParserFunc.
 func WithReplaceLayerParser(slug string, ps ...ParserFunc) ParserOption {
 	return func(ph *Parser) {
 		ph.LayerParsersBySlug[slug] = ps
 	}
 }
 
-func WithCustomizedParameterLayerParser(l layers.ParameterLayer, overrides map[string]interface{}) ParserOption {
+// WithReplaceCustomizedParameterLayerParser adds a DefaultFromLayerParserFunc tweaked by the given
+// `overrides` map. This entirely replaces the current layer parser, but can later on be amended
+// with other parsers, for example with WithAppendOverrideLayer.
+func WithReplaceCustomizedParameterLayerParser(l layers.ParameterLayer, overrides map[string]interface{}) ParserOption {
 	slug := l.GetSlug()
 	return WithReplaceLayerParser(
 		slug,
-		NewStaticLayerParserFunc(l),
+		NewDefaultsFromLayerParserFunc(l),
 		NewStaticParserFunc(overrides),
 	)
 }
 
-func WithGlazeOutputParserOption(gl *settings.GlazedParameterLayers, output string, tableFormat string) ParserOption {
-	return WithCustomizedParameterLayerParser(
-		gl,
-		map[string]interface{}{
+// WithGlazeOutputParserOption is a convenience function to override the output and table format glazed settings.
+func WithGlazeOutputParserOption(output string, tableFormat string) ParserOption {
+	return WithAppendLayerParser(
+		"glazed",
+		NewStaticParserFunc(map[string]interface{}{
 			"output":       output,
 			"table-format": tableFormat,
-		},
+		}),
 	)
 }
 
-func WithStaticLayer(slug string, overrides map[string]interface{}) ParserOption {
+// WithReplaceStaticLayer is a convenience function to use static layer parsing.
+// This entirely replaces current layer parsers, but can later on be amended with other parsers,
+// for example with WithAppendOverrideLayer.
+func WithReplaceStaticLayer(slug string, overrides map[string]interface{}) ParserOption {
 	return WithReplaceLayerParser(
+		slug,
+		NewStaticParserFunc(overrides),
+	)
+}
+
+// WithAppendOverrideLayer is a convenience function to override the parameters of a layer.
+// The overrides are appended past currently present parser functions.
+func WithAppendOverrideLayer(slug string, overrides map[string]interface{}) ParserOption {
+	return WithAppendLayerParser(
 		slug,
 		NewStaticParserFunc(overrides),
 	)

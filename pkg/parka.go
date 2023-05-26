@@ -7,9 +7,7 @@ import (
 	"github.com/gin-gonic/contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/parka/pkg/render"
-	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
-	"html/template"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -67,42 +65,13 @@ type Server struct {
 	Router *gin.Engine
 
 	StaticPaths     []StaticPath
-	TemplateLookups []render.TemplateLookup
+	DefaultRenderer *render.Renderer
 
 	Port    uint16
 	Address string
 }
 
 type ServerOption = func(*Server) error
-
-// WithPrependTemplateLookups will prepend the given template lookups to the list of lookups,
-// ensuring that they will be found before whatever templates might already be in the list.
-func WithPrependTemplateLookups(lookups ...render.TemplateLookup) ServerOption {
-	return func(s *Server) error {
-		// prepend lookups to the list
-		s.TemplateLookups = append(lookups, s.TemplateLookups...)
-		return nil
-	}
-}
-
-// WithAppendTemplateLookups will append the given template lookups to the list of lookups,
-// but they will be found after whatever templates might already be in the list. This is great
-// for providing fallback templates.
-func WithAppendTemplateLookups(lookups ...render.TemplateLookup) ServerOption {
-	return func(s *Server) error {
-		// append lookups to the list
-		s.TemplateLookups = append(s.TemplateLookups, lookups...)
-		return nil
-	}
-}
-
-// WithReplaceTemplateLookups will replace any existing template lookups with the given ones.
-func WithReplaceTemplateLookups(lookups ...render.TemplateLookup) ServerOption {
-	return func(s *Server) error {
-		s.TemplateLookups = lookups
-		return nil
-	}
-}
 
 // WithStaticPaths will add the given static paths to the list of static paths.
 // If a path with the same URL path already exists, it will be replaced.
@@ -146,19 +115,48 @@ func WithFailOption(err error) ServerOption {
 	}
 }
 
-func WithDefaultParkaLookup() ServerOption {
+func WithDefaultRenderer(r *render.Renderer) ServerOption {
+	return func(s *Server) error {
+		s.DefaultRenderer = r
+		return nil
+	}
+}
+
+func GetDefaultParkaRendererOptions() ([]render.RendererOption, error) {
 	// this should be overloaded too
 	parkaLookup, err := render.LookupTemplateFromFS(templateFS, "web/src/templates", "**/*.tmpl.*")
+	if err != nil {
+		return nil, err
+	}
+
+	return []render.RendererOption{
+		render.WithAppendTemplateLookups(parkaLookup),
+		render.WithMarkdownBaseTemplateName("base.tmpl.html"),
+	}, nil
+}
+
+func WithDefaultParkaLookup(options ...render.RendererOption) ServerOption {
+	options_, err := GetDefaultParkaRendererOptions()
+	if err != nil {
+		return WithFailOption(err)
+	}
+	options_ = append(options_, options...)
+
+	renderer, err := render.NewRenderer(options_...)
 	if err != nil {
 		return WithFailOption(err)
 	}
 
-	return WithAppendTemplateLookups(parkaLookup)
+	return WithDefaultRenderer(renderer)
+}
+
+func GetParkaStaticFS() http.FileSystem {
+	return NewEmbedFileSystem(distFS, "web/dist")
 }
 
 func WithDefaultParkaStaticPaths() ServerOption {
 	return WithStaticPaths(
-		NewStaticPath(NewEmbedFileSystem(distFS, "web/dist"), "/dist"),
+		NewStaticPath(GetParkaStaticFS(), "/dist"),
 	)
 }
 
@@ -177,9 +175,8 @@ func NewServer(options ...ServerOption) (*Server, error) {
 	router := gin.Default()
 
 	s := &Server{
-		Router:          router,
-		StaticPaths:     []StaticPath{},
-		TemplateLookups: []render.TemplateLookup{},
+		Router:      router,
+		StaticPaths: []StaticPath{},
 	}
 
 	for _, option := range options {
@@ -238,105 +235,17 @@ func (e *EmbedFileSystem) Exists(prefix string, path string) bool {
 	return true
 }
 
-// LookupTemplate will iterate through the template lookups until it finds one of the
-// templates given in name.
-func (s *Server) LookupTemplate(name ...string) (*template.Template, error) {
-	var t *template.Template
-
-	for _, lookup := range s.TemplateLookups {
-		t, err := lookup(name...)
-		if err != nil {
-			log.Debug().Err(err).Strs("name", name).Msg("failed to lookup template, skipping")
-
-		}
-		if err == nil {
-			return t, nil
-		}
-	}
-
-	return t, nil
-}
-
-// serverMarkdownTemplatePage is an internal helper function to look up a markdown or HTML file
-// and serve it.
-//
-// It first looks for a markdown file or template called either page.md or page.tmpl.md,
-// and render it as a template, passing it the given data.
-// It will use base.tmpl.html as the base template for serving the resulting markdown HTML.
-// page.md is rendered as a plain markdown file, while page.tmpl.md is rendered as a template.
-//
-// If no markdown file or template is found, it will look for a HTML file or template called
-// either page.html or page.tmpl.html and serve it as a template, passing it the given data.
-// page.html is served as a plain HTML file, while page.tmpl.html is served as a template.
-func (s *Server) serveMarkdownTemplatePage(c *gin.Context, page string, data interface{}) {
-	t, err := s.LookupTemplate(page+".tmpl.md", page+".md")
-	if err != nil {
-		c.String(http.StatusInternalServerError, "Error looking up template")
-		return
-	}
-
-	if t != nil {
-		markdown, err := render.RenderMarkdownTemplateToHTML(t, nil)
-		if err != nil {
-			c.String(http.StatusInternalServerError, "Error rendering markdown")
-			return
-		}
-
-		baseTemplate, err := s.LookupTemplate("base.tmpl.html")
-		if err != nil {
-			c.String(http.StatusInternalServerError, "Error rendering template")
-			return
-		}
-
-		err = baseTemplate.Execute(
-			c.Writer,
-			map[string]interface{}{
-				"markdown": template.HTML(markdown),
-			})
-		if err != nil {
-			c.String(http.StatusInternalServerError, "Error rendering template")
-			return
-		}
-	} else {
-		t, err = s.LookupTemplate(page+".tmpl.html", page+".html")
-		if err != nil {
-			c.String(http.StatusInternalServerError, "Error rendering template")
-			return
-		}
-		if t == nil {
-			c.String(http.StatusInternalServerError, "Error rendering template")
-			return
-		}
-
-		err := t.Execute(c.Writer, data)
-		if err != nil {
-			c.String(http.StatusInternalServerError, "Error rendering template")
-			return
-		}
-	}
-}
-
 // Run will start the server and listen on the given address and port.
 func (s *Server) Run(ctx context.Context) error {
 	for _, path := range s.StaticPaths {
 		s.Router.StaticFS(path.urlPath, path.fs)
 	}
 
-	s.Router.GET("/", func(c *gin.Context) {
-		s.serveMarkdownTemplatePage(c, "index", nil)
-	})
-
 	// match all remaining paths to the templates
-	s.Router.Use(
-		func(c *gin.Context) {
-			rawPath := c.Request.URL.Path
-			if len(rawPath) > 0 && rawPath[0] == '/' {
-				trimmedPath := rawPath[1:]
-				s.serveMarkdownTemplatePage(c, trimmedPath, nil)
-				return
-			}
-			c.Next()
-		})
+	if s.DefaultRenderer != nil {
+		s.Router.GET("/", s.DefaultRenderer.HandleWithTemplate("index", nil))
+		s.Router.Use(s.DefaultRenderer.Handle(nil))
+	}
 
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
 

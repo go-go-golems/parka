@@ -6,6 +6,9 @@ import (
 	"github.com/go-go-golems/parka/pkg/glazed"
 )
 
+// This section groups all the functionality related to laying out forms for input parameters
+// for commands.
+
 // Layout might look at first similar to glazed_layout.Layout, but it is actually
 // the parsed and computed version used to render an HTML form.
 type Layout struct {

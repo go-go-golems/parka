@@ -257,7 +257,7 @@ func (s *Server) LookupTemplate(name ...string) (*template.Template, error) {
 	return t, nil
 }
 
-// serverMarkdownTemplatePage is an internal helper function to look up a markdown or HTML file
+// ServeMarkdownTemplatePage is an internal helper function to look up a markdown or HTML file
 // and serve it.
 //
 // It first looks for a markdown file or template called either page.md or page.tmpl.md,
@@ -268,7 +268,7 @@ func (s *Server) LookupTemplate(name ...string) (*template.Template, error) {
 // If no markdown file or template is found, it will look for a HTML file or template called
 // either page.html or page.tmpl.html and serve it as a template, passing it the given data.
 // page.html is served as a plain HTML file, while page.tmpl.html is served as a template.
-func (s *Server) serveMarkdownTemplatePage(c *gin.Context, page string, data interface{}) {
+func (s *Server) ServeMarkdownTemplatePage(c *gin.Context, page string, data interface{}) {
 	t, err := s.LookupTemplate(page+".tmpl.md", page+".md")
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Error looking up template")
@@ -323,7 +323,7 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 
 	s.Router.GET("/", func(c *gin.Context) {
-		s.serveMarkdownTemplatePage(c, "index", nil)
+		s.ServeMarkdownTemplatePage(c, "index", nil)
 	})
 
 	// match all remaining paths to the templates
@@ -332,7 +332,7 @@ func (s *Server) Run(ctx context.Context) error {
 			rawPath := c.Request.URL.Path
 			if len(rawPath) > 0 && rawPath[0] == '/' {
 				trimmedPath := rawPath[1:]
-				s.serveMarkdownTemplatePage(c, trimmedPath, nil)
+				s.ServeMarkdownTemplatePage(c, trimmedPath, nil)
 				return
 			}
 			c.Next()

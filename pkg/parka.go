@@ -122,16 +122,23 @@ func WithDefaultRenderer(r *render.Renderer) ServerOption {
 	}
 }
 
-func WithDefaultParkaLookup(options ...render.RendererOption) ServerOption {
+func GetDefaultParkaRendererOptions() ([]render.RendererOption, error) {
 	// this should be overloaded too
 	parkaLookup, err := render.LookupTemplateFromFS(templateFS, "web/src/templates", "**/*.tmpl.*")
 	if err != nil {
-		return WithFailOption(err)
+		return nil, err
 	}
 
-	options_ := []render.RendererOption{
+	return []render.RendererOption{
 		render.WithAppendTemplateLookups(parkaLookup),
 		render.WithMarkdownBaseTemplateName("base.tmpl.html"),
+	}, nil
+}
+
+func WithDefaultParkaLookup(options ...render.RendererOption) ServerOption {
+	options_, err := GetDefaultParkaRendererOptions()
+	if err != nil {
+		return WithFailOption(err)
 	}
 	options_ = append(options_, options...)
 
@@ -143,9 +150,13 @@ func WithDefaultParkaLookup(options ...render.RendererOption) ServerOption {
 	return WithDefaultRenderer(renderer)
 }
 
+func GetParkaStaticFS() http.FileSystem {
+	return NewEmbedFileSystem(distFS, "web/dist")
+}
+
 func WithDefaultParkaStaticPaths() ServerOption {
 	return WithStaticPaths(
-		NewStaticPath(NewEmbedFileSystem(distFS, "web/dist"), "/dist"),
+		NewStaticPath(GetParkaStaticFS(), "/dist"),
 	)
 }
 

@@ -24,6 +24,7 @@ var ServeCmd = &cobra.Command{
 		cobra.CheckErr(err)
 
 		serverOptions := []pkg.ServerOption{}
+		defaultLookups := []render.TemplateLookup{}
 
 		dev, _ := cmd.Flags().GetBool("dev")
 		templateDir, err := cmd.Flags().GetString("template-dir")
@@ -36,26 +37,30 @@ var ServeCmd = &cobra.Command{
 				Msg("Using assets from disk")
 			serverOptions = append(serverOptions,
 				pkg.WithStaticPaths(pkg.NewStaticPath(http.FS(os.DirFS("pkg/web/dist")), "/dist")),
-				pkg.WithPrependTemplateLookups(render.LookupTemplateFromDirectory("pkg/web/src/templates")),
 			)
-			cobra.CheckErr(err)
+			defaultLookups = append(defaultLookups, render.LookupTemplateFromDirectory("pkg/web/src/templates"))
+		} else {
+			serverOptions = append(serverOptions, pkg.WithDefaultParkaStaticPaths())
 		}
 
 		if templateDir != "" {
 			if dev {
-				serverOptions = append(serverOptions, pkg.WithPrependTemplateLookups(render.LookupTemplateFromDirectory(templateDir)))
-
+				defaultLookups = append(defaultLookups, render.LookupTemplateFromDirectory(templateDir))
 			} else {
 				lookup, err := render.LookupTemplateFromFS(os.DirFS(templateDir), ".", "**/*.tmpl.*")
 				cobra.CheckErr(err)
-				serverOptions = append(serverOptions, pkg.WithPrependTemplateLookups(lookup))
+				defaultLookups = append(defaultLookups, lookup)
 			}
 		}
 
+		serverOptions = append(serverOptions,
+			pkg.WithDefaultParkaLookup(render.WithPrependTemplateLookups(defaultLookups...)),
+		)
 		s, _ := pkg.NewServer(serverOptions...)
 
+		// NOTE(manuel, 2023-05-26) This could also be done with a simple Command config file struct once
+		// implemented as part of sqleton serve
 		s.Router.GET("/api/example", s.HandleSimpleQueryCommand(NewExampleCommand()))
-
 		s.Router.POST("/api/example", s.HandleSimpleFormCommand(NewExampleCommand()))
 
 		ctx, cancel := context.WithCancel(context.Background())

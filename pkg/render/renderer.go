@@ -140,7 +140,7 @@ func (r *Renderer) LookupTemplate(name ...string) (*template.Template, error) {
 	var t *template.Template
 
 	for _, lookup := range r.TemplateLookups {
-		t, err := lookup(name...)
+		t, err := lookup.Lookup(name...)
 		if err != nil {
 			log.Debug().Err(err).Strs("name", name).Msg("failed to lookup template, skipping")
 

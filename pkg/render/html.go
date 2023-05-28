@@ -143,7 +143,7 @@ func NewHTMLTemplateLookupCreateProcessorFunc(
 		// NOTE(manuel, 2023-04-19) This currently is nailed to a single static templateName passed at configuration time.
 		// potentially, templateName could also be dynamic based on the incoming request, but we'll leave
 		// that flexibility for later.
-		t, err := lookup(templateName)
+		t, err := lookup.Lookup(templateName)
 		if err != nil {
 			return nil, contextType, err
 		}
@@ -209,10 +209,11 @@ var templateFS embed.FS
 func NewDataTablesHTMLTemplateCreateProcessorFunc(
 	options ...HTMLTemplateOutputFormatterOption,
 ) (glazed.CreateProcessorFunc, error) {
-	templateLookup, err := LookupTemplateFromFSReloadable(templateFS, "templates/", "templates/**/*.tmpl.html")
-	if err != nil {
-		return nil, err
-	}
+	l := NewLookupTemplateFromFS(
+		WithFS(templateFS),
+		WithBaseDir("templates/"),
+		WithPatterns("templates/**/*.tmpl.html"),
+	)
 
-	return NewHTMLTemplateLookupCreateProcessorFunc(templateLookup, "data-tables.tmpl.html", options...), nil
+	return NewHTMLTemplateLookupCreateProcessorFunc(l, "data-tables.tmpl.html", options...), nil
 }

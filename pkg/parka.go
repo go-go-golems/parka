@@ -124,7 +124,12 @@ func WithDefaultRenderer(r *render.Renderer) ServerOption {
 
 func GetDefaultParkaRendererOptions() ([]render.RendererOption, error) {
 	// this should be overloaded too
-	parkaLookup, err := render.LookupTemplateFromFS(templateFS, "web/src/templates", "**/*.tmpl.*")
+	parkaLookup := render.NewLookupTemplateFromFS(
+		render.WithFS(templateFS),
+		render.WithBaseDir("web/src/templates"),
+		render.WithPatterns("**/*.tmpl.*"),
+	)
+	err := parkaLookup.Reload()
 	if err != nil {
 		return nil, err
 	}

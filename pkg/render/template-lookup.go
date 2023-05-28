@@ -91,9 +91,9 @@ type LookupTemplateFromFS struct {
 
 type LookupTemplateFromFSReloadableOption func(*LookupTemplateFromFS)
 
-func WithAlwaysReload() LookupTemplateFromFSReloadableOption {
+func WithAlwaysReload(alwaysReload bool) LookupTemplateFromFSReloadableOption {
 	return func(l *LookupTemplateFromFS) {
-		l.alwaysReload = true
+		l.alwaysReload = alwaysReload
 	}
 }
 

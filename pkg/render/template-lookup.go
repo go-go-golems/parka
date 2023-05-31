@@ -1,3 +1,6 @@
+// Package render provides an interface for rendering HTML templates and
+// implementations for loading templates from directories or filesystems.
+// It supports template lookup, reloading, and efficient template handling.
 package render
 
 import (
@@ -13,7 +16,10 @@ import (
 // It is use as an interface to allow different ways of loading templates to be provided
 // to a parka application.
 type TemplateLookup interface {
+	// Lookup returns a template by name. If there are multiple names given,
+	// implementations may choose how to handle them.
 	Lookup(name ...string) (*template.Template, error)
+
 	// Reload reloads all or partial templates (necessary to render the given templates).
 	// `name` can easily be ignored if the implementation doesn't support partial reloading.
 	// This is useful for example to have server expose a specific route that reloads
@@ -37,6 +43,9 @@ func NewLookupTemplateFromDirectory(directory string) *LookupTemplateFromDirecto
 
 // Lookup will load the matching template file from the given Directory.
 // This loads the template file on every lookup, and is thus not very efficient.
+//
+// The names passed as arguments correspond to the relative paths of the parsed
+// files starting from configured template directory.
 //
 // TODO(manuel, 2023-05-28) Implement a reloadable LookupTemplateFromDirectory
 // This would distract too much from the current task which is to implement the high-level
@@ -76,7 +85,7 @@ func (l *LookupTemplateFromDirectory) Reload(_ ...string) error {
 	return nil
 }
 
-// LookupTemplateFromFSReloadable will load a template from a fs.FS.
+// LookupTemplateFromFS will load a template from a fs.FS.
 //
 // NOTE: this loads the entire template directory into memory on every lookup.
 // This is not great for performance, but it is useful for development.
@@ -91,33 +100,43 @@ type LookupTemplateFromFS struct {
 	tmpl         *template.Template
 }
 
-type LookupTemplateFromFSReloadableOption func(*LookupTemplateFromFS)
+// Example usage:
+//
+//   lookup := NewLookupTemplateFromFS(
+//     WithAlwaysReload(true),
+//     WithFS(os.DirFS("./templates")),
+//     WithBaseDir("base"),
+//     WithPatterns("*.html"),
+//   )
+//   tmpl, err := lookup.Lookup("index.html")
 
-func WithAlwaysReload(alwaysReload bool) LookupTemplateFromFSReloadableOption {
+type LookupTemplateFromFSOption func(*LookupTemplateFromFS)
+
+func WithAlwaysReload(alwaysReload bool) LookupTemplateFromFSOption {
 	return func(l *LookupTemplateFromFS) {
 		l.alwaysReload = alwaysReload
 	}
 }
 
-func WithFS(_fs fs.FS) LookupTemplateFromFSReloadableOption {
+func WithFS(_fs fs.FS) LookupTemplateFromFSOption {
 	return func(l *LookupTemplateFromFS) {
 		l._fs = _fs
 	}
 }
 
-func WithBaseDir(baseDir string) LookupTemplateFromFSReloadableOption {
+func WithBaseDir(baseDir string) LookupTemplateFromFSOption {
 	return func(l *LookupTemplateFromFS) {
 		l.baseDir = baseDir
 	}
 }
 
-func WithPatterns(patterns ...string) LookupTemplateFromFSReloadableOption {
+func WithPatterns(patterns ...string) LookupTemplateFromFSOption {
 	return func(l *LookupTemplateFromFS) {
 		l.patterns = patterns
 	}
 }
 
-func NewLookupTemplateFromFS(options ...LookupTemplateFromFSReloadableOption) *LookupTemplateFromFS {
+func NewLookupTemplateFromFS(options ...LookupTemplateFromFSOption) *LookupTemplateFromFS {
 	ret := &LookupTemplateFromFS{
 		_fs:      os.DirFS("."),
 		baseDir:  "",

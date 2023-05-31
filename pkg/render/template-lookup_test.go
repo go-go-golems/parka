@@ -2,12 +2,37 @@ package render
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io"
 	"os"
 	"testing"
 )
+
+func ExampleLookupTemplateFromDirectory() {
+	lookup := NewLookupTemplateFromDirectory("./templates")
+	tmpl, err := lookup.Lookup("templates/tests/test.html")
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	fmt.Println("Template:", tmpl.Name())
+}
+
+func ExampleLookupTemplateFromFS() {
+	lookup := NewLookupTemplateFromFS(
+		WithFS(os.DirFS("./templates")),
+		WithBaseDir("./templates"),
+		WithPatterns("*.html"),
+	)
+	tmpl, err := lookup.Lookup("tests/test.html")
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	fmt.Println("Template:", tmpl.Name())
+}
 
 func TestLookupTemplateFromDirectory_SimpleDirectory(t *testing.T) {
 	d := "templates/tests"
@@ -96,4 +121,109 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	return dstFile.Sync()
+}
+
+func TestLookupTemplateFromFS_SimpleDirectory(t *testing.T) {
+	l := NewLookupTemplateFromFS(
+		WithFS(os.DirFS("templates/tests")),
+		WithPatterns("*.html"),
+	)
+	tmpl, err := l.Lookup("test.html")
+	require.Nil(t, err)
+	assert.Equal(t, "test.html", tmpl.Name())
+
+	buf := new(bytes.Buffer)
+	err = tmpl.Execute(buf, nil)
+	require.Nil(t, err)
+	assert.Equal(t, "foo foo", buf.String())
+
+	tmpl, err = l.Lookup("test2.html")
+	assert.NotNil(t, err)
+}
+
+func TestLookupTemplateFromFS_SimpleDirectoryWithBaseDir(t *testing.T) {
+	l := NewLookupTemplateFromFS(
+		WithFS(os.DirFS("templates")),
+		WithBaseDir("tests"),
+		WithPatterns("*.html"),
+	)
+	tmpl, err := l.Lookup("test.html")
+	require.Nil(t, err)
+	assert.Equal(t, "test.html", tmpl.Name())
+
+	buf := new(bytes.Buffer)
+	err = tmpl.Execute(buf, nil)
+	require.Nil(t, err)
+	assert.Equal(t, "foo foo", buf.String())
+
+	tmpl, err = l.Lookup("test2.html")
+	assert.NotNil(t, err)
+}
+
+func TestLookupTemplateFromFS_SimpleDirectoryWithReload(t *testing.T) {
+	l := NewLookupTemplateFromFS(
+		WithFS(os.DirFS("templates/tests")),
+		WithPatterns("*.html"),
+	)
+	tmpl, err := l.Lookup("test.html")
+	require.Nil(t, err)
+	assert.Equal(t, "test.html", tmpl.Name())
+
+	buf := new(bytes.Buffer)
+	err = tmpl.Execute(buf, nil)
+	require.Nil(t, err)
+	assert.Equal(t, "foo foo", buf.String())
+
+	// check that test_tmpl.html fails
+
+	// change the template
+	err = copyFile("templates/tests/test.html", "templates/tests/test_tmpl.html")
+	require.NoError(t, err)
+
+	// reload
+	err = l.Reload()
+	require.NoError(t, err)
+
+	// check that test_tmpl.html succeeds
+	tmpl, err = l.Lookup("test_tmpl.html")
+	require.Nil(t, err)
+
+	buf = new(bytes.Buffer)
+	err = tmpl.Execute(buf, nil)
+	require.Nil(t, err)
+	assert.Equal(t, "foo foo", buf.String())
+
+	// check that test.html still succeeds
+	tmpl, err = l.Lookup("test.html")
+	require.Nil(t, err)
+
+	buf = new(bytes.Buffer)
+	err = tmpl.Execute(buf, nil)
+	require.Nil(t, err)
+	assert.Equal(t, "foo foo", buf.String())
+
+	// check that test2.html still fails
+	tmpl, err = l.Lookup("test2.html")
+	assert.NotNil(t, err)
+
+	// delete test_tmpl.html
+	err = os.Remove("templates/tests/test_tmpl.html")
+	require.NoError(t, err)
+
+	// reload
+	err = l.Reload()
+	require.NoError(t, err)
+
+	// check that test_tmpl.html fails
+	tmpl, err = l.Lookup("test_tmpl.html")
+	assert.NotNil(t, err)
+
+	// check that test.html still succeeds
+	tmpl, err = l.Lookup("test.html")
+	require.Nil(t, err)
+
+	buf = new(bytes.Buffer)
+	err = tmpl.Execute(buf, nil)
+	require.Nil(t, err)
+	assert.Equal(t, "foo foo", buf.String())
 }

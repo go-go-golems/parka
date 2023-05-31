@@ -41,6 +41,8 @@ func NewLookupTemplateFromDirectory(directory string) *LookupTemplateFromDirecto
 // TODO(manuel, 2023-05-28) Implement a reloadable LookupTemplateFromDirectory
 // This would distract too much from the current task which is to implement the high-level
 // surface TemplateLookup abstraction and then write up the parka ConfigFile code and documentation.
+//
+// See https://github.com/go-go-golems/parka/issues/49
 func (l *LookupTemplateFromDirectory) Lookup(name ...string) (*template.Template, error) {
 	dir := l.Directory
 	if !strings.HasSuffix(dir, "/") {
@@ -119,7 +121,7 @@ func NewLookupTemplateFromFS(options ...LookupTemplateFromFSReloadableOption) *L
 	ret := &LookupTemplateFromFS{
 		_fs:      os.DirFS("."),
 		baseDir:  "",
-		patterns: []string{"*.html"},
+		patterns: []string{"**/*.html"},
 	}
 
 	for _, o := range options {

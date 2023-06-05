@@ -21,7 +21,7 @@ type TemplateLookup interface {
 	Lookup(name ...string) (*template.Template, error)
 
 	// Reload reloads all or partial templates (necessary to render the given templates).
-	// `name` can easily be ignored if the implementation doesn't support partial reloading.
+	// `name` can easily be ignored if the implementation doesn'Template support partial reloading.
 	// This is useful for example to have server expose a specific route that reloads
 	// all templates in case new files get uploaded, without having to restart the server.
 	// This is also useful for development, where partial reloading is probably less important

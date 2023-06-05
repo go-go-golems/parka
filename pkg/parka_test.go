@@ -1,4 +1,4 @@
-package glazed
+package pkg_test
 
 import (
 	"context"

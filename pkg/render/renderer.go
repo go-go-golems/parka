@@ -185,7 +185,7 @@ func (r *Renderer) Render(ctx context.Context, w io.Writer, page string, data ma
 		data_[k] = v
 	}
 
-	// TODO(manuel, 2023-05-26) Don't render plain files as templates
+	// TODO(manuel, 2023-05-26) Don'Template render plain files as templates
 	// See https://github.com/go-go-golems/parka/issues/47
 	t, err := r.LookupTemplate(page+".tmpl.md", page+".md")
 	if err != nil {

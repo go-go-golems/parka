@@ -10,16 +10,12 @@ import (
 	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
+	"github.com/go-go-golems/parka/pkg/render/datatables"
+	"github.com/go-go-golems/parka/pkg/render/layout"
 	"os"
 	"strings"
 	"time"
 )
-
-type Link struct {
-	Href  string
-	Text  string
-	Class string
-}
 
 type HandlerParameters struct {
 	Layers    map[string]map[string]interface{}
@@ -270,7 +266,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 
 			name := sqlCommand.Description().Name
 			dateTime := time.Now().Format("2006-01-02--15-04-05")
-			links := []Link{
+			links := []layout.Link{
 				{
 					Href:  fmt.Sprintf("/download/%s/%s-%s.csv", commandPath, dateTime, name),
 					Text:  "Download CSV",
@@ -307,15 +303,11 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			// See https://github.com/go-go-golems/sqleton/issues/162
 			_ = cd.IndexTemplateName
 
-			dataTablesProcessorFunc := render.NewHTMLTemplateLookupCreateProcessorFunc(
+			dataTablesProcessorFunc := datatables.NewDataTablesCreateOutputProcessorFunc(
 				cd.TemplateLookup,
 				cd.TemplateName,
-				render.WithHTMLTemplateOutputFormatterData(
-					map[string]interface{}{
-						"Links": links,
-					},
-				),
-				render.WithJavascriptRendering(),
+				datatables.WithLinks(links...),
+				datatables.WithJSRendering(),
 			)
 
 			// TODO(manuel, 2023-05-25) We can't currently override defaults, since they are parsed up front.

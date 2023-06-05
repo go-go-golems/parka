@@ -251,3 +251,9 @@ func NewSectionFromParameterDefinitions(
 
 	return section
 }
+
+type Link struct {
+	Href  string
+	Text  string
+	Class string
+}

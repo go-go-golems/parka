@@ -166,11 +166,12 @@ func (cfh *ConfigFileHandler) Serve(server *parka.Server) error {
 func (cfh *ConfigFileHandler) Watch(ctx context.Context) error {
 	errGroup, ctx2 := errgroup.WithContext(ctx)
 	for _, cdh := range cfh.commandDirectoryHandlers {
+		cdh2 := cdh
 		if cdh.Repository == nil {
 			continue
 		}
 		errGroup.Go(func() error {
-			return cdh.Repository.Watch(ctx2)
+			return cdh2.Repository.Watch(ctx2)
 		})
 	}
 

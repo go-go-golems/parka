@@ -2,51 +2,54 @@ package render
 
 import (
 	"context"
-	"embed"
 	"github.com/gin-gonic/gin"
-	"github.com/go-go-golems/glazed/pkg/formatters"
-	"github.com/go-go-golems/glazed/pkg/formatters/json"
 	"github.com/go-go-golems/glazed/pkg/formatters/table"
 	"github.com/go-go-golems/glazed/pkg/processor"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/render/layout"
-	"github.com/pkg/errors"
 	"html/template"
 	"io"
 )
 
-// This file contains a variety of output renderers for HTML output.
-// The idea would to create a set of glazed.CreateProcessorFunc
-// that would return an OutputFormatter() that can be used to render
-// a command and a table as HTML.
+// NOTE(manuel, 2023-06-04): I don'Template think any of this is necessary.
+//
+// So it looks like the steps to output glazed data is to use a CreateProcessorFunc to create
+// a processor.Processor. Here we create a processor that uses a HTMLTemplateOutputFormatter (which
+// we are converting to a more specialized DataTableOutputFormatter), and then wrap all this through a
+// HTMLTableProcessor. But really the HTMLTableProcessor is just there to wrap the output formatter and
+// the template used. But the template used should be captured by the OutputFormatter in the first place.
+//
+// As such, we can use a generic Processor (why is there even a processor to be overloaded, if the definition of
+// processor.Processor is the following:
+//
+//type Processor interface {
+//	ProcessInputObject(ctx context.Context, obj map[string]interface{}) error
+//	OutputFormatter() formatters.OutputFormatter
+//}
+//
+// Probably because we use the processor.GlazeProcessor class as a helper, which is able to handle the different
+// middlewares and output formatters. This means we can kill HTMLTemplateProcessor, capture the template in the
+// HTMLTemplateOutputFormatter and then use the standard GlazeProcessor.
 
 // HTMLTemplateOutputFormatter wraps a normal HTML table output formatter, and allows
 // a template to be added in the back in the front.
 type HTMLTemplateOutputFormatter struct {
+	// We use a table outputFormatter because we need to access the Table itself.
 	*table.OutputFormatter
-	t    *template.Template
-	data map[string]interface{}
-	// renderAsJavascript means that we will render the table into the toplevel element
-	// `tableData` in javascript, and not call the parent output formatter
-	renderAsJavascript bool
+	Template *template.Template
+	Data     map[string]interface{}
 }
 
 type HTMLTemplateOutputFormatterOption func(*HTMLTemplateOutputFormatter)
 
-func WithJavascriptRendering() HTMLTemplateOutputFormatterOption {
-	return func(of *HTMLTemplateOutputFormatter) {
-		of.renderAsJavascript = true
-	}
-}
-
 func WithHTMLTemplateOutputFormatterData(data map[string]interface{}) HTMLTemplateOutputFormatterOption {
 	return func(of *HTMLTemplateOutputFormatter) {
-		if of.data == nil {
-			of.data = map[string]interface{}{}
+		if of.Data == nil {
+			of.Data = map[string]interface{}{}
 		}
 		for k, v := range data {
-			of.data[k] = v
+			of.Data[k] = v
 		}
 	}
 }
@@ -58,7 +61,7 @@ func NewHTMLTemplateOutputFormatter(
 ) *HTMLTemplateOutputFormatter {
 	ret := &HTMLTemplateOutputFormatter{
 		OutputFormatter: of,
-		t:               t,
+		Template:        t,
 	}
 
 	for _, option := range options {
@@ -70,23 +73,14 @@ func NewHTMLTemplateOutputFormatter(
 
 func (H *HTMLTemplateOutputFormatter) Output(ctx context.Context, w io.Writer) error {
 	data := map[string]interface{}{}
-	for k, v := range H.data {
+	for k, v := range H.Data {
+
 		data[k] = v
 	}
 	data["Columns"] = H.OutputFormatter.Table.Columns
 	data["Table"] = H.OutputFormatter.Table
-	data["RenderAsJavascript"] = H.renderAsJavascript
 
-	if H.renderAsJavascript {
-		jsonOutputFormatter := json.NewOutputFormatter(json.WithTable(H.OutputFormatter.Table))
-		c := formatters.StartFormatIntoChannel[template.JS](ctx, jsonOutputFormatter)
-		data["JSTableStream"] = c
-	} else {
-		c := formatters.StartFormatIntoChannel[template.HTML](ctx, H.OutputFormatter)
-		data["HTMLTableStream"] = c
-	}
-
-	err := H.t.Execute(w, data)
+	err := H.Template.Execute(w, data)
 
 	if err != nil {
 		return err
@@ -95,36 +89,7 @@ func (H *HTMLTemplateOutputFormatter) Output(ctx context.Context, w io.Writer) e
 	return err
 }
 
-type HTMLTemplateProcessor struct {
-	*processor.GlazeProcessor
-
-	of *HTMLTemplateOutputFormatter
-}
-
-func NewHTMLTemplateProcessor(
-	gp *processor.GlazeProcessor,
-	t *template.Template,
-	options ...HTMLTemplateOutputFormatterOption,
-) (*HTMLTemplateProcessor, error) {
-	parentOf, ok := gp.OutputFormatter().(*table.OutputFormatter)
-	if !ok {
-		return nil, errors.New("parent output formatter is not a table output formatter")
-	}
-
-	of := NewHTMLTemplateOutputFormatter(t, parentOf, options...)
-
-	ret := &HTMLTemplateProcessor{
-		GlazeProcessor: gp,
-		of:             of,
-	}
-	return ret, nil
-}
-
-func (H *HTMLTemplateProcessor) OutputFormatter() formatters.OutputFormatter {
-	return H.of
-}
-
-// NewHTMLTemplateLookupCreateProcessorFunc creates a CreateProcessorFunc based on a TemplateLookup
+// NewHTMLTemplateLookupCreateProcessorFunc creates a glazed.CreateProcessorFunc based on a TemplateLookup
 // and a template name.
 func NewHTMLTemplateLookupCreateProcessorFunc(
 	lookup TemplateLookup,
@@ -138,28 +103,24 @@ func NewHTMLTemplateLookupCreateProcessorFunc(
 	) {
 		contextType := "text/html"
 
-		// lookup on every request, not up front.
-		//
-		// NOTE(manuel, 2023-04-19) This currently is nailed to a single static templateName passed at configuration time.
-		// potentially, templateName could also be dynamic based on the incoming request, but we'll leave
-		// that flexibility for later.
+		// Lookup template on every request, not up front. That way, templates can be reloaded without recreating the gin
+		// server.
 		t, err := lookup.Lookup(templateName)
 		if err != nil {
 			return nil, contextType, err
 		}
 
-		// NOTE(manuel, 2023-04-18) We use glazed to render the actual HTML table.
-		// But really, we could allow the user to specify the actual HTML rendering as well.
-		// This is currently just a convenience to get started.
-		//
-		// They can actually do that by passing in their own glazed.CreateProcessorFunc.
+		// Here, we use the parsed layer to configure the glazed middlewares.
+		// We then use the created formatters.OutputFormatter as a basis for
+		// our own output formatter that renders into an HTML template.
 		l, ok := pc.ParsedLayers["glazed"]
-		l.Parameters["output"] = "table"
-		l.Parameters["table-format"] = "html"
 
 		var gp *processor.GlazeProcessor
 
 		if ok {
+			l.Parameters["output"] = "table"
+			l.Parameters["table-format"] = "html"
+
 			gp, err = settings.SetupProcessor(l.Parameters)
 		} else {
 			gp, err = settings.SetupProcessor(map[string]interface{}{
@@ -172,7 +133,6 @@ func NewHTMLTemplateLookupCreateProcessorFunc(
 			return nil, contextType, err
 		}
 
-		// NOTE(manuel, 2023-04-19) This layout structure is probably something we should extract out to glazed, as it can also be used for a bubbletea interface.
 		layout_, err := layout.ComputeLayout(pc)
 		if err != nil {
 			return nil, contextType, err
@@ -195,25 +155,9 @@ func NewHTMLTemplateLookupCreateProcessorFunc(
 		}
 		options_ = append(options_, options...)
 
-		gp2, err := NewHTMLTemplateProcessor(gp, t, options_...)
-		if err != nil {
-			return nil, contextType, err
-		}
+		of := NewHTMLTemplateOutputFormatter(t, gp.OutputFormatter().(*table.OutputFormatter), options_...)
+		gp2 := processor.NewGlazeProcessor(of)
+
 		return gp2, contextType, nil
 	}
-}
-
-//go:embed templates/*
-var templateFS embed.FS
-
-func NewDataTablesHTMLTemplateCreateProcessorFunc(
-	options ...HTMLTemplateOutputFormatterOption,
-) (glazed.CreateProcessorFunc, error) {
-	l := NewLookupTemplateFromFS(
-		WithFS(templateFS),
-		WithBaseDir("templates/"),
-		WithPatterns("templates/**/*.tmpl.html"),
-	)
-
-	return NewHTMLTemplateLookupCreateProcessorFunc(l, "data-tables.tmpl.html", options...), nil
 }

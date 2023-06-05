@@ -16,18 +16,28 @@ import (
 	"os"
 )
 
-// CreateProcessorFunc is a simple func type to create a cmds.GlazeProcessor and formatters.OutputFormatter out of a CommandContext.
+// CreateProcessorFunc is a simple func type to create a cmds.GlazeProcessor
+// and formatters.OutputFormatter out of a CommandContext.
 type CreateProcessorFunc func(c *gin.Context, pc *CommandContext) (
 	processor.Processor,
 	string, // content type
 	error,
 )
 
+// HandleOptions groups all the settings for a gin handler that handles a glazed command.
 type HandleOptions struct {
-	ParserOptions   []ParserOption
-	Handlers        []CommandHandlerFunc
+	// ParserOptions are passed to the given parser (the thing that gathers the glazed.Command
+	// flags and arguments.
+	ParserOptions []ParserOption
+	// Handlers are run right at the start to build up the CommandContext based on the
+	// gin.Context and the previous value of CommandContext.
+	// TODO(manuel, 2023-06-04) It is unclear how CommandHandler and Parser interact, since
+	// NewCommandHandlerFunc takes a parser (see HandleSimpleQueryOutputFileCommand and HandleSimpleQueryCommand)
+	Handlers []CommandHandlerFunc
+	// CreateProcessor takes a gin.Context and a CommandContext and returns a processor.Processor (and a content-type)
 	CreateProcessor CreateProcessorFunc
-	Writer          io.Writer
+	// This is the actual gin output writer
+	Writer io.Writer
 }
 
 type HandleOption func(*HandleOptions)
@@ -254,7 +264,7 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 
 // SetupProcessor creates a new cmds.GlazeProcessor. It uses the parsed layer glazed if present, and return
 // a simple JsonOutputFormatter and standard glazed processor otherwise.
-func SetupProcessor(pc *CommandContext) (*processor.GlazeProcessor, error) {
+func SetupProcessor(pc *CommandContext, options ...processor.GlazeProcessorOption) (*processor.GlazeProcessor, error) {
 	l, ok := pc.ParsedLayers["glazed"]
 	if ok {
 		gp, err := settings.SetupProcessor(l.Parameters)
@@ -264,7 +274,7 @@ func SetupProcessor(pc *CommandContext) (*processor.GlazeProcessor, error) {
 	of := json.NewOutputFormatter(
 		json.WithOutputIndividualRows(true),
 	)
-	gp := processor.NewGlazeProcessor(of)
+	gp := processor.NewGlazeProcessor(of, options...)
 
 	return gp, nil
 }

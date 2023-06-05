@@ -38,17 +38,19 @@ var ServeCmd = &cobra.Command{
 			serverOptions = append(serverOptions,
 				pkg.WithStaticPaths(pkg.NewStaticPath(http.FS(os.DirFS("pkg/web/dist")), "/dist")),
 			)
-			defaultLookups = append(defaultLookups, render.LookupTemplateFromDirectory("pkg/web/src/templates"))
+			defaultLookups = append(defaultLookups, render.NewLookupTemplateFromDirectory("pkg/web/src/templates"))
 		} else {
 			serverOptions = append(serverOptions, pkg.WithDefaultParkaStaticPaths())
 		}
 
 		if templateDir != "" {
 			if dev {
-				defaultLookups = append(defaultLookups, render.LookupTemplateFromDirectory(templateDir))
+				defaultLookups = append(defaultLookups, render.NewLookupTemplateFromDirectory(templateDir))
 			} else {
-				lookup, err := render.LookupTemplateFromFS(os.DirFS(templateDir), ".", "**/*.tmpl.*")
-				cobra.CheckErr(err)
+				lookup := render.NewLookupTemplateFromFS(
+					render.WithFS(os.DirFS(templateDir)),
+					render.WithPatterns("**/*.tmpl"),
+				)
 				defaultLookups = append(defaultLookups, lookup)
 			}
 		}

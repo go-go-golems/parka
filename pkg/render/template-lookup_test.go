@@ -46,7 +46,7 @@ func TestLookupTemplateFromDirectory_SimpleDirectory(t *testing.T) {
 	require.Nil(t, err)
 	assert.Equal(t, "Foobar", buf.String())
 
-	tmpl, err = l.Lookup("test2.txt")
+	_, err = l.Lookup("test2.txt")
 	assert.NotNil(t, err)
 }
 
@@ -137,7 +137,7 @@ func TestLookupTemplateFromFS_SimpleDirectory(t *testing.T) {
 	require.Nil(t, err)
 	assert.Equal(t, "foo foo", buf.String())
 
-	tmpl, err = l.Lookup("test2.html")
+	_, err = l.Lookup("test2.html")
 	assert.NotNil(t, err)
 }
 
@@ -156,7 +156,7 @@ func TestLookupTemplateFromFS_SimpleDirectoryWithBaseDir(t *testing.T) {
 	require.Nil(t, err)
 	assert.Equal(t, "foo foo", buf.String())
 
-	tmpl, err = l.Lookup("test2.html")
+	_, err = l.Lookup("test2.html")
 	assert.NotNil(t, err)
 }
 
@@ -203,7 +203,7 @@ func TestLookupTemplateFromFS_SimpleDirectoryWithReload(t *testing.T) {
 	assert.Equal(t, "foo foo", buf.String())
 
 	// check that test2.html still fails
-	tmpl, err = l.Lookup("test2.html")
+	_, err = l.Lookup("test2.html")
 	assert.NotNil(t, err)
 
 	// delete test_tmpl.html
@@ -215,7 +215,7 @@ func TestLookupTemplateFromFS_SimpleDirectoryWithReload(t *testing.T) {
 	require.NoError(t, err)
 
 	// check that test_tmpl.html fails
-	tmpl, err = l.Lookup("test_tmpl.html")
+	_, err = l.Lookup("test_tmpl.html")
 	assert.NotNil(t, err)
 
 	// check that test.html still succeeds

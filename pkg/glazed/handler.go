@@ -29,13 +29,17 @@ type HandleOptions struct {
 	// ParserOptions are passed to the given parser (the thing that gathers the glazed.Command
 	// flags and arguments.
 	ParserOptions []ParserOption
+
 	// Handlers are run right at the start to build up the CommandContext based on the
 	// gin.Context and the previous value of CommandContext.
+	//
 	// TODO(manuel, 2023-06-04) It is unclear how CommandHandler and Parser interact, since
 	// NewCommandHandlerFunc takes a parser (see HandleSimpleQueryOutputFileCommand and HandleSimpleQueryCommand)
 	Handlers []CommandHandlerFunc
+
 	// CreateProcessor takes a gin.Context and a CommandContext and returns a processor.Processor (and a content-type)
 	CreateProcessor CreateProcessorFunc
+
 	// This is the actual gin output writer
 	Writer io.Writer
 }

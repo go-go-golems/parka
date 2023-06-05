@@ -1,4 +1,4 @@
-package pkg_test
+package server_test
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/processor"
-	"github.com/go-go-golems/parka/pkg"
+	"github.com/go-go-golems/parka/pkg/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io"
@@ -43,7 +43,7 @@ func (t *TestCommand) Run(
 func TestRunGlazedCommand(t *testing.T) {
 	tc := &TestCommand{}
 
-	s, err := pkg.NewServer()
+	s, err := server.NewServer()
 	require.NoError(t, err)
 
 	handler := s.HandleSimpleQueryCommand(tc)

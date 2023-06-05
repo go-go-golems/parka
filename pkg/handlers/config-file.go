@@ -3,12 +3,12 @@ package handlers
 import (
 	"context"
 	"github.com/go-go-golems/clay/pkg/repositories"
-	parka "github.com/go-go-golems/parka/pkg"
 	"github.com/go-go-golems/parka/pkg/handlers/command-dir"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/handlers/static-dir"
 	"github.com/go-go-golems/parka/pkg/handlers/static-file"
 	"github.com/go-go-golems/parka/pkg/handlers/template-dir"
+	"github.com/go-go-golems/parka/pkg/server"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -78,7 +78,7 @@ func NewConfigFileHandler(config *config.Config, options ...ConfigFileHandlerOpt
 	return handler
 }
 
-func (cfh *ConfigFileHandler) Serve(server *parka.Server) error {
+func (cfh *ConfigFileHandler) Serve(server *server.Server) error {
 	// NOTE(manuel, 2023-05-26)
 	// This could be extracted to a "parseConfigFile", so that we can easily add preconfigured handlers that
 	// can deal with embeddedFS

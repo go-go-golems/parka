@@ -1,8 +1,8 @@
 package static_file
 
 import (
-	"github.com/go-go-golems/parka/pkg"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
+	"github.com/go-go-golems/parka/pkg/server"
 	"io/fs"
 	"net/http"
 	"os"
@@ -55,7 +55,7 @@ func NewStaticFileHandlerFromConfig(shf *config.StaticFile, options ...StaticFil
 	return handler
 }
 
-func (s *StaticFileHandler) Serve(server *pkg.Server, path string) error {
+func (s *StaticFileHandler) Serve(server *server.Server, path string) error {
 	server.Router.StaticFileFS(
 		path,
 		s.localPath,

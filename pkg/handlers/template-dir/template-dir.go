@@ -2,9 +2,9 @@ package template_dir
 
 import (
 	"fmt"
-	"github.com/go-go-golems/parka/pkg"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
+	"github.com/go-go-golems/parka/pkg/server"
 	"io/fs"
 	"os"
 	"strings"
@@ -106,7 +106,7 @@ func NewTemplateDirHandlerFromConfig(td *config.TemplateDir, options ...Template
 	return handler, nil
 }
 
-func (td *TemplateDirHandler) Serve(server *pkg.Server, path string) error {
+func (td *TemplateDirHandler) Serve(server *server.Server, path string) error {
 	// TODO(manuel, 2023-05-26) This is a hack because we currently mix and match content with commands.
 	server.Router.Use(td.renderer.HandleWithTrimPrefix(path, nil))
 

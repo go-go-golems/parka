@@ -1,8 +1,9 @@
 package static_dir
 
 import (
-	"github.com/go-go-golems/parka/pkg"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
+	"github.com/go-go-golems/parka/pkg/server"
+	fs2 "github.com/go-go-golems/parka/pkg/utils/fs"
 	"io/fs"
 	"net/http"
 	"os"
@@ -56,10 +57,10 @@ func NewStaticDirHandlerFromConfig(sh *config.Static, options ...StaticDirHandle
 	return handler
 }
 
-func (s *StaticDirHandler) Serve(server *pkg.Server, path string) error {
+func (s *StaticDirHandler) Serve(server *server.Server, path string) error {
 	fs := s.fs
 	if s.localPath != "" {
-		fs = pkg.NewAddPrefixPathFS(s.fs, s.localPath)
+		fs = fs2.NewAddPrefixPathFS(s.fs, s.localPath)
 	}
 	server.Router.StaticFS(path, http.FS(fs))
 	return nil

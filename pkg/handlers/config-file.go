@@ -9,8 +9,10 @@ import (
 	"github.com/go-go-golems/parka/pkg/handlers/static-file"
 	"github.com/go-go-golems/parka/pkg/handlers/template"
 	"github.com/go-go-golems/parka/pkg/handlers/template-dir"
+	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/server"
 	"golang.org/x/sync/errgroup"
+	"os"
 )
 
 // TODO(manuel, 2023-05-31) For multi command serves, we should be able to configure
@@ -35,9 +37,17 @@ type ConfigFileHandler struct {
 	commandDirectoryHandlers  []*command_dir.CommandDirHandler
 	templateDirectoryHandlers []*template_dir.TemplateDirHandler
 	templateHandlers          []*template.TemplateHandler
+
+	DevMode bool
 }
 
 type ConfigFileHandlerOption func(*ConfigFileHandler)
+
+func WithDevMode(devMode bool) ConfigFileHandlerOption {
+	return func(handler *ConfigFileHandler) {
+		handler.DevMode = devMode
+	}
+}
 
 func WithAppendCommandDirHandlerOptions(options ...command_dir.CommandDirHandlerOption) ConfigFileHandlerOption {
 	return func(handler *ConfigFileHandler) {
@@ -130,7 +140,33 @@ func (cfh *ConfigFileHandler) Serve(server *server.Server) error {
 			if err != nil {
 				return err
 			}
-			directoryOptions := append(cfh.CommandDirectoryOptions, command_dir.WithRepository(r))
+			directoryOptions := []command_dir.CommandDirHandlerOption{
+				command_dir.WithRepository(r),
+			}
+
+			if route.CommandDirectory.TemplateDirectory != "" {
+				// but here when not loading from a config file, we already set the template lookup externally...
+				templateLookup := render.NewLookupTemplateFromFS(
+					render.WithFS(os.DirFS(route.CommandDirectory.TemplateDirectory)),
+					render.WithBaseDir(""),
+					render.WithPatterns(
+						"**/*.tmpl.md",
+						"**/*.tmpl.html",
+					),
+					render.WithAlwaysReload(cfh.DevMode),
+				)
+				err = templateLookup.Reload()
+				if err != nil {
+					return err
+				}
+
+				directoryOptions = append(directoryOptions, command_dir.WithTemplateLookup(templateLookup))
+			}
+
+			// Because the external options are passed in last, they will overwrite whatever
+			// options were set from the config file itself, which is useful when running
+			// the config file less version of the serve command in sqleton.
+			directoryOptions = append(directoryOptions, cfh.CommandDirectoryOptions...)
 
 			cdh, err := command_dir.NewCommandDirHandlerFromConfig(
 				route.CommandDirectory,

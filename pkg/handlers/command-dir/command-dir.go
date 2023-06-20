@@ -215,22 +215,6 @@ func NewCommandDirHandlerFromConfig(
 		option(cd)
 	}
 
-	templateLookup := render.NewLookupTemplateFromFS(
-		render.WithFS(os.DirFS(config.TemplateDirectory)),
-		render.WithBaseDir(""),
-		render.WithPatterns(
-			"**/*.tmpl.md",
-			"**/*.tmpl.html",
-		),
-		render.WithAlwaysReload(cd.DevMode),
-	)
-	err := templateLookup.Reload()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load templates: %w", err)
-	}
-
-	cd.TemplateLookup = templateLookup
-
 	return cd, nil
 }
 

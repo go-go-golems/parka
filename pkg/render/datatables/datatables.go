@@ -146,13 +146,20 @@ var templateFS embed.FS
 func NewDataTablesHTMLTemplateCreateProcessorFunc(
 	options ...render.HTMLTemplateOutputFormatterOption,
 ) (glazed.CreateProcessorFunc, error) {
+	l := NewDataTablesLookupTemplate()
+	return render.NewHTMLTemplateLookupCreateProcessorFunc(l, "data-tables.tmpl.html", options...), nil
+}
+
+func NewDataTablesLookupTemplate() *render.LookupTemplateFromFS {
 	l := render.NewLookupTemplateFromFS(
 		render.WithFS(templateFS),
 		render.WithBaseDir("templates/"),
-		render.WithPatterns("templates/**/*.tmpl.html"),
+		render.WithPatterns("**/*.tmpl.html"),
 	)
 
-	return render.NewHTMLTemplateLookupCreateProcessorFunc(l, "data-tables.tmpl.html", options...), nil
+	_ = l.Reload()
+
+	return l
 }
 
 func NewDataTablesOutputFormatter(

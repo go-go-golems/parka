@@ -35,7 +35,8 @@ type DataTables struct {
 	//
 	// TODO(manuel, 2023-06-04): Maybe we could make this be an iterator of rows that provide access to the individual
 	// columns for more interesting HTML shenanigans too.
-	Stream <-chan string
+	JSStream   <-chan template.JS
+	HTMLStream <-chan template.HTML
 	// Configuring the template to load the table data through javascript, and provide the data itself
 	// as a JSON array inlined in the HTML of the page.
 	JSRendering bool
@@ -122,12 +123,6 @@ func WithPrependLinks(links ...layout.Link) DataTablesOutputFormatterOption {
 	}
 }
 
-func WithStream(stream <-chan string) DataTablesOutputFormatterOption {
-	return func(d *DataTablesOutputFormatter) {
-		d.dataTablesData.Stream = stream
-	}
-}
-
 func WithColumns(columns ...string) DataTablesOutputFormatterOption {
 	return func(d *DataTablesOutputFormatter) {
 		d.dataTablesData.Columns = columns
@@ -181,15 +176,21 @@ func NewDataTablesOutputFormatter(
 
 func (d *DataTablesOutputFormatter) Output(ctx context.Context, w io.Writer) error {
 	dt := d.dataTablesData
-	if dt.Stream == nil {
-		if dt.JSRendering {
-			jsonOutputFormatter := json.NewOutputFormatter(json.WithTable(d.OutputFormatter.Table))
-			dt.Stream = formatters.StartFormatIntoChannel[template.JS](ctx, jsonOutputFormatter)
-		} else {
-			dt.Stream = formatters.StartFormatIntoChannel[template.HTML](ctx, d.OutputFormatter)
-		}
+	if dt.JSRendering {
+		jsonOutputFormatter := json.NewOutputFormatter(json.WithTable(d.OutputFormatter.Table))
+		dt.JSStream = formatters.StartFormatIntoChannel[template.JS](ctx, jsonOutputFormatter)
+	} else {
+		dt.HTMLStream = formatters.StartFormatIntoChannel[template.HTML](ctx, d.OutputFormatter)
 	}
 
+	if d.OutputFormatter.Table != nil {
+		dt.Columns = d.OutputFormatter.Table.Columns
+	}
+
+	// TODO(manuel, 2023-06-20) We need to properly pass the columns here, which can't be set upstream
+	// since we already pass in the JSStream here and we keep it, I think we are better off cloning the
+	// DataTables struct, or even separating it out to make d.dataTablesData immutable and just contain the
+	// toplevel config.
 	err := d.HTMLTemplateOutputFormatter.Template.Execute(w, dt)
 
 	if err != nil {

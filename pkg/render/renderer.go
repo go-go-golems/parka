@@ -2,7 +2,6 @@ package render
 
 import (
 	"context"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -154,16 +153,6 @@ func (r *Renderer) LookupTemplate(name ...string) (*template.Template, error) {
 
 }
 
-// NoPageFoundError is returned by Render if no template was found, in which case
-// the Render is skipped and moves on to the next middleware.
-type NoPageFoundError struct {
-	Page string
-}
-
-func (e *NoPageFoundError) Error() string {
-	return fmt.Sprintf("no page found for %s", e.Page)
-}
-
 // Render a given page with the given data.
 //
 // It first looks for a markdown file or template called either page.md or page.tmpl.md,
@@ -174,7 +163,12 @@ func (e *NoPageFoundError) Error() string {
 // If no markdown file or template is found, it will look for a HTML file or template called
 // either page.html or page.tmpl.html and serve it as a template, passing it the given data.
 // page.html is served as a plain HTML file, while page.tmpl.html is served as a template.
-func (r *Renderer) Render(ctx context.Context, w io.Writer, page string, data map[string]interface{}) error {
+func (r *Renderer) Render(
+	ctx context.Context,
+	w io.Writer,
+	page string,
+	data map[string]interface{},
+) error {
 	// first, merge the data we want to pass to the templates, with the data passed in overridding
 	// the data in the renderer
 	data_ := map[string]interface{}{}
@@ -185,7 +179,7 @@ func (r *Renderer) Render(ctx context.Context, w io.Writer, page string, data ma
 		data_[k] = v
 	}
 
-	// TODO(manuel, 2023-05-26) Don'Template render plain files as templates
+	// TODO(manuel, 2023-05-26) Don't render plain files as templates
 	// See https://github.com/go-go-golems/parka/issues/47
 	t, err := r.LookupTemplate(page+".tmpl.md", page+".md")
 	if err != nil {
@@ -228,7 +222,10 @@ func (r *Renderer) Render(ctx context.Context, w io.Writer, page string, data ma
 	return nil
 }
 
-func (r *Renderer) HandleWithTemplate(templateName string, data map[string]interface{}) gin.HandlerFunc {
+func (r *Renderer) HandleWithTemplate(
+	templateName string,
+	data map[string]interface{},
+) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Writer.Written() {
 			c.Next()

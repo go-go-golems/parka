@@ -31,7 +31,9 @@ var distFS embed.FS
 type Server struct {
 	Router *gin.Engine
 
-	StaticPaths     []utils_fs.StaticPath
+	// TODO(manuel, 2023-06-05) This should become a standard Static handler to be added to the Routes
+	StaticPaths []utils_fs.StaticPath
+	// TODO(manuel, 2023-06-05) This could potentially be replaced with a fallback Handler
 	DefaultRenderer *render.Renderer
 
 	Port    uint16
@@ -89,6 +91,10 @@ func WithDefaultRenderer(r *render.Renderer) ServerOption {
 	}
 }
 
+// GetDefaultParkaRendererOptions will return the default options for the parka renderer.
+// This includes looking up templates from the embedded templateFS to provide support for
+// markdown rendering with tailwind. This includes css files.
+// It also sets base.tmpl.html as the base template for wrapping rendered markdown.
 func GetDefaultParkaRendererOptions() ([]render.RendererOption, error) {
 	// this should be overloaded too
 	parkaLookup := render.NewLookupTemplateFromFS(
@@ -107,7 +113,7 @@ func GetDefaultParkaRendererOptions() ([]render.RendererOption, error) {
 	}, nil
 }
 
-func WithDefaultParkaLookup(options ...render.RendererOption) ServerOption {
+func WithDefaultParkaRenderer(options ...render.RendererOption) ServerOption {
 	options_, err := GetDefaultParkaRendererOptions()
 	if err != nil {
 		return WithFailOption(err)

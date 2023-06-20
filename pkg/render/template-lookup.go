@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"io/fs"
 	"os"
+	"path"
 	"strings"
 )
 
@@ -27,6 +28,46 @@ type TemplateLookup interface {
 	// This is also useful for development, where partial reloading is probably less important
 	// and performance is not paramount, and as such a full reload on every request could be configured.
 	Reload(name ...string) error
+}
+
+// LookupTemplateFromFile will load a template from a filesystem. It will always return
+// the content of that file when queried, independent of the actual name requested.
+type LookupTemplateFromFile struct {
+	File string
+	// The templateName to respond to, if empty, all templates request will return the file content.
+	TemplateName string
+}
+
+func NewLookupTemplateFromFile(file string, path string) *LookupTemplateFromFile {
+	return &LookupTemplateFromFile{
+		File:         file,
+		TemplateName: path,
+	}
+}
+
+func (l *LookupTemplateFromFile) Lookup(name ...string) (*template.Template, error) {
+	b, err := os.ReadFile(l.File)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, name_ := range name {
+		if l.TemplateName == "" || l.TemplateName == name_ {
+			templateName := path.Base(l.File)
+			t, err := templating.CreateHTMLTemplate(templateName).Parse(string(b))
+			if err != nil {
+				return nil, err
+			}
+
+			return t, nil
+		}
+	}
+
+	return nil, errors.Errorf("template %s not found", name)
+}
+
+func (l *LookupTemplateFromFile) Reload(name ...string) error {
+	return nil
 }
 
 // LookupTemplateFromDirectory will load a template at runtime. This is useful

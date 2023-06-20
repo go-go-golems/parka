@@ -57,7 +57,7 @@ var ServeCmd = &cobra.Command{
 		}
 
 		serverOptions = append(serverOptions,
-			server.WithDefaultParkaLookup(render.WithPrependTemplateLookups(defaultLookups...)),
+			server.WithDefaultParkaRenderer(render.WithPrependTemplateLookups(defaultLookups...)),
 		)
 		s, _ := server.NewServer(serverOptions...)
 

@@ -208,9 +208,28 @@ func NewCommandDirHandlerFromConfig(
 		IndexTemplateName: config.IndexTemplateName,
 	}
 
+	// TODO(manuel, 2023-06-20) Handle all the options from the config file
+	// Overrides, TemplateDirectory, IndexTemplateName, Defaults, Overrides
+
 	for _, option := range options {
 		option(cd)
 	}
+
+	templateLookup := render.NewLookupTemplateFromFS(
+		render.WithFS(os.DirFS(config.TemplateDirectory)),
+		render.WithBaseDir(""),
+		render.WithPatterns(
+			"**/*.tmpl.md",
+			"**/*.tmpl.html",
+		),
+		render.WithAlwaysReload(cd.DevMode),
+	)
+	err := templateLookup.Reload()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load templates: %w", err)
+	}
+
+	cd.TemplateLookup = templateLookup
 
 	return cd, nil
 }

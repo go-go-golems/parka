@@ -29,12 +29,14 @@ func WithDefaultFS(fs fs.FS, localPath string) StaticDirHandlerOption {
 func WithLocalPath(localPath string) StaticDirHandlerOption {
 	return func(handler *StaticDirHandler) {
 		if localPath != "" {
+			if !strings.HasSuffix(localPath, "/") {
+				localPath = localPath + "/"
+			}
 			if localPath[0] == '/' {
 				handler.fs = os.DirFS(localPath)
 			} else {
 				handler.fs = os.DirFS(localPath)
 			}
-			handler.localPath = strings.TrimPrefix(localPath, "/")
 		}
 	}
 }
@@ -48,9 +50,8 @@ func NewStaticDirHandler(options ...StaticDirHandlerOption) *StaticDirHandler {
 }
 
 func NewStaticDirHandlerFromConfig(sh *config.Static, options ...StaticDirHandlerOption) *StaticDirHandler {
-	handler := &StaticDirHandler{
-		localPath: sh.LocalPath,
-	}
+	handler := &StaticDirHandler{}
+	WithLocalPath(sh.LocalPath)(handler)
 	for _, option := range options {
 		option(handler)
 	}
@@ -58,10 +59,10 @@ func NewStaticDirHandlerFromConfig(sh *config.Static, options ...StaticDirHandle
 }
 
 func (s *StaticDirHandler) Serve(server *server.Server, path string) error {
-	fs := s.fs
+	fs_ := s.fs
 	if s.localPath != "" {
-		fs = fs2.NewAddPrefixPathFS(s.fs, s.localPath)
+		fs_ = fs2.NewAddPrefixPathFS(s.fs, s.localPath)
 	}
-	server.Router.StaticFS(path, http.FS(fs))
+	server.Router.StaticFS(path, http.FS(fs_))
 	return nil
 }

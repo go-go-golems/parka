@@ -7,6 +7,7 @@ import (
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/handlers/static-dir"
 	"github.com/go-go-golems/parka/pkg/handlers/static-file"
+	"github.com/go-go-golems/parka/pkg/handlers/template"
 	"github.com/go-go-golems/parka/pkg/handlers/template-dir"
 	"github.com/go-go-golems/parka/pkg/server"
 	"golang.org/x/sync/errgroup"
@@ -27,11 +28,13 @@ type ConfigFileHandler struct {
 
 	CommandDirectoryOptions  []command_dir.CommandDirHandlerOption
 	TemplateDirectoryOptions []template_dir.TemplateDirHandlerOption
+	TemplateOptions          []template.TemplateHandlerOption
 
 	// ConfigFileLocation is an optional path to the config file on disk in case it needs to be reloaded
 	ConfigFileLocation        string
 	commandDirectoryHandlers  []*command_dir.CommandDirHandler
 	templateDirectoryHandlers []*template_dir.TemplateDirHandler
+	templateHandlers          []*template.TemplateHandler
 }
 
 type ConfigFileHandlerOption func(*ConfigFileHandler)
@@ -45,6 +48,12 @@ func WithAppendCommandDirHandlerOptions(options ...command_dir.CommandDirHandler
 func WithAppendTemplateDirHandlerOptions(options ...template_dir.TemplateDirHandlerOption) ConfigFileHandlerOption {
 	return func(handler *ConfigFileHandler) {
 		handler.TemplateDirectoryOptions = append(handler.TemplateDirectoryOptions, options...)
+	}
+}
+
+func WithAppendTemplateHandlerOptions(options ...template.TemplateHandlerOption) ConfigFileHandlerOption {
+	return func(handler *ConfigFileHandler) {
+		handler.TemplateOptions = append(handler.TemplateOptions, options...)
 	}
 }
 
@@ -66,7 +75,23 @@ func (e ErrNoRepositoryFactory) Error() string {
 	return "no repository factory provided"
 }
 
-func NewConfigFileHandler(config *config.Config, options ...ConfigFileHandlerOption) *ConfigFileHandler {
+// NewConfigFileHandler creates a new config file handler. The actual handlers resulting from the config
+// file are actually created in Serve.
+//
+// It will use the options passed in using WithAppendCommandDirHandlerOptions and WithAppendTemplateDirHandlerOptions
+// and pass them to the TemplateDir and CommandDir handlers.
+//
+// TODO(manuel, 2023-06-20) This doesn't allow taking CommandDirOptions and TemplateDirOptions for individual routes.
+//
+// Also see https://github.com/go-go-golems/parka/issues/51 to allow the individual config file entries
+// to actually provide the options for the handlers.
+//
+// In a way, the options passed here could be considered "defaults". The order of overrides would be interesting
+// to figure out.
+func NewConfigFileHandler(
+	config *config.Config,
+	options ...ConfigFileHandlerOption,
+) *ConfigFileHandler {
 	handler := &ConfigFileHandler{
 		Config: config,
 	}
@@ -78,10 +103,18 @@ func NewConfigFileHandler(config *config.Config, options ...ConfigFileHandlerOpt
 	return handler
 }
 
+// Serve serves the config file by registering all the routers.
+//
+// To create the handlers, it will walk over each individual
+// route and create the appropriate handler. For example, if the route contains a CommandDirectory, it will
+// create a CommandDirHandler and register it with the server.
+//
+// NOTE(manuel, 2023-06-20) Creating the handlers late, in the Serve method, is not ideal
+// because it makes it hard for the creating function to override specific handler options
+// if need be (also this could potentially better be handled by setting the right overrides
+// and defaults in the config.Config object upfront).
 func (cfh *ConfigFileHandler) Serve(server *server.Server) error {
-	// NOTE(manuel, 2023-05-26)
-	// This could be extracted to a "parseConfigFile", so that we can easily add preconfigured handlers that
-	// can deal with embeddedFS
+	// TODO(manuel, 2023-06-05) Add default repositories and handle them in Command and CommandDir
 
 	for _, route := range cfh.Config.Routes {
 		if route.CommandDirectory != nil {
@@ -117,6 +150,26 @@ func (cfh *ConfigFileHandler) Serve(server *server.Server) error {
 			continue
 		}
 
+		if route.Template != nil {
+			th, err := template.NewTemplateHandlerFromConfig(
+				route.Path,
+				route.Template,
+				cfh.TemplateOptions...,
+			)
+			if err != nil {
+				return err
+			}
+
+			cfh.templateHandlers = append(cfh.templateHandlers, th)
+
+			err = th.Serve(server, route.Path)
+			if err != nil {
+				return err
+			}
+
+			continue
+		}
+
 		if route.TemplateDirectory != nil {
 			tdh, err := template_dir.NewTemplateDirHandlerFromConfig(
 				route.TemplateDirectory,
@@ -126,6 +179,7 @@ func (cfh *ConfigFileHandler) Serve(server *server.Server) error {
 				return err
 			}
 
+			// NOTE(manuel, 2023-06-20) I don't think we need to keep track of these
 			cfh.templateDirectoryHandlers = append(cfh.templateDirectoryHandlers, tdh)
 
 			err = tdh.Serve(server, route.Path)

@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/helpers"
-	"github.com/go-go-golems/parka/pkg"
 	"github.com/go-go-golems/parka/pkg/render"
+	"github.com/go-go-golems/parka/pkg/server"
+	"github.com/go-go-golems/parka/pkg/utils/fs"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"io"
@@ -23,7 +24,7 @@ var ServeCmd = &cobra.Command{
 		_, err := cmd.Flags().GetUint16("port")
 		cobra.CheckErr(err)
 
-		serverOptions := []pkg.ServerOption{}
+		serverOptions := []server.ServerOption{}
 		defaultLookups := []render.TemplateLookup{}
 
 		dev, _ := cmd.Flags().GetBool("dev")
@@ -36,27 +37,29 @@ var ServeCmd = &cobra.Command{
 				Str("templateDir", "pkg/web/src/templates").
 				Msg("Using assets from disk")
 			serverOptions = append(serverOptions,
-				pkg.WithStaticPaths(pkg.NewStaticPath(http.FS(os.DirFS("pkg/web/dist")), "/dist")),
+				server.WithStaticPaths(fs.NewStaticPath(http.FS(os.DirFS("pkg/web/dist")), "/dist")),
 			)
-			defaultLookups = append(defaultLookups, render.LookupTemplateFromDirectory("pkg/web/src/templates"))
+			defaultLookups = append(defaultLookups, render.NewLookupTemplateFromDirectory("pkg/web/src/templates"))
 		} else {
-			serverOptions = append(serverOptions, pkg.WithDefaultParkaStaticPaths())
+			serverOptions = append(serverOptions, server.WithDefaultParkaStaticPaths())
 		}
 
 		if templateDir != "" {
 			if dev {
-				defaultLookups = append(defaultLookups, render.LookupTemplateFromDirectory(templateDir))
+				defaultLookups = append(defaultLookups, render.NewLookupTemplateFromDirectory(templateDir))
 			} else {
-				lookup, err := render.LookupTemplateFromFS(os.DirFS(templateDir), ".", "**/*.tmpl.*")
-				cobra.CheckErr(err)
+				lookup := render.NewLookupTemplateFromFS(
+					render.WithFS(os.DirFS(templateDir)),
+					render.WithPatterns("**/*.tmpl"),
+				)
 				defaultLookups = append(defaultLookups, lookup)
 			}
 		}
 
 		serverOptions = append(serverOptions,
-			pkg.WithDefaultParkaLookup(render.WithPrependTemplateLookups(defaultLookups...)),
+			server.WithDefaultParkaRenderer(render.WithPrependTemplateLookups(defaultLookups...)),
 		)
-		s, _ := pkg.NewServer(serverOptions...)
+		s, _ := server.NewServer(serverOptions...)
 
 		// NOTE(manuel, 2023-05-26) This could also be done with a simple Command config file struct once
 		// implemented as part of sqleton serve

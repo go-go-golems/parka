@@ -21,6 +21,9 @@ build:
 	go generate ./...
 	go build ./...
 
+docs:
+	godoc -http=:6060
+
 goreleaser:
 	goreleaser release --skip-sign --snapshot --rm-dist
 

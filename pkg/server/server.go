@@ -1,4 +1,4 @@
-package pkg
+package server
 
 import (
 	"context"
@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"github.com/gin-gonic/contrib/gzip"
 	"github.com/gin-gonic/gin"
+	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/render"
+	utils_fs "github.com/go-go-golems/parka/pkg/utils/fs"
 	"golang.org/x/sync/errgroup"
-	"io/fs"
 	"net/http"
-	"strings"
 )
 
 //go:embed "web/src/templates/*"
@@ -18,40 +19,6 @@ var templateFS embed.FS
 
 //go:embed "web/dist/*"
 var distFS embed.FS
-
-// StaticPath allows you to serve static files from a http.FileSystem under a given URL path urlPath.
-type StaticPath struct {
-	fs      http.FileSystem
-	urlPath string
-}
-
-// NewStaticPath creates a new StaticPath that will serve files from the given http.FileSystem.
-func NewStaticPath(fs http.FileSystem, urlPath string) StaticPath {
-	return StaticPath{
-		fs:      fs,
-		urlPath: urlPath,
-	}
-}
-
-// AddPrefixPathFS is a helper wrapper that will a prefix to each incoming filename that is to be opened.
-// This is useful for embedFS which will keep their prefix. For example, mounting the embed fs go:embed static
-// will retain the static/* prefix, while the static gin handler will strip it.
-type AddPrefixPathFS struct {
-	fs     fs.FS
-	prefix string
-}
-
-// NewAddPrefixPathFS creates a new AddPrefixPathFS that will add the given prefix to each file that is opened..
-func NewAddPrefixPathFS(fs fs.FS, prefix string) AddPrefixPathFS {
-	return AddPrefixPathFS{
-		fs:     fs,
-		prefix: prefix,
-	}
-}
-
-func (s AddPrefixPathFS) Open(name string) (fs.File, error) {
-	return s.fs.Open(s.prefix + name)
-}
 
 // Server is the main class that parka uses to serve static and templated content.
 // It is a wrapper around gin.Engine.
@@ -64,7 +31,9 @@ func (s AddPrefixPathFS) Open(name string) (fs.File, error) {
 type Server struct {
 	Router *gin.Engine
 
-	StaticPaths     []StaticPath
+	// TODO(manuel, 2023-06-05) This should become a standard Static handler to be added to the Routes
+	StaticPaths []utils_fs.StaticPath
+	// TODO(manuel, 2023-06-05) This could potentially be replaced with a fallback Handler
 	DefaultRenderer *render.Renderer
 
 	Port    uint16
@@ -75,13 +44,13 @@ type ServerOption = func(*Server) error
 
 // WithStaticPaths will add the given static paths to the list of static paths.
 // If a path with the same URL path already exists, it will be replaced.
-func WithStaticPaths(paths ...StaticPath) ServerOption {
+func WithStaticPaths(paths ...utils_fs.StaticPath) ServerOption {
 	return func(s *Server) error {
 		// prepend paths to the list
 	pathLoop:
 		for _, path := range paths {
 			for i, existingPath := range s.StaticPaths {
-				if existingPath.urlPath == path.urlPath {
+				if existingPath.UrlPath == path.UrlPath {
 					s.StaticPaths[i] = path
 					continue pathLoop
 				}
@@ -122,9 +91,18 @@ func WithDefaultRenderer(r *render.Renderer) ServerOption {
 	}
 }
 
+// GetDefaultParkaRendererOptions will return the default options for the parka renderer.
+// This includes looking up templates from the embedded templateFS to provide support for
+// markdown rendering with tailwind. This includes css files.
+// It also sets base.tmpl.html as the base template for wrapping rendered markdown.
 func GetDefaultParkaRendererOptions() ([]render.RendererOption, error) {
 	// this should be overloaded too
-	parkaLookup, err := render.LookupTemplateFromFS(templateFS, "web/src/templates", "**/*.tmpl.*")
+	parkaLookup := render.NewLookupTemplateFromFS(
+		render.WithFS(templateFS),
+		render.WithBaseDir("web/src/templates"),
+		render.WithPatterns("**/*.tmpl.*"),
+	)
+	err := parkaLookup.Reload()
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +113,7 @@ func GetDefaultParkaRendererOptions() ([]render.RendererOption, error) {
 	}, nil
 }
 
-func WithDefaultParkaLookup(options ...render.RendererOption) ServerOption {
+func WithDefaultParkaRenderer(options ...render.RendererOption) ServerOption {
 	options_, err := GetDefaultParkaRendererOptions()
 	if err != nil {
 		return WithFailOption(err)
@@ -151,12 +129,12 @@ func WithDefaultParkaLookup(options ...render.RendererOption) ServerOption {
 }
 
 func GetParkaStaticFS() http.FileSystem {
-	return NewEmbedFileSystem(distFS, "web/dist")
+	return utils_fs.NewEmbedFileSystem(distFS, "web/dist")
 }
 
 func WithDefaultParkaStaticPaths() ServerOption {
 	return WithStaticPaths(
-		NewStaticPath(GetParkaStaticFS(), "/dist"),
+		utils_fs.NewStaticPath(GetParkaStaticFS(), "/dist"),
 	)
 }
 
@@ -176,7 +154,7 @@ func NewServer(options ...ServerOption) (*Server, error) {
 
 	s := &Server{
 		Router:      router,
-		StaticPaths: []StaticPath{},
+		StaticPaths: []utils_fs.StaticPath{},
 	}
 
 	for _, option := range options {
@@ -189,56 +167,10 @@ func NewServer(options ...ServerOption) (*Server, error) {
 	return s, nil
 }
 
-// EmbedFileSystem is a helper to make an embed FS work as a http.FS,
-// which allows us to serve embed.FS using gin's `Static` middleware.
-type EmbedFileSystem struct {
-	f           http.FileSystem
-	stripPrefix string
-}
-
-// NewEmbedFileSystem will create a new EmbedFileSystem that will serve the given embed.FS
-// under the given URL path. stripPrefix will be added to the beginning of all paths when
-// looking up files in the embed.FS.
-func NewEmbedFileSystem(f fs.FS, stripPrefix string) *EmbedFileSystem {
-	if !strings.HasSuffix(stripPrefix, "/") {
-		stripPrefix += "/"
-	}
-	return &EmbedFileSystem{
-		f:           http.FS(f),
-		stripPrefix: stripPrefix,
-	}
-}
-
-// Open will open the file with the given name from the embed.FS. The name will be prefixed
-// with the stripPrefix that was given when creating the EmbedFileSystem.
-func (e *EmbedFileSystem) Open(name string) (http.File, error) {
-	name = strings.TrimPrefix(name, "/")
-	return e.f.Open(e.stripPrefix + name)
-}
-
-// Exists will check if the given path exists in the embed.FS. The path will be prefixed
-// with the stripPrefix that was given when creating the EmbedFileSystem, while prefix will
-// be removed from the path.
-func (e *EmbedFileSystem) Exists(prefix string, path string) bool {
-	if len(path) < len(prefix) {
-		return false
-	}
-
-	// remove prefix from path
-	path = path[len(prefix):]
-
-	f, err := e.f.Open(e.stripPrefix + path)
-	if err != nil {
-		return false
-	}
-	defer f.Close()
-	return true
-}
-
 // Run will start the server and listen on the given address and port.
 func (s *Server) Run(ctx context.Context) error {
 	for _, path := range s.StaticPaths {
-		s.Router.StaticFS(path.urlPath, path.fs)
+		s.Router.StaticFS(path.UrlPath, path.FS)
 	}
 
 	// match all remaining paths to the templates
@@ -264,4 +196,45 @@ func (s *Server) Run(ctx context.Context) error {
 	})
 
 	return eg.Wait()
+}
+
+func (s *Server) HandleSimpleQueryCommand(
+	cmd cmds.GlazeCommand,
+	options ...glazed.HandleOption,
+) gin.HandlerFunc {
+	opts := glazed.NewHandleOptions(options)
+	opts.Handlers = append(opts.Handlers,
+		glazed.NewCommandHandlerFunc(cmd,
+			glazed.NewCommandQueryParser(cmd, opts.ParserOptions...)),
+	)
+	return glazed.GinHandleGlazedCommand(cmd, opts)
+}
+
+func (s *Server) HandleSimpleQueryOutputFileCommand(
+	cmd cmds.GlazeCommand,
+	outputFile string,
+	fileName string,
+	options ...glazed.HandleOption,
+) gin.HandlerFunc {
+	opts := glazed.NewHandleOptions(options)
+	opts.Handlers = append(opts.Handlers,
+		glazed.NewCommandHandlerFunc(cmd, glazed.NewCommandQueryParser(cmd, opts.ParserOptions...)),
+	)
+	return glazed.GinHandleGlazedCommandWithOutputFile(cmd, outputFile, fileName, opts)
+}
+
+// TODO(manuel, 2023-02-28) We want to provide a handler to catch errors while parsing parameters
+
+func (s *Server) HandleSimpleFormCommand(
+	cmd cmds.GlazeCommand,
+	options ...glazed.HandleOption,
+) gin.HandlerFunc {
+	opts := &glazed.HandleOptions{}
+	for _, option := range options {
+		option(opts)
+	}
+	opts.Handlers = append(opts.Handlers,
+		glazed.NewCommandHandlerFunc(cmd, glazed.NewCommandFormParser(cmd, opts.ParserOptions...)),
+	)
+	return glazed.GinHandleGlazedCommand(cmd, opts)
 }

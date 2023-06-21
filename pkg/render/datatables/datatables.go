@@ -183,14 +183,14 @@ func (d *DataTablesOutputFormatter) Output(ctx context.Context, w io.Writer) err
 		dt.HTMLStream = formatters.StartFormatIntoChannel[template.HTML](ctx, d.OutputFormatter)
 	}
 
-	if d.OutputFormatter.Table != nil {
-		dt.Columns = d.OutputFormatter.Table.Columns
-	}
-
 	// TODO(manuel, 2023-06-20) We need to properly pass the columns here, which can't be set upstream
 	// since we already pass in the JSStream here and we keep it, I think we are better off cloning the
 	// DataTables struct, or even separating it out to make d.dataTablesData immutable and just contain the
 	// toplevel config.
+	if d.OutputFormatter.Table != nil {
+		dt.Columns = d.OutputFormatter.Table.Columns
+	}
+
 	err := d.HTMLTemplateOutputFormatter.Template.Execute(w, dt)
 
 	if err != nil {

@@ -120,6 +120,8 @@ func HandlePrepopulatedParsedLayers(layers_ map[string]*layers.ParsedParameterLa
 func NewCommandQueryParser(cmd cmds.GlazeCommand, options ...parser.ParserOption) *parser.Parser {
 	d := cmd.Description()
 
+	// NOTE(manuel, 2023-06-21) We could pass the parser options here, but then we wouldn't be able to
+	// override the layer parser. Or we could pass the QueryParsers right here.
 	ph := parser.NewParser()
 	ph.Parsers = []parser.ParseStep{
 		parser.NewQueryParseStep(false),

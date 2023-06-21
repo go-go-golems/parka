@@ -167,16 +167,33 @@ func WithOverrideArgument(name string, value string) CommandDirHandlerOption {
 	}
 }
 
-func WithMergeOverrideLayer(name string, layer *layers.ParsedParameterLayer) CommandDirHandlerOption {
+func WithMergeOverrideLayer(name string, layer map[string]interface{}) CommandDirHandlerOption {
 	return func(handler *CommandDirHandler) {
 		if handler.Overrides == nil {
 			handler.Overrides = NewHandlerParameters()
 		}
-		for k, v := range layer.Parameters {
+		for k, v := range layer {
 			if _, ok := handler.Overrides.Layers[name]; !ok {
 				handler.Overrides.Layers[name] = map[string]interface{}{}
 			}
 			handler.Overrides.Layers[name][k] = v
+		}
+	}
+}
+
+// WithLayerDefaults populates the defaults for the given layer. If a value is already set, the value is skipped.
+func WithLayerDefaults(name string, layer map[string]interface{}) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		if handler.Overrides == nil {
+			handler.Overrides = NewHandlerParameters()
+		}
+		for k, v := range layer {
+			if _, ok := handler.Overrides.Layers[name]; !ok {
+				handler.Overrides.Layers[name] = map[string]interface{}{}
+			}
+			if _, ok := handler.Overrides.Layers[name][k]; !ok {
+				handler.Overrides.Layers[name][k] = v
+			}
 		}
 	}
 }

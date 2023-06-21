@@ -1,12 +1,10 @@
 package render
 
 import (
-	"context"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"html/template"
-	"io"
 	"net/http"
 	"strings"
 )
@@ -150,7 +148,6 @@ func (r *Renderer) LookupTemplate(name ...string) (*template.Template, error) {
 	}
 
 	return t, nil
-
 }
 
 // Render a given page with the given data.
@@ -163,9 +160,14 @@ func (r *Renderer) LookupTemplate(name ...string) (*template.Template, error) {
 // If no markdown file or template is found, it will look for a HTML file or template called
 // either page.html or page.tmpl.html and serve it as a template, passing it the given data.
 // page.html is served as a plain HTML file, while page.tmpl.html is served as a template.
+//
+// NOTE(manuel, 2023-06-21)
+// Render renders directly into the http.ResponseWriter, which means that an error in the template
+// rendering will not be able to update the headers, as those will have already been sent.
+// This could lead to partial writes with an error code of 200 if there is an error rendering the template,
+// not sure if that's exactly what we want.
 func (r *Renderer) Render(
-	ctx context.Context,
-	w io.Writer,
+	c *gin.Context,
 	page string,
 	data map[string]interface{},
 ) error {
@@ -197,8 +199,9 @@ func (r *Renderer) Render(
 			return errors.Wrap(err, "error looking up base template")
 		}
 
+		c.Status(http.StatusOK)
 		err = baseTemplate.Execute(
-			w,
+			c.Writer,
 			map[string]interface{}{
 				"markdown": template.HTML(markdown),
 			})
@@ -214,7 +217,9 @@ func (r *Renderer) Render(
 			return &NoPageFoundError{Page: page}
 		}
 
-		err := t.Execute(w, data)
+		c.Status(http.StatusOK)
+
+		err := t.Execute(c.Writer, data)
 		if err != nil {
 			return errors.Wrap(err, "error executing template")
 		}
@@ -231,7 +236,7 @@ func (r *Renderer) HandleWithTemplate(
 			c.Next()
 			return
 		}
-		err := r.Render(c, c.Writer, templateName, data)
+		err := r.Render(c, templateName, data)
 		if err != nil {
 			if _, ok := err.(*NoPageFoundError); ok {
 				c.Next()
@@ -240,6 +245,7 @@ func (r *Renderer) HandleWithTemplate(
 			_ = c.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
+		c.Status(http.StatusOK)
 	}
 }
 
@@ -261,7 +267,8 @@ func (r *Renderer) HandleWithTrimPrefix(prefix string, data map[string]interface
 			if trimmedPath == "" || strings.HasSuffix(trimmedPath, "/") {
 				trimmedPath += "index"
 			}
-			err := r.Render(c, c.Writer, trimmedPath, data)
+
+			err := r.Render(c, trimmedPath, data)
 			if err != nil {
 				if _, ok := err.(*NoPageFoundError); ok {
 					c.Next()

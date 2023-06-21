@@ -3,6 +3,7 @@ package fs
 import (
 	"io/fs"
 	"net/http"
+	"path/filepath"
 	"strings"
 )
 
@@ -48,7 +49,9 @@ func (e *EmbedFileSystem) Exists(prefix string, path string) bool {
 	if err != nil {
 		return false
 	}
-	defer f.Close()
+	defer func(f http.File) {
+		_ = f.Close()
+	}(f)
 	return true
 }
 
@@ -83,5 +86,5 @@ func NewAddPrefixPathFS(fs fs.FS, prefix string) AddPrefixPathFS {
 }
 
 func (s AddPrefixPathFS) Open(name string) (fs.File, error) {
-	return s.fs.Open(s.prefix + name)
+	return s.fs.Open(filepath.Join(s.prefix, name))
 }

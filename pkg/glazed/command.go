@@ -6,6 +6,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/alias"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/parka/pkg/glazed/parser"
 )
 
 // CommandContext keeps the context for execution of a glazed command,
@@ -116,19 +117,19 @@ func HandlePrepopulatedParsedLayers(layers_ map[string]*layers.ParsedParameterLa
 	}
 }
 
-func NewCommandQueryParser(cmd cmds.GlazeCommand, options ...ParserOption) *Parser {
+func NewCommandQueryParser(cmd cmds.GlazeCommand, options ...parser.ParserOption) *parser.Parser {
 	d := cmd.Description()
 
-	ph := NewParser()
-	ph.Parsers = []ParserFunc{
-		NewQueryParserFunc(false),
+	ph := parser.NewParser()
+	ph.Parsers = []parser.ParserFunc{
+		parser.NewQueryParserFunc(false),
 	}
 
 	// NOTE(manuel, 2023-04-16) API design: we would probably like to hide layers right here in the handler constructor
 	for _, l := range d.Layers {
 		slug := l.GetSlug()
-		ph.LayerParsersBySlug[slug] = []ParserFunc{
-			NewQueryParserFunc(false),
+		ph.LayerParsersBySlug[slug] = []parser.ParserFunc{
+			parser.NewQueryParserFunc(false),
 		}
 	}
 
@@ -139,19 +140,19 @@ func NewCommandQueryParser(cmd cmds.GlazeCommand, options ...ParserOption) *Pars
 	return ph
 }
 
-func NewCommandFormParser(cmd cmds.GlazeCommand, options ...ParserOption) *Parser {
+func NewCommandFormParser(cmd cmds.GlazeCommand, options ...parser.ParserOption) *parser.Parser {
 	d := cmd.Description()
 
-	ph := NewParser()
-	ph.Parsers = []ParserFunc{
-		NewFormParserFunc(false),
+	ph := parser.NewParser()
+	ph.Parsers = []parser.ParserFunc{
+		parser.NewFormParserFunc(false),
 	}
 
 	// NOTE(manuel, 2023-04-16) API design: we would probably like to hide layers right here in the handler constructor
 	for _, l := range d.Layers {
 		slug := l.GetSlug()
-		ph.LayerParsersBySlug[slug] = []ParserFunc{
-			NewFormParserFunc(false),
+		ph.LayerParsersBySlug[slug] = []parser.ParserFunc{
+			parser.NewFormParserFunc(false),
 		}
 	}
 
@@ -167,7 +168,7 @@ func NewCommandFormParser(cmd cmds.GlazeCommand, options ...ParserOption) *Parse
 //
 // When the CommandHandler is invoked, we first gather all the parameterDefinitions from the
 // cmd (fresh on every invocation, because the parsers are allowed to modify them).
-func NewCommandHandlerFunc(cmd cmds.GlazeCommand, parserHandler *Parser) CommandHandlerFunc {
+func NewCommandHandlerFunc(cmd cmds.GlazeCommand, parserHandler *parser.Parser) CommandHandlerFunc {
 	d := cmd.Description()
 
 	defaults := map[string]string{}

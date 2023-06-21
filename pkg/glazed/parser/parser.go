@@ -1,4 +1,4 @@
-package glazed
+package parser
 
 import (
 	"encoding/json"
@@ -6,14 +6,33 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 	"io"
 	"mime/multipart"
 	"strings"
-	"time"
 )
+
+// TODO(manuel, 2023-06-21) This part of the API is a complete mess, I'm not even sure what it is supposed to do overall
+// Well worth refactoring
+
+type ParseState struct {
+	// Defaults contains the default values for the parameters, as strings to be parsed
+	// NOTE(manuel, 2023-06-21) Why are these strings?
+	// See also https://github.com/go-go-golems/glazed/issues/239
+	Defaults map[string]string
+	// Parameters contains the parsed parameters so far
+	Parameters map[string]interface{}
+	// ParameterDefinitions contains the parameter definitions that can still be parsed
+	ParameterDefinitions map[string]*parameters.ParameterDefinition
+}
+
+// ParseStep is used to parse parameters out of a gin.Context (meaning most certainly out of an incoming *http.Request).
+// These parsed parameters are stored in the ParseState structure.
+// A ParseStep can only parse parameters that are given in the ParameterDefinitions field of the ParseState.
+type ParseStep interface {
+	Parse(c *gin.Context, result *ParseState) error
+}
 
 // ParserFunc is used to parse parameters out of a gin.Context (meaning
 // most certainly out of an incoming *http.Request). These parameters
@@ -30,151 +49,6 @@ type ParserFunc func(
 	ps map[string]interface{},
 	pds map[string]*parameters.ParameterDefinition,
 ) (map[string]*parameters.ParameterDefinition, error)
-
-// NewQueryParserFunc returns a ParserFunc that can handle an incoming GET query string.
-// If the parameter is supposed to be read from a file, we will just pass in the query parameter's value.
-func NewQueryParserFunc(onlyDefined bool) ParserFunc {
-	return func(
-		c *gin.Context,
-		defaults map[string]string,
-		ps map[string]interface{},
-		pd map[string]*parameters.ParameterDefinition,
-	) (map[string]*parameters.ParameterDefinition, error) {
-
-		for _, p := range pd {
-			value := c.DefaultQuery(p.Name, defaults[p.Name])
-			if parameters.IsFileLoadingParameter(p.Type, value) {
-				// if the parameter is supposed to be read from a file, we will just pass in the query parameters
-				// as a placeholder here
-				if value == "" {
-					if p.Required {
-						return nil, errors.Errorf("required parameter '%s' is missing", p.Name)
-					}
-					if !onlyDefined {
-						ps[p.Name] = p.Default
-					}
-				} else {
-					f := strings.NewReader(value)
-					pValue, err := p.ParseFromReader(f, "")
-					if err != nil {
-						return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
-					}
-					ps[p.Name] = pValue
-				}
-			} else {
-				if value == "" {
-					if p.Required {
-						return nil, fmt.Errorf("required parameter '%s' is missing", p.Name)
-					}
-					if !onlyDefined {
-						if p.Type == parameters.ParameterTypeDate {
-							switch v := p.Default.(type) {
-							case string:
-								parsedDate, err := parameters.ParseDate(v)
-								if err != nil {
-									return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
-								}
-
-								ps[p.Name] = parsedDate
-							case time.Time:
-								ps[p.Name] = v
-
-							}
-						} else {
-							ps[p.Name] = p.Default
-						}
-					}
-				} else {
-					var values []string
-					if parameters.IsListParameter(p.Type) {
-						values = strings.Split(value, ",")
-					} else {
-						values = []string{value}
-					}
-					pValue, err := p.ParseParameter(values)
-					if err != nil {
-						return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
-					}
-					ps[p.Name] = pValue
-				}
-			}
-		}
-
-		return pd, nil
-	}
-}
-
-// NewFormParserFunc returns a ParserFunc that takes an incoming multipart Form, and can thus also handle uploaded files.
-func NewFormParserFunc(onlyDefined bool) ParserFunc {
-	return func(c *gin.Context,
-		defaults map[string]string,
-		ps map[string]interface{},
-		pd map[string]*parameters.ParameterDefinition,
-	) (map[string]*parameters.ParameterDefinition, error) {
-
-		for _, p := range pd {
-			value := c.DefaultPostForm(p.Name, defaults[p.Name])
-			// TODO(manuel, 2023-02-28) is this enough to check if a file is missing?
-			if value == "" {
-				if p.Required {
-					return nil, fmt.Errorf("required parameter '%s' is missing", p.Name)
-				}
-				if !onlyDefined {
-					if p.Type == parameters.ParameterTypeDate {
-						switch v := p.Default.(type) {
-						case string:
-							parsedDate, err := parameters.ParseDate(v)
-							if err != nil {
-								return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
-							}
-
-							ps[p.Name] = parsedDate
-						case time.Time:
-							ps[p.Name] = v
-
-						}
-					} else {
-						ps[p.Name] = p.Default
-					}
-				}
-			} else if !parameters.IsFileLoadingParameter(p.Type, value) {
-				v := []string{value}
-				if p.Type == parameters.ParameterTypeStringList ||
-					p.Type == parameters.ParameterTypeIntegerList ||
-					p.Type == parameters.ParameterTypeFloatList {
-					v = strings.Split(value, ",")
-				}
-				pValue, err := p.ParseParameter(v)
-				if err != nil {
-					return nil, fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
-				}
-				ps[p.Name] = pValue
-			} else if p.Type == parameters.ParameterTypeStringFromFile {
-				s, err := ParseStringFromFile(c, p.Name)
-				if err != nil {
-					return nil, err
-				}
-				ps[p.Name] = s
-			} else if p.Type == parameters.ParameterTypeObjectFromFile {
-				obj, err := ParseObjectFromFile(c, p.Name)
-				if err != nil {
-					return nil, err
-				}
-				ps[p.Name] = obj
-			} else if p.Type == parameters.ParameterTypeStringListFromFile {
-				// TODO(manuel, 2023-04-16) Add support for StringListFromFile and ObjectListFromFile
-				// See: https://github.com/go-go-golems/parka/issues/23
-				_ = ps
-			} else if p.Type == parameters.ParameterTypeObjectListFromFile {
-				// TODO(manuel, 2023-04-16) Add support for StringListFromFile and ObjectListFromFile
-				// See: https://github.com/go-go-golems/parka/issues/23
-				_ = ps
-			}
-		}
-
-		return pd, nil
-	}
-}
 
 // ParseStringFromFile takes a multipart.File named `name` from the request and reads it into a string.
 func ParseStringFromFile(c *gin.Context, name string) (string, error) {

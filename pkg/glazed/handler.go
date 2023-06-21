@@ -11,6 +11,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/formatters/yaml"
 	"github.com/go-go-golems/glazed/pkg/processor"
 	"github.com/go-go-golems/glazed/pkg/settings"
+	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"io"
 	"net/http"
 	"os"
@@ -28,7 +29,7 @@ type CreateProcessorFunc func(c *gin.Context, pc *CommandContext) (
 type HandleOptions struct {
 	// ParserOptions are passed to the given parser (the thing that gathers the glazed.Command
 	// flags and arguments.
-	ParserOptions []ParserOption
+	ParserOptions []parser.ParserOption
 
 	// Handlers are run right at the start to build up the CommandContext based on the
 	// gin.Context and the previous value of CommandContext.
@@ -69,7 +70,7 @@ func NewHandleOptions(options []HandleOption) *HandleOptions {
 	return opts
 }
 
-func WithParserOptions(parserOptions ...ParserOption) HandleOption {
+func WithParserOptions(parserOptions ...parser.ParserOption) HandleOption {
 	return func(o *HandleOptions) {
 		o.ParserOptions = parserOptions
 	}

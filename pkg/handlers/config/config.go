@@ -18,9 +18,6 @@ type Route struct {
 	StaticFile        *StaticFile  `yaml:"staticFile,omitempty"`
 	TemplateDirectory *TemplateDir `yaml:"templateDirectory,omitempty"`
 	Template          *Template    `yaml:"template,omitempty"`
-
-	DefaultStaticDirectory   bool `yaml:"defaultStaticDirectory,omitempty"`
-	DefaultTemplateDirectory bool `yaml:"defaultTemplateDirectory,omitempty"`
 }
 
 // RouteHandlerConfiguration is the interface that all route handler configurations must implement.
@@ -35,7 +32,7 @@ func (r *Route) HandlesCommand() bool {
 }
 
 func (r *Route) HandlesStatic() bool {
-	return r.Static != nil || r.StaticFile != nil || r.DefaultStaticDirectory
+	return r.Static != nil || r.StaticFile != nil
 }
 
 func (r *Route) HandlesTemplate() bool {
@@ -144,10 +141,14 @@ func (s *StaticFile) ExpandPaths() error {
 	return nil
 }
 
+// TemplateDir serves a directory of html, md, .tmpl.md, .tmpl.html files.
+// Markdown files are renderer using the given MarkdownBaseTemplateName, which will be
+// looked up in the TemplateDir itself, or using the default renderer if empty.
 type TemplateDir struct {
-	LocalDirectory    string                 `yaml:"localDirectory"`
-	IndexTemplateName string                 `yaml:"indexTemplateName,omitempty"`
-	AdditionalData    map[string]interface{} `yaml:"additionalData,omitempty"`
+	LocalDirectory           string                 `yaml:"localDirectory"`
+	IndexTemplateName        string                 `yaml:"indexTemplateName,omitempty"`
+	MarkdownBaseTemplateName string                 `yaml:"markdownBaseTemplateName,omitempty"`
+	AdditionalData           map[string]interface{} `yaml:"additionalData,omitempty"`
 }
 
 func (t *TemplateDir) ExpandPaths() error {
@@ -156,9 +157,12 @@ func (t *TemplateDir) ExpandPaths() error {
 }
 
 type Template struct {
-	// every request will be rendered from the template file
+	// every request will be rendered from the template file, using the default renderer in the case of markdown
+	// content.
 	TemplateFile string `yaml:"templateFile"`
 	// TODO(manuel, 2023-06-20) Add the option to pass in data to the template
+	AdditionalData           map[string]interface{} `yaml:"additionalData,omitempty"`
+	MarkdownBaseTemplateName string                 `yaml:"markdownBaseTemplateName,omitempty"`
 }
 
 func (t *Template) ExpandPaths() error {
@@ -202,8 +206,29 @@ func (p *LayerParams) Merge(overrides *LayerParams) {
 	}
 }
 
+// Defaults controls the default renderer and which embedded static files to serve.
+type Defaults struct {
+	Renderer            *DefaultRendererOptions `yaml:"renderer,omitempty"`
+	UseParkaStaticFiles *bool                   `yaml:"useParkaStaticFiles,omitempty"`
+}
+
+// DefaultRendererOptions controls the default renderer.
+// If UseDefaultParkaRenderer is true, the default parka renderer will be used.
+// It renders markdown files using base.tmpl.html and uses a tailwind css stylesheet
+// which has to be served under dist/output.css.
+type DefaultRendererOptions struct {
+	UseDefaultParkaRenderer  *bool  `yaml:"useDefaultParkaRenderer,omitempty"`
+	TemplateDirectory        string `yaml:"templateDirectory,omitempty"`
+	MarkdownBaseTemplateName string `yaml:"markdownBaseTemplateName,omitempty"`
+}
+
 type Config struct {
-	Routes []*Route `yaml:"routes"`
+	Routes   []*Route  `yaml:"routes"`
+	Defaults *Defaults `yaml:"defaults,omitempty"`
+}
+
+func boolPtr(b bool) *bool {
+	return &b
 }
 
 func ParseConfig(data []byte) (*Config, error) {
@@ -213,6 +238,30 @@ func ParseConfig(data []byte) (*Config, error) {
 		return nil, err
 	}
 
+	if cfg.Defaults == nil {
+		cfg.Defaults = &Defaults{
+			UseParkaStaticFiles: boolPtr(true),
+			Renderer: &DefaultRendererOptions{
+				UseDefaultParkaRenderer: boolPtr(true),
+			},
+		}
+	} else {
+		if cfg.Defaults.UseParkaStaticFiles == nil {
+			cfg.Defaults.UseParkaStaticFiles = boolPtr(true)
+		}
+
+		if cfg.Defaults.Renderer == nil {
+			cfg.Defaults.Renderer = &DefaultRendererOptions{
+				UseDefaultParkaRenderer: boolPtr(true),
+			}
+		} else {
+			if cfg.Defaults.Renderer.UseDefaultParkaRenderer == nil &&
+				cfg.Defaults.UseParkaStaticFiles != nil &&
+				*cfg.Defaults.UseParkaStaticFiles {
+				cfg.Defaults.Renderer.UseDefaultParkaRenderer = boolPtr(true)
+			}
+		}
+	}
 	for _, route := range cfg.Routes {
 		if route.CommandDirectory != nil {
 			err = route.CommandDirectory.ExpandPaths()
@@ -251,5 +300,6 @@ func ParseConfig(data []byte) (*Config, error) {
 			}
 		}
 	}
+
 	return &cfg, nil
 }

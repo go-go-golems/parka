@@ -78,19 +78,25 @@ func WithLocalDirectory(localPath string) TemplateDirHandlerOption {
 	}
 }
 
-func NewTemplateDirHandler(options ...TemplateDirHandlerOption) *TemplateDirHandler {
+func NewTemplateDirHandler(options ...TemplateDirHandlerOption) (*TemplateDirHandler, error) {
 	handler := &TemplateDirHandler{}
 	for _, option := range options {
-		option(handler)
+		err := option(handler)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return handler
+	return handler, nil
 }
 
 func NewTemplateDirHandlerFromConfig(td *config.TemplateDir, options ...TemplateDirHandlerOption) (*TemplateDirHandler, error) {
 	handler := &TemplateDirHandler{
 		IndexTemplateName: td.IndexTemplateName,
 	}
-	WithLocalDirectory(td.LocalDirectory)(handler)
+	err := WithLocalDirectory(td.LocalDirectory)(handler)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, option := range options {
 		err := option(handler)
@@ -109,7 +115,7 @@ func NewTemplateDirHandlerFromConfig(td *config.TemplateDir, options ...Template
 		),
 		render.WithAlwaysReload(handler.alwaysReload),
 	)
-	err := templateLookup.Reload()
+	err = templateLookup.Reload()
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to load local template: %w", err)

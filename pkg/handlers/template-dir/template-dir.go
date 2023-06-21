@@ -50,10 +50,14 @@ func WithLocalDirectory(localPath string) TemplateDirHandlerOption {
 	return func(handler *TemplateDirHandler) {
 		if localPath != "" {
 			if localPath[0] == '/' {
-				handler.fs = os.DirFS(localPath)
+				handler.fs = os.DirFS("/")
 			} else {
-				handler.fs = os.DirFS(localPath)
+				handler.fs = os.DirFS(".")
 			}
+			// We strip the / prefix because once the FS is /, we need to match for "relative" paths within the FS.
+			// We can't just simplify the whole thing to be os.DirFS(localPath) because we also need to support
+			// embed.FS where we can't do the same path shenanigans, since the embed.FS files reflect the directory
+			// from which they were included, which we need to strip at runtime.
 			handler.LocalDirectory = strings.TrimPrefix(localPath, "/")
 		}
 	}

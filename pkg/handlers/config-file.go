@@ -13,6 +13,7 @@ import (
 	"github.com/go-go-golems/parka/pkg/server"
 	"golang.org/x/sync/errgroup"
 	"os"
+	"path/filepath"
 )
 
 // TODO(manuel, 2023-05-31) For multi command serves, we should be able to configure
@@ -123,8 +124,64 @@ func NewConfigFileHandler(
 // because it makes it hard for the creating function to override specific handler options
 // if need be (also this could potentially better be handled by setting the right overrides
 // and defaults in the config.Config object upfront).
-func (cfh *ConfigFileHandler) Serve(server *server.Server) error {
+func (cfh *ConfigFileHandler) Serve(server_ *server.Server) error {
 	// TODO(manuel, 2023-06-05) Add default repositories and handle them in Command and CommandDir
+
+	if *cfh.Config.Defaults.UseParkaStaticFiles {
+		fs_ := server.GetParkaStaticFS()
+		parkaStaticHandler := static_dir.NewStaticDirHandler(
+			static_dir.WithDefaultFS(fs_, "web/dist"),
+		)
+		err := parkaStaticHandler.Serve(server_, "/dist")
+		if err != nil {
+			return err
+		}
+	}
+
+	rendererOptionsConfig := cfh.Config.Defaults.Renderer
+	rendererOptions := []render.RendererOption{}
+	if *rendererOptionsConfig.UseDefaultParkaRenderer {
+		parkaDefaultRendererOptions, err := server.GetDefaultParkaRendererOptions()
+		if err != nil {
+			return err
+		}
+
+		rendererOptions = append(rendererOptions, parkaDefaultRendererOptions...)
+	} else {
+		if rendererOptionsConfig.TemplateDirectory != "" {
+			dir, err := filepath.Abs(os.ExpandEnv(rendererOptionsConfig.TemplateDirectory))
+			if err != nil {
+				return err
+			}
+			lookup := render.NewLookupTemplateFromFS(
+				render.WithFS(os.DirFS(dir)),
+				render.WithPatterns("**/*.tmpl.*"),
+			)
+			err = lookup.Reload()
+			if err != nil {
+				return err
+			}
+
+			markdownBaseTemplateName := "base.tmpl.html"
+			if rendererOptionsConfig.MarkdownBaseTemplateName != "" {
+				markdownBaseTemplateName = rendererOptionsConfig.MarkdownBaseTemplateName
+			}
+
+			rendererOptions = []render.RendererOption{
+				render.WithAppendTemplateLookups(lookup),
+				render.WithMarkdownBaseTemplateName(markdownBaseTemplateName),
+			}
+		}
+	}
+
+	// prepend the renderer options to the list of options
+	// honestly this setting should actually be a setting for each route as well
+	cfh.TemplateDirectoryOptions = append([]template_dir.TemplateDirHandlerOption{
+		template_dir.WithAppendRendererOptions(rendererOptions...),
+	}, cfh.TemplateDirectoryOptions...)
+	cfh.TemplateOptions = append([]template.TemplateHandlerOption{
+		template.WithAppendRendererOptions(rendererOptions...),
+	}, cfh.TemplateOptions...)
 
 	for _, route := range cfh.Config.Routes {
 		if route.CommandDirectory != nil {
@@ -178,7 +235,7 @@ func (cfh *ConfigFileHandler) Serve(server *server.Server) error {
 
 			cfh.commandDirectoryHandlers = append(cfh.commandDirectoryHandlers, cdh)
 
-			err = cdh.Serve(server, route.Path)
+			err = cdh.Serve(server_, route.Path)
 			if err != nil {
 				return err
 			}
@@ -198,7 +255,7 @@ func (cfh *ConfigFileHandler) Serve(server *server.Server) error {
 
 			cfh.templateHandlers = append(cfh.templateHandlers, th)
 
-			err = th.Serve(server, route.Path)
+			err = th.Serve(server_, route.Path)
 			if err != nil {
 				return err
 			}
@@ -218,7 +275,7 @@ func (cfh *ConfigFileHandler) Serve(server *server.Server) error {
 			// NOTE(manuel, 2023-06-20) I don't think we need to keep track of these
 			cfh.templateDirectoryHandlers = append(cfh.templateDirectoryHandlers, tdh)
 
-			err = tdh.Serve(server, route.Path)
+			err = tdh.Serve(server_, route.Path)
 			if err != nil {
 				return err
 			}
@@ -228,7 +285,7 @@ func (cfh *ConfigFileHandler) Serve(server *server.Server) error {
 
 		if route.StaticFile != nil {
 			sfh := static_file.NewStaticFileHandlerFromConfig(route.StaticFile)
-			err := sfh.Serve(server, route.Path)
+			err := sfh.Serve(server_, route.Path)
 			if err != nil {
 				return err
 			}
@@ -238,7 +295,7 @@ func (cfh *ConfigFileHandler) Serve(server *server.Server) error {
 
 		if route.Static != nil {
 			sdh := static_dir.NewStaticDirHandlerFromConfig(route.Static)
-			err := sdh.Serve(server, route.Path)
+			err := sdh.Serve(server_, route.Path)
 			if err != nil {
 				return err
 			}

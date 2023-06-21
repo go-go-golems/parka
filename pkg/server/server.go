@@ -11,6 +11,7 @@ import (
 	"github.com/go-go-golems/parka/pkg/render"
 	utils_fs "github.com/go-go-golems/parka/pkg/utils/fs"
 	"golang.org/x/sync/errgroup"
+	"io/fs"
 	"net/http"
 )
 
@@ -128,13 +129,17 @@ func WithDefaultParkaRenderer(options ...render.RendererOption) ServerOption {
 	return WithDefaultRenderer(renderer)
 }
 
-func GetParkaStaticFS() http.FileSystem {
+func GetParkaStaticHttpFS() http.FileSystem {
 	return utils_fs.NewEmbedFileSystem(distFS, "web/dist")
+}
+
+func GetParkaStaticFS() fs.FS {
+	return distFS
 }
 
 func WithDefaultParkaStaticPaths() ServerOption {
 	return WithStaticPaths(
-		utils_fs.NewStaticPath(GetParkaStaticFS(), "/dist"),
+		utils_fs.NewStaticPath(GetParkaStaticHttpFS(), "/dist"),
 	)
 }
 

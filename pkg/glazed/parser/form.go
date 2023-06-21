@@ -12,7 +12,7 @@ type FormParseStep struct {
 	onlyDefined bool
 }
 
-func (f *FormParseStep) Parse(c *gin.Context, state *ParseState) error {
+func (f *FormParseStep) ParseLayerState(c *gin.Context, state *LayerParseState) error {
 	for _, p := range state.ParameterDefinitions {
 		value := c.DefaultPostForm(p.Name, state.Defaults[p.Name])
 		// TODO(manuel, 2023-02-28) is this enough to check if a file is missing?
@@ -76,29 +76,17 @@ func (f *FormParseStep) Parse(c *gin.Context, state *ParseState) error {
 	return nil
 }
 
+func (f *FormParseStep) Parse(c *gin.Context, state *LayerParseState) error {
+	err := f.ParseLayerState(c, state)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func NewFormParseStep(onlyDefined bool) *FormParseStep {
 	return &FormParseStep{
 		onlyDefined: onlyDefined,
-	}
-}
-
-// NewFormParserFunc returns a ParserFunc that takes an incoming multipart Form, and can thus also handle uploaded files.
-func NewFormParserFunc(onlyDefined bool) ParserFunc {
-	return func(c *gin.Context,
-		defaults map[string]string,
-		ps map[string]interface{},
-		pd map[string]*parameters.ParameterDefinition,
-	) (map[string]*parameters.ParameterDefinition, error) {
-		s := &ParseState{
-			Defaults:             defaults,
-			Parameters:           ps,
-			ParameterDefinitions: pd,
-		}
-		step := NewFormParseStep(onlyDefined)
-		err := step.Parse(c, s)
-		if err != nil {
-			return nil, err
-		}
-		return s.ParameterDefinitions, nil
 	}
 }

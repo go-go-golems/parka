@@ -97,10 +97,10 @@ func HandlePrepopulatedParameters(ps map[string]interface{}) CommandHandlerFunc 
 	}
 }
 
-// HandlePrepopulatedParsedLayers sets the given layers in the CommandContext's ParsedLayers,
+// HandlePrepopulatedParsedLayers sets the given layers in the CommandContext's Layers,
 // overriding the parameters of any layers that are already present.
-// This means that if a parameter is not set in layers_ but is set in the ParsedLayers,
-// the value in the ParsedLayers will be kept.
+// This means that if a parameter is not set in layers_ but is set in the Layers,
+// the value in the Layers will be kept.
 func HandlePrepopulatedParsedLayers(layers_ map[string]*layers.ParsedParameterLayer) CommandHandlerFunc {
 	return func(c *gin.Context, pc *CommandContext) error {
 		for k, v := range layers_ {
@@ -121,15 +121,15 @@ func NewCommandQueryParser(cmd cmds.GlazeCommand, options ...parser.ParserOption
 	d := cmd.Description()
 
 	ph := parser.NewParser()
-	ph.Parsers = []parser.ParserFunc{
-		parser.NewQueryParserFunc(false),
+	ph.Parsers = []parser.ParseStep{
+		parser.NewQueryParseStep(false),
 	}
 
 	// NOTE(manuel, 2023-04-16) API design: we would probably like to hide layers right here in the handler constructor
 	for _, l := range d.Layers {
 		slug := l.GetSlug()
-		ph.LayerParsersBySlug[slug] = []parser.ParserFunc{
-			parser.NewQueryParserFunc(false),
+		ph.LayerParsersBySlug[slug] = []parser.ParseStep{
+			parser.NewQueryParseStep(false),
 		}
 	}
 
@@ -144,15 +144,15 @@ func NewCommandFormParser(cmd cmds.GlazeCommand, options ...parser.ParserOption)
 	d := cmd.Description()
 
 	ph := parser.NewParser()
-	ph.Parsers = []parser.ParserFunc{
-		parser.NewFormParserFunc(false),
+	ph.Parsers = []parser.ParseStep{
+		parser.NewFormParseStep(false),
 	}
 
-	// NOTE(manuel, 2023-04-16) API design: we would probably like to hide layers right here in the handler constructor
+	// TODO(manuel, 2023-06-21) This is probably not necessary if the FormParseStep handles layers by itself
 	for _, l := range d.Layers {
 		slug := l.GetSlug()
-		ph.LayerParsersBySlug[slug] = []parser.ParserFunc{
-			parser.NewFormParserFunc(false),
+		ph.LayerParsersBySlug[slug] = []parser.ParseStep{
+			parser.NewFormParseStep(false),
 		}
 	}
 
@@ -184,7 +184,7 @@ func NewCommandHandlerFunc(cmd cmds.GlazeCommand, parserHandler *parser.Parser) 
 		}
 	}
 
-	// TODO(manuel, 2023-05-25) This is where we should handle default values provided from the config file, for example
+	// TODO(manuel, 2023-05-25) This is where we should handle default values provided from the config file
 	//
 	// See https://github.com/go-go-golems/sqleton/issues/161
 	//
@@ -206,52 +206,25 @@ func NewCommandHandlerFunc(cmd cmds.GlazeCommand, parserHandler *parser.Parser) 
 	var err error
 
 	return func(c *gin.Context, pc *CommandContext) error {
-		// Gather the ParameterDefinitions from the command description
-		// from scratch, because the parsers are allowed to modify the `pds` map.
-		//
-		// NOTE(2023-05-25, manuel) I wonder if we need `defaults` at all then.
-		// We could just as well store the defaults in the pds itself, since it seems
-		// that we only set them from the alias anyway (plus that seems broken...).
-		//
-		// See https://github.com/go-go-golems/sqleton/issues/151
-		pds := map[string]*parameters.ParameterDefinition{}
-		for _, p := range d.Flags {
-			pds[p.Name] = p
-		}
-		for _, p := range d.Arguments {
-			pds[p.Name] = p
+		parseState := parser.NewParseStateFromCommandDescription(d)
+		err = parserHandler.Parse(c, parseState)
+		if err != nil {
+			return err
 		}
 
-		for _, o := range parserHandler.Parsers {
-			pds, err = o(c, defaults, pc.ParsedParameters, pds)
-			if err != nil {
-				return err
+		pc.ParsedParameters = parseState.FlagsAndArguments.Parameters
+		pc.ParsedLayers = map[string]*layers.ParsedParameterLayer{}
+		commandLayers := pc.Cmd.Description().Layers
+		for _, v := range commandLayers {
+			parsedParameterLayer := &layers.ParsedParameterLayer{
+				Layer:      v,
+				Parameters: map[string]interface{}{},
 			}
-		}
-
-		for _, l := range d.Layers {
-			slug := l.GetSlug()
-			parsers, ok := parserHandler.LayerParsersBySlug[slug]
-			if !ok {
-				continue
+			parsedLayers, ok := parseState.Layers[v.GetSlug()]
+			if ok {
+				parsedParameterLayer.Parameters = parsedLayers.Parameters
 			}
-
-			_, ok = pc.ParsedLayers[slug]
-			if !ok {
-				pc.ParsedLayers[slug] = &layers.ParsedParameterLayer{
-					Layer:      l,
-					Parameters: map[string]interface{}{},
-				}
-			}
-
-			pds = l.GetParameterDefinitions()
-
-			for _, o := range parsers {
-				pds, err = o(c, defaults, pc.ParsedLayers[slug].Parameters, pds)
-				if err != nil {
-					return err
-				}
-			}
+			pc.ParsedLayers[v.GetSlug()] = parsedParameterLayer
 		}
 
 		return nil

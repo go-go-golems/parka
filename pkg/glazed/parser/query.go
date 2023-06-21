@@ -14,7 +14,7 @@ type QueryParseStep struct {
 	onlyDefined bool
 }
 
-func (q *QueryParseStep) Parse(c *gin.Context, state *ParseState) error {
+func (q *QueryParseStep) ParseLayerState(c *gin.Context, state *LayerParseState) error {
 	for _, p := range state.ParameterDefinitions {
 		value := c.DefaultQuery(p.Name, state.Defaults[p.Name])
 		if parameters.IsFileLoadingParameter(p.Type, value) {
@@ -77,31 +77,17 @@ func (q *QueryParseStep) Parse(c *gin.Context, state *ParseState) error {
 	return nil
 }
 
+func (q *QueryParseStep) Parse(c *gin.Context, state *LayerParseState) error {
+	err := q.ParseLayerState(c, state)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func NewQueryParseStep(onlyDefined bool) ParseStep {
 	return &QueryParseStep{
 		onlyDefined: onlyDefined,
-	}
-}
-
-// NewQueryParserFunc returns a ParserFunc that can handle an incoming GET query string.
-// If the parameter is supposed to be read from a file, we will just pass in the query parameter's value.
-func NewQueryParserFunc(onlyDefined bool) ParserFunc {
-	return func(
-		c *gin.Context,
-		defaults map[string]string,
-		ps map[string]interface{},
-		pd map[string]*parameters.ParameterDefinition,
-	) (map[string]*parameters.ParameterDefinition, error) {
-		s := &ParseState{
-			Defaults:             defaults,
-			Parameters:           ps,
-			ParameterDefinitions: pd,
-		}
-		step := NewQueryParseStep(onlyDefined)
-		err := step.Parse(c, s)
-		if err != nil {
-			return nil, err
-		}
-		return s.ParameterDefinitions, nil
 	}
 }

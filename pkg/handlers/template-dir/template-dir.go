@@ -7,6 +7,7 @@ import (
 	"github.com/go-go-golems/parka/pkg/server"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -23,58 +24,85 @@ type TemplateDirHandler struct {
 	alwaysReload             bool
 }
 
-type TemplateDirHandlerOption func(handler *TemplateDirHandler)
+type TemplateDirHandlerOption func(handler *TemplateDirHandler) error
 
 func WithDefaultFS(fs fs.FS, localPath string) TemplateDirHandlerOption {
-	return func(handler *TemplateDirHandler) {
+	return func(handler *TemplateDirHandler) error {
 		if handler.fs == nil {
 			handler.fs = fs
 			handler.LocalDirectory = localPath
 		}
+		return nil
 	}
 }
 
 func WithAlwaysReload(alwaysReload bool) TemplateDirHandlerOption {
-	return func(handler *TemplateDirHandler) {
+	return func(handler *TemplateDirHandler) error {
 		handler.alwaysReload = alwaysReload
+		return nil
 	}
 }
 
 func WithAppendRendererOptions(rendererOptions ...render.RendererOption) TemplateDirHandlerOption {
-	return func(handler *TemplateDirHandler) {
+	return func(handler *TemplateDirHandler) error {
 		handler.rendererOptions = append(handler.rendererOptions, rendererOptions...)
+		return nil
 	}
 }
 
 func WithLocalDirectory(localPath string) TemplateDirHandlerOption {
-	return func(handler *TemplateDirHandler) {
+	return func(handler *TemplateDirHandler) error {
 		if localPath != "" {
-			if localPath[0] == '/' {
-				handler.fs = os.DirFS(localPath)
-			} else {
-				handler.fs = os.DirFS(localPath)
+			// try to resolve the localPath to an absolute path, because lookups in relative paths
+			// are a bit untested.
+			p, err := filepath.Abs(localPath)
+			if err != nil {
+				return err
 			}
-			handler.LocalDirectory = strings.TrimPrefix(localPath, "/")
+			if len(p) == 0 {
+				return fmt.Errorf("invalid local path: %s", localPath)
+			}
+			if p[0] == '/' {
+				handler.fs = os.DirFS("/")
+			} else {
+				handler.fs = os.DirFS(".")
+			}
+			// We strip the / prefix because once the FS is /, we need to match for "relative" paths within the FS.
+			// We can't just simplify the whole thing to be os.DirFS(localPath) because we also need to support
+			// embed.FS where we can't do the same path shenanigans, since the embed.FS files reflect the directory
+			// from which they were included, which we need to strip at runtime.
+			handler.LocalDirectory = strings.TrimPrefix(p, "/")
 		}
+
+		return nil
 	}
 }
 
-func NewTemplateDirHandler(options ...TemplateDirHandlerOption) *TemplateDirHandler {
+func NewTemplateDirHandler(options ...TemplateDirHandlerOption) (*TemplateDirHandler, error) {
 	handler := &TemplateDirHandler{}
 	for _, option := range options {
-		option(handler)
+		err := option(handler)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return handler
+	return handler, nil
 }
 
 func NewTemplateDirHandlerFromConfig(td *config.TemplateDir, options ...TemplateDirHandlerOption) (*TemplateDirHandler, error) {
 	handler := &TemplateDirHandler{
 		IndexTemplateName: td.IndexTemplateName,
 	}
-	WithLocalDirectory(td.LocalDirectory)(handler)
+	err := WithLocalDirectory(td.LocalDirectory)(handler)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, option := range options {
-		option(handler)
+		err := option(handler)
+		if err != nil {
+			return nil, err
+		}
 	}
 	templateLookup := render.NewLookupTemplateFromFS(
 		render.WithFS(handler.fs),
@@ -87,7 +115,7 @@ func NewTemplateDirHandlerFromConfig(td *config.TemplateDir, options ...Template
 		),
 		render.WithAlwaysReload(handler.alwaysReload),
 	)
-	err := templateLookup.Reload()
+	err = templateLookup.Reload()
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to load local template: %w", err)

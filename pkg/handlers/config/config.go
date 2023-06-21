@@ -243,6 +243,15 @@ func ParseConfig(data []byte) (*Config, error) {
 		return nil, err
 	}
 
+	err = cfg.Initialize()
+	if err != nil {
+		return nil, err
+	}
+
+	return &cfg, nil
+}
+
+func (cfg *Config) Initialize() error {
 	if cfg.Defaults == nil {
 		cfg.Defaults = &Defaults{
 			UseParkaStaticFiles: boolPtr(true),
@@ -267,44 +276,45 @@ func ParseConfig(data []byte) (*Config, error) {
 			}
 		}
 	}
+	var err error
 	for _, route := range cfg.Routes {
 		if route.CommandDirectory != nil {
 			err = route.CommandDirectory.ExpandPaths()
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 		if route.Command != nil {
 			err = route.Command.ExpandPaths()
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 		if route.Static != nil {
 			err = route.Static.ExpandPaths()
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 		if route.StaticFile != nil {
 			err = route.StaticFile.ExpandPaths()
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 		if route.Template != nil {
 			err = route.Template.ExpandPaths()
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 		if route.TemplateDirectory != nil {
 			err = route.TemplateDirectory.ExpandPaths()
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
 
-	return &cfg, nil
+	return nil
 }

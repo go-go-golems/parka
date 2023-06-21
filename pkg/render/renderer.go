@@ -188,15 +188,28 @@ func (r *Renderer) Render(
 		return errors.Wrap(err, "error looking up template")
 	}
 
+	baseTemplate, err := r.LookupTemplate(r.MarkdownBaseTemplateName)
+	if err != nil {
+		return errors.Wrap(err, "error looking up base template")
+	}
+
+	if baseTemplate == nil {
+		// no base template to render the markdown to HTML, so just return the markdown
+		c.Header("Content-Type", "text/plain")
+		c.Status(http.StatusOK)
+
+		err := t.Execute(c.Writer, data)
+		if err != nil {
+			return errors.Wrap(err, "error executing template")
+		}
+
+		return nil
+	}
+
 	if t != nil {
 		markdown, err := RenderMarkdownTemplateToHTML(t, nil)
 		if err != nil {
 			return errors.Wrap(err, "error rendering markdown")
-		}
-
-		baseTemplate, err := r.LookupTemplate(r.MarkdownBaseTemplateName)
-		if err != nil {
-			return errors.Wrap(err, "error looking up base template")
 		}
 
 		c.Status(http.StatusOK)

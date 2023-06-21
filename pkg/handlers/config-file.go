@@ -13,6 +13,7 @@ import (
 	"github.com/go-go-golems/parka/pkg/server"
 	"golang.org/x/sync/errgroup"
 	"os"
+	"path/filepath"
 )
 
 // TODO(manuel, 2023-05-31) For multi command serves, we should be able to configure
@@ -137,21 +138,50 @@ func (cfh *ConfigFileHandler) Serve(server_ *server.Server) error {
 		}
 	}
 
-	if *cfh.Config.Defaults.Renderer.UseDefaultParkaRenderer {
+	rendererOptionsConfig := cfh.Config.Defaults.Renderer
+	rendererOptions := []render.RendererOption{}
+	if *rendererOptionsConfig.UseDefaultParkaRenderer {
 		parkaDefaultRendererOptions, err := server.GetDefaultParkaRendererOptions()
 		if err != nil {
 			return err
 		}
 
-		// prepend the renderer options to the list of options
-		// honestly this setting should actually be a setting for each route as well
-		cfh.TemplateDirectoryOptions = append([]template_dir.TemplateDirHandlerOption{
-			template_dir.WithAppendRendererOptions(parkaDefaultRendererOptions...),
-		}, cfh.TemplateDirectoryOptions...)
-		cfh.TemplateOptions = append([]template.TemplateHandlerOption{
-			template.WithAppendRendererOptions(parkaDefaultRendererOptions...),
-		}, cfh.TemplateOptions...)
+		rendererOptions = append(rendererOptions, parkaDefaultRendererOptions...)
+	} else {
+		if rendererOptionsConfig.TemplateDirectory != "" {
+			dir, err := filepath.Abs(os.ExpandEnv(rendererOptionsConfig.TemplateDirectory))
+			if err != nil {
+				return err
+			}
+			lookup := render.NewLookupTemplateFromFS(
+				render.WithFS(os.DirFS(dir)),
+				render.WithPatterns("**/*.tmpl.*"),
+			)
+			err = lookup.Reload()
+			if err != nil {
+				return err
+			}
+
+			markdownBaseTemplateName := "base.tmpl.html"
+			if rendererOptionsConfig.MarkdownBaseTemplateName != "" {
+				markdownBaseTemplateName = rendererOptionsConfig.MarkdownBaseTemplateName
+			}
+
+			rendererOptions = []render.RendererOption{
+				render.WithAppendTemplateLookups(lookup),
+				render.WithMarkdownBaseTemplateName(markdownBaseTemplateName),
+			}
+		}
 	}
+
+	// prepend the renderer options to the list of options
+	// honestly this setting should actually be a setting for each route as well
+	cfh.TemplateDirectoryOptions = append([]template_dir.TemplateDirHandlerOption{
+		template_dir.WithAppendRendererOptions(rendererOptions...),
+	}, cfh.TemplateDirectoryOptions...)
+	cfh.TemplateOptions = append([]template.TemplateHandlerOption{
+		template.WithAppendRendererOptions(rendererOptions...),
+	}, cfh.TemplateOptions...)
 
 	for _, route := range cfh.Config.Routes {
 		if route.CommandDirectory != nil {

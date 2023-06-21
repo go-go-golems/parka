@@ -222,7 +222,10 @@ type Defaults struct {
 // It renders markdown files using base.tmpl.html and uses a tailwind css stylesheet
 // which has to be served under dist/output.css.
 type DefaultRendererOptions struct {
-	UseDefaultParkaRenderer  *bool  `yaml:"useDefaultParkaRenderer,omitempty"`
+	UseDefaultParkaRenderer *bool `yaml:"useDefaultParkaRenderer,omitempty"`
+	// TODO(manuel, 2023-06-21) These two options are not implemented yet
+	// It is not so much that they are hard to implement, but rather that they are annoying to test.
+	// See: https://github.com/go-go-golems/parka/issues/56
 	TemplateDirectory        string `yaml:"templateDirectory,omitempty"`
 	MarkdownBaseTemplateName string `yaml:"markdownBaseTemplateName,omitempty"`
 }
@@ -269,10 +272,16 @@ func (cfg *Config) Initialize() error {
 				UseDefaultParkaRenderer: boolPtr(true),
 			}
 		} else {
-			if cfg.Defaults.Renderer.UseDefaultParkaRenderer == nil &&
-				cfg.Defaults.UseParkaStaticFiles != nil &&
-				*cfg.Defaults.UseParkaStaticFiles {
-				cfg.Defaults.Renderer.UseDefaultParkaRenderer = boolPtr(true)
+			if cfg.Defaults.Renderer.UseDefaultParkaRenderer == nil {
+				if cfg.Defaults.Renderer.TemplateDirectory == "" {
+					cfg.Defaults.Renderer.UseDefaultParkaRenderer = boolPtr(true)
+				} else {
+					cfg.Defaults.Renderer.UseDefaultParkaRenderer = boolPtr(false)
+				}
+			}
+
+			if cfg.Defaults.Renderer.TemplateDirectory != "" {
+				cfg.Defaults.Renderer.TemplateDirectory = expandPath(cfg.Defaults.Renderer.TemplateDirectory)
 			}
 		}
 	}

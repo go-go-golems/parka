@@ -123,8 +123,19 @@ func NewConfigFileHandler(
 // because it makes it hard for the creating function to override specific handler options
 // if need be (also this could potentially better be handled by setting the right overrides
 // and defaults in the config.Config object upfront).
-func (cfh *ConfigFileHandler) Serve(server *server.Server) error {
+func (cfh *ConfigFileHandler) Serve(server_ *server.Server) error {
 	// TODO(manuel, 2023-06-05) Add default repositories and handle them in Command and CommandDir
+
+	if *cfh.Config.Defaults.UseParkaStaticFiles {
+		fs_ := server.GetParkaStaticFS()
+		parkaStaticHandler := static_dir.NewStaticDirHandler(
+			static_dir.WithDefaultFS(fs_, "web/dist"),
+		)
+		err := parkaStaticHandler.Serve(server_, "/dist")
+		if err != nil {
+			return err
+		}
+	}
 
 	for _, route := range cfh.Config.Routes {
 		if route.CommandDirectory != nil {
@@ -178,7 +189,7 @@ func (cfh *ConfigFileHandler) Serve(server *server.Server) error {
 
 			cfh.commandDirectoryHandlers = append(cfh.commandDirectoryHandlers, cdh)
 
-			err = cdh.Serve(server, route.Path)
+			err = cdh.Serve(server_, route.Path)
 			if err != nil {
 				return err
 			}
@@ -198,7 +209,7 @@ func (cfh *ConfigFileHandler) Serve(server *server.Server) error {
 
 			cfh.templateHandlers = append(cfh.templateHandlers, th)
 
-			err = th.Serve(server, route.Path)
+			err = th.Serve(server_, route.Path)
 			if err != nil {
 				return err
 			}
@@ -218,7 +229,7 @@ func (cfh *ConfigFileHandler) Serve(server *server.Server) error {
 			// NOTE(manuel, 2023-06-20) I don't think we need to keep track of these
 			cfh.templateDirectoryHandlers = append(cfh.templateDirectoryHandlers, tdh)
 
-			err = tdh.Serve(server, route.Path)
+			err = tdh.Serve(server_, route.Path)
 			if err != nil {
 				return err
 			}
@@ -228,7 +239,7 @@ func (cfh *ConfigFileHandler) Serve(server *server.Server) error {
 
 		if route.StaticFile != nil {
 			sfh := static_file.NewStaticFileHandlerFromConfig(route.StaticFile)
-			err := sfh.Serve(server, route.Path)
+			err := sfh.Serve(server_, route.Path)
 			if err != nil {
 				return err
 			}
@@ -238,7 +249,7 @@ func (cfh *ConfigFileHandler) Serve(server *server.Server) error {
 
 		if route.Static != nil {
 			sdh := static_dir.NewStaticDirHandlerFromConfig(route.Static)
-			err := sdh.Serve(server, route.Path)
+			err := sdh.Serve(server_, route.Path)
 			if err != nil {
 				return err
 			}

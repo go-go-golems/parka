@@ -137,6 +137,22 @@ func (cfh *ConfigFileHandler) Serve(server_ *server.Server) error {
 		}
 	}
 
+	if *cfh.Config.Defaults.Renderer.UseDefaultParkaRenderer {
+		parkaDefaultRendererOptions, err := server.GetDefaultParkaRendererOptions()
+		if err != nil {
+			return err
+		}
+
+		// prepend the renderer options to the list of options
+		// honestly this setting should actually be a setting for each route as well
+		cfh.TemplateDirectoryOptions = append([]template_dir.TemplateDirHandlerOption{
+			template_dir.WithAppendRendererOptions(parkaDefaultRendererOptions...),
+		}, cfh.TemplateDirectoryOptions...)
+		cfh.TemplateOptions = append([]template.TemplateHandlerOption{
+			template.WithAppendRendererOptions(parkaDefaultRendererOptions...),
+		}, cfh.TemplateOptions...)
+	}
+
 	for _, route := range cfh.Config.Routes {
 		if route.CommandDirectory != nil {
 			// TODO(manuel, 2023-05-31) We must pass in the RepositoryConstructor here,

@@ -78,14 +78,21 @@ func expandPath(path string) string {
 // TODO(manuel, 2023-06-20) We should probably allow for environment values to be passed as data as well
 
 type CommandDir struct {
-	Repositories               []string          `yaml:"repositories"`
-	IncludeDefaultRepositories bool              `yaml:"includeDefaultRepositories"`
-	TemplateDirectory          string            `yaml:"templateDirectory,omitempty"`
-	TemplateName               string            `yaml:"templateName,omitempty"`
-	IndexTemplateName          string            `yaml:"indexTemplateName,omitempty"`
-	AdditionalData             map[string]string `yaml:"additionalData,omitempty"`
-	Defaults                   *LayerParams      `yaml:"defaults,omitempty"`
-	Overrides                  *LayerParams      `yaml:"overrides,omitempty"`
+	Repositories               []string `yaml:"repositories"`
+	IncludeDefaultRepositories bool     `yaml:"includeDefaultRepositories"`
+
+	// TODO(manuel, 2023-06-21) Unify support to override the default renderer for individual routes
+	// See https://github.com/go-go-golems/parka/issues/55
+	// We should probably make it possible to pass multiple template directories for the renderer options
+	// so that we can bundle the embedded templates and override them with external ones, as well
+	// as merge together multiple datatables renderers.
+	TemplateDirectory string `yaml:"templateDirectory,omitempty"`
+	TemplateName      string `yaml:"templateName,omitempty"`
+	IndexTemplateName string `yaml:"indexTemplateName,omitempty"`
+
+	AdditionalData map[string]string `yaml:"additionalData,omitempty"`
+	Defaults       *LayerParams      `yaml:"defaults,omitempty"`
+	Overrides      *LayerParams      `yaml:"overrides,omitempty"`
 }
 
 func (c *CommandDir) ExpandPaths() error {
@@ -145,10 +152,9 @@ func (s *StaticFile) ExpandPaths() error {
 // Markdown files are renderer using the given MarkdownBaseTemplateName, which will be
 // looked up in the TemplateDir itself, or using the default renderer if empty.
 type TemplateDir struct {
-	LocalDirectory           string                 `yaml:"localDirectory"`
-	IndexTemplateName        string                 `yaml:"indexTemplateName,omitempty"`
-	MarkdownBaseTemplateName string                 `yaml:"markdownBaseTemplateName,omitempty"`
-	AdditionalData           map[string]interface{} `yaml:"additionalData,omitempty"`
+	LocalDirectory    string                 `yaml:"localDirectory"`
+	IndexTemplateName string                 `yaml:"indexTemplateName,omitempty"`
+	AdditionalData    map[string]interface{} `yaml:"additionalData,omitempty"`
 }
 
 func (t *TemplateDir) ExpandPaths() error {
@@ -161,8 +167,7 @@ type Template struct {
 	// content.
 	TemplateFile string `yaml:"templateFile"`
 	// TODO(manuel, 2023-06-20) Add the option to pass in data to the template
-	AdditionalData           map[string]interface{} `yaml:"additionalData,omitempty"`
-	MarkdownBaseTemplateName string                 `yaml:"markdownBaseTemplateName,omitempty"`
+	AdditionalData map[string]interface{} `yaml:"additionalData,omitempty"`
 }
 
 func (t *Template) ExpandPaths() error {

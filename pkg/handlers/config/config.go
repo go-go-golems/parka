@@ -90,9 +90,9 @@ type CommandDir struct {
 	TemplateName      string `yaml:"templateName,omitempty"`
 	IndexTemplateName string `yaml:"indexTemplateName,omitempty"`
 
-	AdditionalData map[string]string `yaml:"additionalData,omitempty"`
-	Defaults       *LayerParams      `yaml:"defaults,omitempty"`
-	Overrides      *LayerParams      `yaml:"overrides,omitempty"`
+	AdditionalData map[string]interface{} `yaml:"additionalData,omitempty"`
+	Defaults       *LayerParams           `yaml:"defaults,omitempty"`
+	Overrides      *LayerParams           `yaml:"overrides,omitempty"`
 }
 
 func (c *CommandDir) ExpandPaths() error {
@@ -114,19 +114,63 @@ func (c *CommandDir) ExpandPaths() error {
 		return errors.Errorf("no repositories found: %s", strings.Join(c.Repositories, ", "))
 	}
 	c.Repositories = repositories
+
+	evaluatedData, err := evaluateEnv(c.AdditionalData)
+	if err != nil {
+		return err
+	}
+	c.AdditionalData = evaluatedData.(map[string]interface{})
+
+	if c.Defaults != nil {
+		evaluatedDefaults, err := evaluateLayerParams(c.Defaults)
+		if err != nil {
+			return err
+		}
+		c.Defaults = evaluatedDefaults
+	}
+	if c.Overrides != nil {
+		evaluatedOverrides, err := evaluateLayerParams(c.Overrides)
+		if err != nil {
+			return err
+		}
+		c.Overrides = evaluatedOverrides
+	}
+
 	return nil
 }
 
 type Command struct {
-	File           string            `yaml:"file"`
-	TemplateName   string            `yaml:"templateName"`
-	AdditionalData map[string]string `yaml:"additionalData,omitempty"`
-	Defaults       *LayerParams      `yaml:"defaults,omitempty"`
-	Overrides      *LayerParams      `yaml:"overrides,omitempty"`
+	File         string `yaml:"file"`
+	TemplateName string `yaml:"templateName"`
+
+	AdditionalData map[string]interface{} `yaml:"additionalData,omitempty"`
+	Defaults       *LayerParams           `yaml:"defaults,omitempty"`
+	Overrides      *LayerParams           `yaml:"overrides,omitempty"`
 }
 
 func (c *Command) ExpandPaths() error {
 	c.File = expandPath(c.File)
+
+	evaluatedData, err := evaluateEnv(c.AdditionalData)
+	if err != nil {
+		return err
+	}
+	c.AdditionalData = evaluatedData.(map[string]interface{})
+
+	if c.Defaults != nil {
+		evaluatedDefaults, err := evaluateLayerParams(c.Defaults)
+		if err != nil {
+			return err
+		}
+		c.Defaults = evaluatedDefaults
+	}
+	if c.Overrides != nil {
+		evaluatedOverrides, err := evaluateLayerParams(c.Overrides)
+		if err != nil {
+			return err
+		}
+		c.Overrides = evaluatedOverrides
+	}
 	return nil
 }
 
@@ -159,19 +203,32 @@ type TemplateDir struct {
 
 func (t *TemplateDir) ExpandPaths() error {
 	t.LocalDirectory = expandPath(t.LocalDirectory)
+
+	evaluatedData, err := evaluateEnv(t.AdditionalData)
+	if err != nil {
+		return err
+	}
+	t.AdditionalData = evaluatedData.(map[string]interface{})
+
 	return nil
 }
 
 type Template struct {
 	// every request will be rendered from the template file, using the default renderer in the case of markdown
 	// content.
-	TemplateFile string `yaml:"templateFile"`
-	// TODO(manuel, 2023-06-20) Add the option to pass in data to the template
+	TemplateFile   string                 `yaml:"templateFile"`
 	AdditionalData map[string]interface{} `yaml:"additionalData,omitempty"`
 }
 
 func (t *Template) ExpandPaths() error {
 	t.TemplateFile = expandPath(t.TemplateFile)
+
+	evaluatedData, err := evaluateEnv(t.AdditionalData)
+	if err != nil {
+		return err
+	}
+	t.AdditionalData = evaluatedData.(map[string]interface{})
+
 	return nil
 }
 

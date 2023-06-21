@@ -11,6 +11,7 @@ import (
 	"github.com/go-go-golems/parka/pkg/handlers/template-dir"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/server"
+	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 	"os"
 	"path/filepath"
@@ -184,7 +185,12 @@ func (cfh *ConfigFileHandler) Serve(server_ *server.Server) error {
 	}, cfh.TemplateOptions...)
 
 	for _, route := range cfh.Config.Routes {
+		if route.Command != nil {
+			return errors.New("command routes are not yet supported")
+		}
+
 		if route.CommandDirectory != nil {
+			cd := route.CommandDirectory
 			// TODO(manuel, 2023-05-31) We must pass in the RepositoryConstructor here,
 			// because we need to create an app specific repository, but the config file
 			// contains the directories to load commands from.
@@ -193,7 +199,7 @@ func (cfh *ConfigFileHandler) Serve(server_ *server.Server) error {
 				return ErrNoRepositoryFactory{}
 			}
 
-			r, err := cfh.RepositoryFactory(route.CommandDirectory.Repositories)
+			r, err := cfh.RepositoryFactory(cd.Repositories)
 			if err != nil {
 				return err
 			}
@@ -201,10 +207,12 @@ func (cfh *ConfigFileHandler) Serve(server_ *server.Server) error {
 				command_dir.WithRepository(r),
 			}
 
-			if route.CommandDirectory.TemplateDirectory != "" {
+			// TODO(manuel, 2023-06-21) We should have a unified way of configuring the renderers for each route
+			// See https://github.com/go-go-golems/parka/issues/55
+			if cd.TemplateDirectory != "" {
 				// but here when not loading from a config file, we already set the template lookup externally...
 				templateLookup := render.NewLookupTemplateFromFS(
-					render.WithFS(os.DirFS(route.CommandDirectory.TemplateDirectory)),
+					render.WithFS(os.DirFS(cd.TemplateDirectory)),
 					render.WithBaseDir(""),
 					render.WithPatterns(
 						"**/*.tmpl.md",
@@ -220,13 +228,33 @@ func (cfh *ConfigFileHandler) Serve(server_ *server.Server) error {
 				directoryOptions = append(directoryOptions, command_dir.WithTemplateLookup(templateLookup))
 			}
 
+			if cd.Overrides != nil {
+				directoryOptions = append(directoryOptions, command_dir.WithMergeOverrides(
+					&command_dir.HandlerParameters{
+						Layers:    cd.Overrides.Layers,
+						Flags:     cd.Overrides.Flags,
+						Arguments: cd.Overrides.Arguments,
+					}),
+				)
+			}
+
+			if cd.Defaults != nil {
+				directoryOptions = append(directoryOptions, command_dir.WithMergeDefaults(
+					&command_dir.HandlerParameters{
+						Layers:    cd.Defaults.Layers,
+						Flags:     cd.Defaults.Flags,
+						Arguments: cd.Defaults.Arguments,
+					}),
+				)
+			}
+
 			// Because the external options are passed in last, they will overwrite whatever
 			// options were set from the config file itself, which is useful when running
 			// the config file less version of the serve command in sqleton.
 			directoryOptions = append(directoryOptions, cfh.CommandDirectoryOptions...)
 
 			cdh, err := command_dir.NewCommandDirHandlerFromConfig(
-				route.CommandDirectory,
+				cd,
 				directoryOptions...,
 			)
 			if err != nil {

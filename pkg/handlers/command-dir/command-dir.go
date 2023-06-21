@@ -7,6 +7,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/parka/pkg/glazed"
+	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/render/datatables"
@@ -130,6 +131,8 @@ func WithTemplateLookup(lookup render.TemplateLookup) CommandDirHandlerOption {
 	}
 }
 
+// handling all the ways to configure overrides
+
 func WithReplaceOverrides(overrides *HandlerParameters) CommandDirHandlerOption {
 	return func(handler *CommandDirHandler) {
 		handler.Overrides = overrides
@@ -187,6 +190,69 @@ func WithReplaceOverrideLayer(name string, layer map[string]interface{}) Command
 	}
 }
 
+// TODO(manuel, 2023-05-25) We can't currently override defaults, since they are parsed up front.
+// For that we would need https://github.com/go-go-golems/glazed/issues/239
+// So for now, we only deal with overrides.
+//
+// Handling all the way to configure defaults.
+
+func WithReplaceDefaults(defaults *HandlerParameters) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		handler.Defaults = defaults
+	}
+}
+
+func WithMergeDefaults(defaults *HandlerParameters) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		if handler.Defaults == nil {
+			handler.Defaults = defaults
+		} else {
+			handler.Defaults.Merge(defaults)
+		}
+	}
+}
+
+func WithDefaultFlag(name string, value string) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		if handler.Defaults == nil {
+			handler.Defaults = NewHandlerParameters()
+		}
+		handler.Defaults.Flags[name] = value
+	}
+}
+
+func WithDefaultArgument(name string, value string) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		if handler.Defaults == nil {
+			handler.Defaults = NewHandlerParameters()
+		}
+		handler.Defaults.Arguments[name] = value
+	}
+}
+
+func WithMergeDefaultLayer(name string, layer *layers.ParsedParameterLayer) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		if handler.Defaults == nil {
+			handler.Defaults = NewHandlerParameters()
+		}
+		for k, v := range layer.Parameters {
+			if _, ok := handler.Defaults.Layers[name]; !ok {
+				handler.Defaults.Layers[name] = map[string]interface{}{}
+			}
+			handler.Defaults.Layers[name][k] = v
+		}
+	}
+}
+
+func WithReplaceDefaultLayer(name string, layer map[string]interface{}) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		if handler.Defaults == nil {
+			handler.Defaults = NewHandlerParameters()
+		}
+		handler.Defaults.Layers[name] = layer
+	}
+}
+
 func WithDevMode(devMode bool) CommandDirHandlerOption {
 	return func(handler *CommandDirHandler) {
 		handler.DevMode = devMode
@@ -207,9 +273,6 @@ func NewCommandDirHandlerFromConfig(
 		TemplateName:      config.TemplateName,
 		IndexTemplateName: config.IndexTemplateName,
 	}
-
-	// TODO(manuel, 2023-06-20) Handle all the options from the config file
-	// Overrides, TemplateDirectory, IndexTemplateName, Defaults, Overrides
 
 	for _, option := range options {
 		option(cd)
@@ -236,16 +299,13 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 
 		jsonProcessorFunc := glazed.CreateJSONProcessor
 
-		// TODO(manuel, 2023-05-25) We can't currently override defaults, since they are parsed up front.
-		// For that we would need https://github.com/go-go-golems/glazed/issues/239
-		// So for now, we only deal with overrides.
-
-		parserOptions := []glazed.ParserOption{}
+		parserOptions := []parser.ParserOption{}
 
 		if cd.Overrides != nil {
 			for slug, layer := range cd.Overrides.Layers {
-				parserOptions = append(parserOptions, glazed.WithAppendOverrideLayer(slug, layer))
+				parserOptions = append(parserOptions, parser.WithAppendOverrideLayer(slug, layer))
 			}
+
 		}
 		handle := server.HandleSimpleQueryCommand(sqlCommand,
 			glazed.WithCreateProcessor(jsonProcessorFunc),
@@ -317,11 +377,11 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			// For that we would need https://github.com/go-go-golems/glazed/issues/239
 			// So for now, we only deal with overrides.
 
-			parserOptions := []glazed.ParserOption{}
+			parserOptions := []parser.ParserOption{}
 
 			if cd.Overrides != nil {
 				for slug, layer := range cd.Overrides.Layers {
-					parserOptions = append(parserOptions, glazed.WithAppendOverrideLayer(slug, layer))
+					parserOptions = append(parserOptions, parser.WithAppendOverrideLayer(slug, layer))
 				}
 			}
 
@@ -394,16 +454,16 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			return
 		}
 
-		parserOptions := []glazed.ParserOption{}
+		parserOptions := []parser.ParserOption{}
 
 		if cd.Overrides != nil {
 			for slug, layer := range cd.Overrides.Layers {
-				parserOptions = append(parserOptions, glazed.WithAppendOverrideLayer(slug, layer))
+				parserOptions = append(parserOptions, parser.WithAppendOverrideLayer(slug, layer))
 			}
 		}
 
 		// override parameter layers at the end
-		parserOptions = append(parserOptions, glazed.WithAppendOverrideLayer("glazed", glazedOverrides))
+		parserOptions = append(parserOptions, parser.WithAppendOverrideLayer("glazed", glazedOverrides))
 
 		handle := server.HandleSimpleQueryOutputFileCommand(
 			sqlCommand,

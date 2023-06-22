@@ -165,12 +165,9 @@ func NewCommandFormParser(cmd cmds.GlazeCommand, options ...parser.ParserOption)
 	return ph
 }
 
-// NewCommandHandlerFunc creates a CommandHandlerFunc using the given Parser struct.
-// This first establishes a set of defaults by loading them from an alias definition.
-//
-// When the CommandHandler is invoked, we first gather all the parameterDefinitions from the
-// cmd (fresh on every invocation, because the parsers are allowed to modify them).
-func NewCommandHandlerFunc(cmd cmds.GlazeCommand, parserHandler *parser.Parser) CommandHandlerFunc {
+// NewParserCommandHandlerFunc creates a CommandHandlerFunc using the given parser.Parser.
+// It also first establishes a set of defaults by loading them from an alias definition.
+func NewParserCommandHandlerFunc(cmd cmds.GlazeCommand, parserHandler *parser.Parser) CommandHandlerFunc {
 	d := cmd.Description()
 
 	defaults := map[string]string{}
@@ -205,6 +202,9 @@ func NewCommandHandlerFunc(cmd cmds.GlazeCommand, parserHandler *parser.Parser) 
 	//
 	// Actually, the parsers return updated ParameterDefinitions, which means that we should be
 	// able to override the defaults in those directly.
+	//
+	// ANSWER(manuel, 2023-06-22) Handling defaults and overrides from the config (and from code)
+	// is now handled by the parser.Parser. The above comments don't apply anymore.
 	var err error
 
 	return func(c *gin.Context, pc *CommandContext) error {

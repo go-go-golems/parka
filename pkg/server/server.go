@@ -224,7 +224,7 @@ func (s *Server) HandleSimpleQueryCommand(
 ) gin.HandlerFunc {
 	opts := glazed.NewHandleOptions(options)
 	opts.Handlers = append(opts.Handlers,
-		glazed.NewCommandHandlerFunc(cmd,
+		glazed.NewParserCommandHandlerFunc(cmd,
 			glazed.NewCommandQueryParser(cmd, opts.ParserOptions...)),
 	)
 	return glazed.GinHandleGlazedCommand(cmd, opts)
@@ -238,7 +238,7 @@ func (s *Server) HandleSimpleQueryOutputFileCommand(
 ) gin.HandlerFunc {
 	opts := glazed.NewHandleOptions(options)
 	opts.Handlers = append(opts.Handlers,
-		glazed.NewCommandHandlerFunc(cmd, glazed.NewCommandQueryParser(cmd, opts.ParserOptions...)),
+		glazed.NewParserCommandHandlerFunc(cmd, glazed.NewCommandQueryParser(cmd, opts.ParserOptions...)),
 	)
 	return glazed.GinHandleGlazedCommandWithOutputFile(cmd, outputFile, fileName, opts)
 }
@@ -254,7 +254,7 @@ func (s *Server) HandleSimpleFormCommand(
 		option(opts)
 	}
 	opts.Handlers = append(opts.Handlers,
-		glazed.NewCommandHandlerFunc(cmd, glazed.NewCommandFormParser(cmd, opts.ParserOptions...)),
+		glazed.NewParserCommandHandlerFunc(cmd, glazed.NewCommandFormParser(cmd, opts.ParserOptions...)),
 	)
 	return glazed.GinHandleGlazedCommand(cmd, opts)
 }

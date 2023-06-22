@@ -224,10 +224,6 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 		return err
 	}
 
-	// NOTE(manuel, 2023-04-16) API design wise, we might want to reuse gin.HandlerFunc here for lower processing
-	// For example, computing the response (?) I'm not sure this makes sense
-	// ANSWER(manuel, 2023-06-22) I don't remember what this actually means.
-
 	of := gp.OutputFormatter()
 
 	if opts.Writer == nil {

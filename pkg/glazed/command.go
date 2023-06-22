@@ -183,33 +183,9 @@ func NewParserCommandHandlerFunc(cmd cmds.GlazeCommand, parserHandler *parser.Pa
 		}
 	}
 
-	// TODO(manuel, 2023-05-25) This is where we should handle default values provided from the config file
-	//
-	// See https://github.com/go-go-golems/sqleton/issues/161
-	//
-	// We should clearly establish a precedence scheme, something like:
-	// - alias defaults (loaded from repository)
-	// - overwritten by defaults set in code
-	// - overwritten by defaults set from config file
-	//
-	// See also https://github.com/go-go-golems/glazed/issues/139
-	//
-	// ## hack notes
-	//
-	// I think that parser handler could actually override / fill out the defaults here,
-	// since we just pass the map around. That's probably not the smart way to do it though,
-	// and would warrant revisiting.
-	//
-	// Actually, the parsers return updated ParameterDefinitions, which means that we should be
-	// able to override the defaults in those directly.
-	//
-	// ANSWER(manuel, 2023-06-22) Handling defaults and overrides from the config (and from code)
-	// is now handled by the parser.Parser. The above comments don't apply anymore.
-	var err error
-
 	return func(c *gin.Context, pc *CommandContext) error {
 		parseState := parser.NewParseStateFromCommandDescription(d)
-		err = parserHandler.Parse(c, parseState)
+		err := parserHandler.Parse(c, parseState)
 		if err != nil {
 			return err
 		}

@@ -421,13 +421,9 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			return
 		}
 
-		jsonProcessorFunc := glazed.CreateJSONProcessor
-
-		parserOptions := cd.computeParserOptions()
-
 		handle := server.HandleSimpleQueryCommand(sqlCommand,
-			glazed.WithCreateProcessor(jsonProcessorFunc),
-			glazed.WithParserOptions(parserOptions...),
+			glazed.WithCreateProcessor(glazed.CreateJSONProcessor),
+			glazed.WithParserOptions(cd.computeParserOptions()...),
 		)
 
 		handle(c)
@@ -449,32 +445,32 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			dateTime := time.Now().Format("2006-01-02--15-04-05")
 			links := []layout.Link{
 				{
-					Href:  fmt.Sprintf("/download/%s/%s-%s.csv", commandPath, dateTime, name),
+					Href:  fmt.Sprintf("%s/download/%s/%s-%s.csv", path, commandPath, dateTime, name),
 					Text:  "Download CSV",
 					Class: "download",
 				},
 				{
-					Href:  fmt.Sprintf("/download/%s/%s-%s.json", commandPath, dateTime, name),
+					Href:  fmt.Sprintf("%s/download/%s/%s-%s.json", path, commandPath, dateTime, name),
 					Text:  "Download JSON",
 					Class: "download",
 				},
 				{
-					Href:  fmt.Sprintf("/download/%s/%s-%s.xlsx", commandPath, dateTime, name),
+					Href:  fmt.Sprintf("%s/download/%s/%s-%s.xlsx", path, commandPath, dateTime, name),
 					Text:  "Download Excel",
 					Class: "download",
 				},
 				{
-					Href:  fmt.Sprintf("/download/%s/%s-%s.md", commandPath, dateTime, name),
+					Href:  fmt.Sprintf("%s/download/%s/%s-%s.md", path, commandPath, dateTime, name),
 					Text:  "Download Markdown",
 					Class: "download",
 				},
 				{
-					Href:  fmt.Sprintf("/download/%s/%s-%s.html", commandPath, dateTime, name),
+					Href:  fmt.Sprintf("%s/download/%s/%s-%s.html", path, commandPath, dateTime, name),
 					Text:  "Download HTML",
 					Class: "download",
 				},
 				{
-					Href:  fmt.Sprintf("/download/%s/%s-%s.txt", commandPath, dateTime, name),
+					Href:  fmt.Sprintf("%s/download/%s/%s-%s.txt", path, commandPath, dateTime, name),
 					Text:  "Download Text",
 					Class: "download",
 				},
@@ -490,22 +486,13 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 				datatables.WithLinks(links...),
 				datatables.WithJSRendering(),
 				datatables.WithAdditionalData(cd.AdditionalData),
+				datatables.WithBasePath(path),
 			)
-
-			// TODO(manuel, 2023-06-21) We also need to handle:
-			// - IndexTemplateName
-			// - TemplateDirectory (by replacing TemplateLookup)
-			//
-			// don't exist in config file yet:
-			// - UseDefaultParkaTemplate
-			parserOptions := cd.computeParserOptions()
 
 			handle := server.HandleSimpleQueryCommand(
 				sqlCommand,
-				glazed.WithCreateProcessor(
-					dataTablesProcessorFunc,
-				),
-				glazed.WithParserOptions(parserOptions...),
+				glazed.WithCreateProcessor(dataTablesProcessorFunc),
+				glazed.WithParserOptions(cd.computeParserOptions()...),
 			)
 
 			handle(c)

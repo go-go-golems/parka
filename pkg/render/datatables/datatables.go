@@ -146,13 +146,6 @@ func WithUseDataTables() DataTablesOutputFormatterOption {
 //go:embed templates/*
 var templateFS embed.FS
 
-func NewDataTablesHTMLTemplateCreateProcessorFunc(
-	options ...render.HTMLTemplateOutputFormatterOption,
-) (glazed.CreateProcessorFunc, error) {
-	l := NewDataTablesLookupTemplate()
-	return render.NewHTMLTemplateLookupCreateProcessorFunc(l, "data-tables.tmpl.html", options...), nil
-}
-
 func NewDataTablesLookupTemplate() *render.LookupTemplateFromFS {
 	l := render.NewLookupTemplateFromFS(
 		render.WithFS(templateFS),

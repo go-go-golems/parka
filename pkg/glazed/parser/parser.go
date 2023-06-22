@@ -3,6 +3,7 @@ package parser
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/alias"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 )
 
@@ -34,10 +35,28 @@ type ParseState struct {
 	Layers            map[string]*LayerParseState
 }
 
-func NewParseStateFromCommandDescription(d *cmds.CommandDescription) *ParseState {
+func NewParseStateFromCommandDescription(cmd cmds.Command) *ParseState {
+	d := cmd.Description()
+
+	// TODO(manuel, 2023-06-22) If the command is an alias, set the defaults properly
+	// See https://github.com/go-go-golems/parka/issues/62
+
+	defaults := map[string]string{}
+
+	// check if we are an alias
+	alias_, ok := cmd.(*alias.CommandAlias)
+	if ok {
+		defaults = alias_.Flags
+		for idx, v := range alias_.Arguments {
+			if len(d.Arguments) <= idx {
+				defaults[d.Arguments[idx].Name] = v
+			}
+		}
+	}
+
 	ret := &ParseState{
 		FlagsAndArguments: &LayerParseState{
-			Defaults:             map[string]string{},
+			Defaults:             defaults,
 			Parameters:           map[string]interface{}{},
 			ParameterDefinitions: map[string]*parameters.ParameterDefinition{},
 		},
@@ -53,8 +72,12 @@ func NewParseStateFromCommandDescription(d *cmds.CommandDescription) *ParseState
 
 	for _, l := range d.Layers {
 		ret.Layers[l.GetSlug()] = &LayerParseState{
-			Slug:                 l.GetSlug(),
-			Defaults:             map[string]string{},
+			Slug: l.GetSlug(),
+			// TODO(manuel, 2023-06-22) This is not the most elegant way to pass defaults down the road
+			// This is used here to propagate the alias defaults down, but it is currently only handled
+			// in the FormParseStep and QueryParseStep, when it should probably be set up front
+			// in this function here, before we run all our ParseStep.
+			Defaults:             defaults,
 			Parameters:           map[string]interface{}{},
 			ParameterDefinitions: map[string]*parameters.ParameterDefinition{},
 		}

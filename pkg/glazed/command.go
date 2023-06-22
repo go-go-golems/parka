@@ -3,7 +3,6 @@ package glazed
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/alias"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/parka/pkg/glazed/parser"
@@ -168,23 +167,8 @@ func NewCommandFormParser(cmd cmds.GlazeCommand, options ...parser.ParserOption)
 // NewParserCommandHandlerFunc creates a CommandHandlerFunc using the given parser.Parser.
 // It also first establishes a set of defaults by loading them from an alias definition.
 func NewParserCommandHandlerFunc(cmd cmds.GlazeCommand, parserHandler *parser.Parser) CommandHandlerFunc {
-	d := cmd.Description()
-
-	defaults := map[string]string{}
-
-	// check if we are an alias
-	alias_, ok := cmd.(*alias.CommandAlias)
-	if ok {
-		defaults = alias_.Flags
-		for idx, v := range alias_.Arguments {
-			if len(d.Arguments) <= idx {
-				defaults[d.Arguments[idx].Name] = v
-			}
-		}
-	}
-
 	return func(c *gin.Context, pc *CommandContext) error {
-		parseState := parser.NewParseStateFromCommandDescription(d)
+		parseState := parser.NewParseStateFromCommandDescription(cmd)
 		err := parserHandler.Parse(c, parseState)
 		if err != nil {
 			return err

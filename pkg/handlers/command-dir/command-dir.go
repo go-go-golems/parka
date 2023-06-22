@@ -91,6 +91,9 @@ type CommandDirHandler struct {
 	// Repository is the command repository that is exposed over HTTP through this handler.
 	Repository *repositories.Repository
 
+	// AdditionalData is passed to the template being rendered.
+	AdditionalData map[string]interface{}
+
 	Overrides *HandlerParameters
 	Defaults  *HandlerParameters
 }
@@ -121,6 +124,22 @@ func WithDefaultIndexTemplateName(name string) CommandDirHandlerOption {
 	return func(handler *CommandDirHandler) {
 		if handler.IndexTemplateName == "" {
 			handler.IndexTemplateName = name
+		}
+	}
+}
+
+// WithMergeAdditionalData merges the passed in map with the handler's AdditionalData map.
+// If a value is already set in the AdditionalData map and override is true, it will get overwritten.
+func WithMergeAdditionalData(data map[string]interface{}, override bool) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		if handler.AdditionalData == nil {
+			handler.AdditionalData = data
+		} else {
+			for k, v := range data {
+				if _, ok := handler.AdditionalData[k]; !ok || override {
+					handler.AdditionalData[k] = v
+				}
+			}
 		}
 	}
 }
@@ -289,6 +308,23 @@ func NewCommandDirHandlerFromConfig(
 	cd := &CommandDirHandler{
 		TemplateName:      config.TemplateName,
 		IndexTemplateName: config.IndexTemplateName,
+		AdditionalData:    config.AdditionalData,
+	}
+
+	if config.Overrides != nil {
+		cd.Overrides = &HandlerParameters{
+			Flags:     config.Overrides.Flags,
+			Arguments: config.Overrides.Arguments,
+			Layers:    config.Overrides.Layers,
+		}
+	}
+
+	if config.Defaults != nil {
+		cd.Defaults = &HandlerParameters{
+			Flags:     config.Defaults.Flags,
+			Arguments: config.Defaults.Arguments,
+			Layers:    config.Defaults.Layers,
+		}
 	}
 
 	for _, option := range options {
@@ -296,6 +332,47 @@ func NewCommandDirHandlerFromConfig(
 	}
 
 	return cd, nil
+}
+
+func (cd *CommandDirHandler) computeParserOptions() []parser.ParserOption {
+	parserOptions := []parser.ParserOption{}
+
+	// TODO(manuel, 2023-06-21) This needs to be handled for each backend, not just the HTML one
+	if cd.Overrides != nil {
+		if cd.Overrides.Flags != nil && len(cd.Overrides.Flags) > 0 {
+			parserOptions = append(parserOptions,
+				parser.WithAppendOverrides(parser.DefaultSlug, cd.Overrides.Flags),
+			)
+		}
+		if cd.Overrides.Arguments != nil && len(cd.Overrides.Arguments) > 0 {
+			parserOptions = append(parserOptions,
+				parser.WithAppendOverrides(parser.DefaultSlug, cd.Overrides.Arguments),
+			)
+		}
+		for slug, layer := range cd.Overrides.Layers {
+			parserOptions = append(parserOptions, parser.WithAppendOverrides(slug, layer))
+		}
+	}
+
+	if cd.Defaults != nil {
+		if cd.Defaults.Flags != nil && len(cd.Defaults.Flags) > 0 {
+			parserOptions = append(parserOptions,
+				parser.WithPrependDefaults(parser.DefaultSlug, cd.Defaults.Flags),
+			)
+		}
+		if cd.Defaults.Arguments != nil && len(cd.Defaults.Arguments) > 0 {
+			parserOptions = append(parserOptions,
+				parser.WithPrependDefaults(parser.DefaultSlug, cd.Defaults.Arguments),
+			)
+		}
+		for slug, layer := range cd.Defaults.Layers {
+			// we use prepend because that way, later options will actually override earlier flag values,
+			// since they will be applied earlier.
+			parserOptions = append(parserOptions, parser.WithPrependDefaults(slug, layer))
+		}
+	}
+
+	return parserOptions
 }
 
 func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
@@ -316,14 +393,8 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 
 		jsonProcessorFunc := glazed.CreateJSONProcessor
 
-		parserOptions := []parser.ParserOption{}
+		parserOptions := cd.computeParserOptions()
 
-		if cd.Overrides != nil {
-			for slug, layer := range cd.Overrides.Layers {
-				parserOptions = append(parserOptions, parser.WithAppendOverrides(slug, layer))
-			}
-
-		}
 		handle := server.HandleSimpleQueryCommand(sqlCommand,
 			glazed.WithCreateProcessor(jsonProcessorFunc),
 			glazed.WithParserOptions(parserOptions...),
@@ -388,53 +459,16 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 				cd.TemplateName,
 				datatables.WithLinks(links...),
 				datatables.WithJSRendering(),
+				datatables.WithAdditionalData(cd.AdditionalData),
 			)
-
-			parserOptions := []parser.ParserOption{}
-
-			// TODO(manuel, 2023-06-21) This needs to be handled for each backend, not just the HTML one
-			if cd.Overrides != nil {
-				if cd.Overrides.Flags != nil && len(cd.Overrides.Flags) > 0 {
-					parserOptions = append(parserOptions,
-						parser.WithAppendOverrides(parser.DefaultSlug, cd.Overrides.Flags),
-					)
-				}
-				if cd.Overrides.Arguments != nil && len(cd.Overrides.Arguments) > 0 {
-					parserOptions = append(parserOptions,
-						parser.WithAppendOverrides(parser.DefaultSlug, cd.Overrides.Arguments),
-					)
-				}
-				for slug, layer := range cd.Overrides.Layers {
-					parserOptions = append(parserOptions, parser.WithAppendOverrides(slug, layer))
-				}
-			}
-
-			if cd.Defaults != nil {
-				if cd.Defaults.Flags != nil && len(cd.Defaults.Flags) > 0 {
-					parserOptions = append(parserOptions,
-						parser.WithPrependDefaults(parser.DefaultSlug, cd.Defaults.Flags),
-					)
-				}
-				if cd.Defaults.Arguments != nil && len(cd.Defaults.Arguments) > 0 {
-					parserOptions = append(parserOptions,
-						parser.WithPrependDefaults(parser.DefaultSlug, cd.Defaults.Arguments),
-					)
-				}
-				for slug, layer := range cd.Defaults.Layers {
-					// we use prepend because that way, later options will actually override earlier flag values,
-					// since they will be applied earlier.
-					parserOptions = append(parserOptions, parser.WithPrependDefaults(slug, layer))
-				}
-			}
 
 			// TODO(manuel, 2023-06-21) We also need to handle:
 			// - IndexTemplateName
-			// - IncludeDefaultRepositories
-			// - AdditionalData
 			// - TemplateDirectory (by replacing TemplateLookup)
 			//
 			// don't exist in config file yet:
 			// - UseDefaultParkaTemplate
+			parserOptions := cd.computeParserOptions()
 
 			handle := server.HandleSimpleQueryCommand(
 				sqlCommand,
@@ -507,13 +541,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			return
 		}
 
-		parserOptions := []parser.ParserOption{}
-
-		if cd.Overrides != nil {
-			for slug, layer := range cd.Overrides.Layers {
-				parserOptions = append(parserOptions, parser.WithAppendOverrides(slug, layer))
-			}
-		}
+		parserOptions := cd.computeParserOptions()
 
 		// override parameter layers at the end
 		parserOptions = append(parserOptions, parser.WithAppendOverrides("glazed", glazedOverrides))

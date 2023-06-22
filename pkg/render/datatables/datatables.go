@@ -259,7 +259,11 @@ func NewDataTablesCreateOutputProcessorFunc(
 		}
 		options_ = append(options_, options...)
 
-		of := NewDataTablesOutputFormatter(t, gp.OutputFormatter().(*table.OutputFormatter), options_...)
+		of := NewDataTablesOutputFormatter(
+			t,
+			gp.OutputFormatter().(*table.OutputFormatter),
+			options_...,
+		)
 
 		gp2 := processor.NewGlazeProcessor(of)
 

@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"github.com/go-go-golems/clay/pkg/repositories"
+	"github.com/go-go-golems/glazed/pkg/helpers/strings"
 	"github.com/go-go-golems/parka/pkg/handlers/command-dir"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/handlers/static-dir"
@@ -12,6 +13,7 @@ import (
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/server"
 	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 	"os"
 	"path/filepath"
@@ -199,6 +201,15 @@ func (cfh *ConfigFileHandler) Serve(server_ *server.Server) error {
 				return ErrNoRepositoryFactory{}
 			}
 
+			// TODO(manuel, 2023-06-22) It would be nicer to do that in the constructor for the handler itself
+			repositories := []string{}
+			if cd.IncludeDefaultRepositories {
+				repositories = viper.GetStringSlice("repositories")
+			}
+			repositories = append(repositories, cd.Repositories...)
+			// remove duplicates
+			repositories = strings.UniqueStrings(repositories)
+
 			r, err := cfh.RepositoryFactory(cd.Repositories)
 			if err != nil {
 				return err
@@ -226,26 +237,6 @@ func (cfh *ConfigFileHandler) Serve(server_ *server.Server) error {
 				}
 
 				directoryOptions = append(directoryOptions, command_dir.WithTemplateLookup(templateLookup))
-			}
-
-			if cd.Overrides != nil {
-				directoryOptions = append(directoryOptions, command_dir.WithMergeOverrides(
-					&command_dir.HandlerParameters{
-						Layers:    cd.Overrides.Layers,
-						Flags:     cd.Overrides.Flags,
-						Arguments: cd.Overrides.Arguments,
-					}),
-				)
-			}
-
-			if cd.Defaults != nil {
-				directoryOptions = append(directoryOptions, command_dir.WithMergeDefaults(
-					&command_dir.HandlerParameters{
-						Layers:    cd.Defaults.Layers,
-						Flags:     cd.Defaults.Flags,
-						Arguments: cd.Defaults.Arguments,
-					}),
-				)
 			}
 
 			// Because the external options are passed in last, they will overwrite whatever

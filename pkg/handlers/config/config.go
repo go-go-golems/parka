@@ -75,6 +75,15 @@ func expandPath(path string) string {
 	return path
 }
 
+// TemplateLookupConfig is used to configured a directory based template lookup.
+type TemplateLookupConfig struct {
+	// Directories is a list of directories that will be searched for templates.
+	Directories []string `yaml:"directories,omitempty"`
+	// Patterns is a list of glob patterns that will be used to match files in the directories.
+	// If the list is empty, the default of **/*.tmpl.md and **/*.tmpl.html will be used
+	Patterns []string `yaml:"patterns,omitempty"`
+}
+
 // TODO(manuel, 2023-06-20) We should probably allow for environment values to be passed as data as well
 
 type CommandDir struct {
@@ -88,6 +97,8 @@ type CommandDir struct {
 	// so that we can bundle the embedded templates and override them with external ones, as well
 	// as merge together multiple datatables renderers.
 	TemplateDirectory string `yaml:"templateDirectory,omitempty"`
+
+	TemplateLookup *TemplateLookupConfig `yaml:"templateLookup,omitempty"`
 
 	TemplateName      string `yaml:"templateName,omitempty"`
 	IndexTemplateName string `yaml:"indexTemplateName,omitempty"`

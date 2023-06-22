@@ -21,21 +21,23 @@ func (f *FormParseStep) ParseLayerState(c *gin.Context, state *LayerParseState) 
 				return fmt.Errorf("required parameter '%s' is missing", p.Name)
 			}
 			if !f.onlyDefined {
-				if p.Type == parameters.ParameterTypeDate {
-					switch v := p.Default.(type) {
-					case string:
-						parsedDate, err := parameters.ParseDate(v)
-						if err != nil {
-							return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
+				if _, ok := state.Parameters[p.Name]; !ok {
+					if p.Type == parameters.ParameterTypeDate {
+						switch v := p.Default.(type) {
+						case string:
+							parsedDate, err := parameters.ParseDate(v)
+							if err != nil {
+								return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
+							}
+
+							state.Parameters[p.Name] = parsedDate
+						case time.Time:
+							state.Parameters[p.Name] = v
+
 						}
-
-						state.Parameters[p.Name] = parsedDate
-					case time.Time:
-						state.Parameters[p.Name] = v
-
+					} else {
+						state.Parameters[p.Name] = p.Default
 					}
-				} else {
-					state.Parameters[p.Name] = p.Default
 				}
 			}
 		} else if !parameters.IsFileLoadingParameter(p.Type, value) {

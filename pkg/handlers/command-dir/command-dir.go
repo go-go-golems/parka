@@ -320,7 +320,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 
 		if cd.Overrides != nil {
 			for slug, layer := range cd.Overrides.Layers {
-				parserOptions = append(parserOptions, parser.WithAppendOverrideLayer(slug, layer))
+				parserOptions = append(parserOptions, parser.WithAppendOverrides(slug, layer))
 			}
 
 		}
@@ -393,14 +393,55 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			// TODO(manuel, 2023-05-25) We can't currently override defaults, since they are parsed up front.
 			// For that we would need https://github.com/go-go-golems/glazed/issues/239
 			// So for now, we only deal with overrides.
+			//
+			// ANSWER(manuel, 2023-06-22) Defaults should actually work by prepending them to the parsers,
+			// so that they fill the initial value. Not fully sure yet, let's give it a try actually.
 
 			parserOptions := []parser.ParserOption{}
 
+			// TODO(manuel, 2023-06-21) This needs to be handled for each backend, not just the HTML one
 			if cd.Overrides != nil {
+				if cd.Overrides.Flags != nil && len(cd.Overrides.Flags) > 0 {
+					parserOptions = append(parserOptions,
+						parser.WithAppendOverrides(parser.DefaultSlug, cd.Overrides.Flags),
+					)
+				}
+				if cd.Overrides.Arguments != nil && len(cd.Overrides.Arguments) > 0 {
+					parserOptions = append(parserOptions,
+						parser.WithAppendOverrides(parser.DefaultSlug, cd.Overrides.Arguments),
+					)
+				}
 				for slug, layer := range cd.Overrides.Layers {
-					parserOptions = append(parserOptions, parser.WithAppendOverrideLayer(slug, layer))
+					parserOptions = append(parserOptions, parser.WithAppendOverrides(slug, layer))
 				}
 			}
+
+			if cd.Defaults != nil {
+				if cd.Defaults.Flags != nil && len(cd.Defaults.Flags) > 0 {
+					parserOptions = append(parserOptions,
+						parser.WithPrependDefaults(parser.DefaultSlug, cd.Defaults.Flags),
+					)
+				}
+				if cd.Defaults.Arguments != nil && len(cd.Defaults.Arguments) > 0 {
+					parserOptions = append(parserOptions,
+						parser.WithPrependDefaults(parser.DefaultSlug, cd.Defaults.Arguments),
+					)
+				}
+				for slug, layer := range cd.Defaults.Layers {
+					// we use prepend because that way, later options will actually override earlier flag values,
+					// since they will be applied earlier.
+					parserOptions = append(parserOptions, parser.WithPrependDefaults(slug, layer))
+				}
+			}
+
+			// TODO(manuel, 2023-06-21) We also need to handle:
+			// - IndexTemplateName
+			// - IncludeDefaultRepositories
+			// - AdditionalData
+			// - TemplateDirectory (by replacing TemplateLookup)
+			//
+			// don't exist in config file yet:
+			// - UseDefaultParkaTemplate
 
 			handle := server.HandleSimpleQueryCommand(
 				sqlCommand,
@@ -439,7 +480,9 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			c.JSON(500, gin.H{"error": "could not create temporary file"})
 			return
 		}
-		defer os.Remove(tmpFile.Name())
+		defer func(name string) {
+			_ = os.Remove(name)
+		}(tmpFile.Name())
 
 		// now check file suffix for content-type
 		glazedOverrides := map[string]interface{}{
@@ -475,12 +518,12 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 
 		if cd.Overrides != nil {
 			for slug, layer := range cd.Overrides.Layers {
-				parserOptions = append(parserOptions, parser.WithAppendOverrideLayer(slug, layer))
+				parserOptions = append(parserOptions, parser.WithAppendOverrides(slug, layer))
 			}
 		}
 
 		// override parameter layers at the end
-		parserOptions = append(parserOptions, parser.WithAppendOverrideLayer("glazed", glazedOverrides))
+		parserOptions = append(parserOptions, parser.WithAppendOverrides("glazed", glazedOverrides))
 
 		handle := server.HandleSimpleQueryOutputFileCommand(
 			sqlCommand,

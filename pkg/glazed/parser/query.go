@@ -25,7 +25,9 @@ func (q *QueryParseStep) ParseLayerState(c *gin.Context, state *LayerParseState)
 					return errors.Errorf("required parameter '%s' is missing", p.Name)
 				}
 				if !q.onlyDefined {
-					state.Parameters[p.Name] = p.Default
+					if _, ok := state.Parameters[p.Name]; !ok {
+						state.Parameters[p.Name] = p.Default
+					}
 				}
 			} else {
 				f := strings.NewReader(value)
@@ -55,7 +57,10 @@ func (q *QueryParseStep) ParseLayerState(c *gin.Context, state *LayerParseState)
 
 						}
 					} else {
-						state.Parameters[p.Name] = p.Default
+						// only set default value if it is not already set
+						if _, ok := state.Parameters[p.Name]; !ok {
+							state.Parameters[p.Name] = p.Default
+						}
 					}
 				}
 			} else {

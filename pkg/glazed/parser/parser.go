@@ -9,6 +9,14 @@ import (
 // TODO(manuel, 2023-06-21) This part of the API is a complete mess, I'm not even sure what it is supposed to do overall
 // Well worth refactoring
 
+// DefaultSlug is used as a drop-in to signal that we actually want to parse the
+// top-level flags and arguments.
+//
+// # TODO(manuel, 2023-06-22) This should be removed once we actually turn default flags and arguments into an actual layer
+//
+// See https://github.com/go-go-golems/glazed/issues/303
+const DefaultSlug = "default"
+
 type LayerParseState struct {
 	Slug string
 	// Defaults contains the default values for the parameters, as strings to be parsed
@@ -66,16 +74,12 @@ type ParseStep interface {
 	Parse(c *gin.Context, result *LayerParseState) error
 }
 
-// Parser is contains a list of ParserFunc that are used to parse an incoming
+// Parser is contains a list of ParseStep that are used to parse an incoming
 // request into a proper CommandContext, and ultimately be used to Run a glazed Command.
 //
-// These ParserFunc can be operating on the general parameters as well as per layer.
+// These ParseStep can be operating on the general parameters as well as per layer.
 // The flexibility is there so that more complicated commands can ultimately be built that leverage
 // different validations and rewrite rules.
-//
-// NOTE(manuel, 2023-04-16) I wonder when I will queue multiple ParserFunc and LayerParser Func.
-// We might actually already do this by leveraging it to overwrite layer parameters (say, sqleton
-// connection parameters).
 type Parser struct {
 	Parsers            []ParseStep
 	LayerParsersBySlug map[string][]ParseStep
@@ -118,34 +122,15 @@ func (p *Parser) Parse(c *gin.Context, state *ParseState) error {
 	return nil
 }
 
-// WithPrependParser adds the given ParserFunc to the beginning of the list of parsers.
+// WithPrependParser adds the given ParserFunc to the beginning of the list of layer parsers.
 // Be mindful that this can later on be overwritten by a WithReplaceParser.
-func WithPrependParser(ps ...ParseStep) ParserOption {
+func WithPrependParser(slug string, ps ...ParseStep) ParserOption {
 	return func(ph *Parser) {
-		ph.Parsers = append(ps, ph.Parsers...)
-	}
-}
+		if slug == DefaultSlug {
+			ph.Parsers = append(ps, ph.Parsers...)
+			return
+		}
 
-// WithAppendParser adds the given ParserFunc to the end of the list of parsers.
-// Be mindful that this can later on be overwritten by a WithReplaceParser.
-func WithAppendParser(ps ...ParseStep) ParserOption {
-	return func(ph *Parser) {
-		ph.Parsers = append(ph.Parsers, ps...)
-	}
-}
-
-// WithReplaceParser replaces the list of parsers with the given ParserFunc.
-// This will remove all previously added prepend, replace, append parsers.
-func WithReplaceParser(ps ...ParseStep) ParserOption {
-	return func(ph *Parser) {
-		ph.Parsers = ps
-	}
-}
-
-// WithPrependLayerParser adds the given ParserFunc to the beginning of the list of layer parsers.
-// Be mindful that this can later on be overwritten by a WithReplaceLayerParser.
-func WithPrependLayerParser(slug string, ps ...ParseStep) ParserOption {
-	return func(ph *Parser) {
 		if _, ok := ph.LayerParsersBySlug[slug]; !ok {
 			ph.LayerParsersBySlug[slug] = []ParseStep{}
 		}
@@ -153,10 +138,15 @@ func WithPrependLayerParser(slug string, ps ...ParseStep) ParserOption {
 	}
 }
 
-// WithAppendLayerParser adds the given ParserFunc to the end of the list of layer parsers.
-// Be mindful that this can later on be overwritten by a WithReplaceLayerParser.
-func WithAppendLayerParser(slug string, ps ...ParseStep) ParserOption {
+// WithAppendParser adds the given ParserFunc to the end of the list of layer parsers.
+// Be mindful that this can later on be overwritten by a WithReplaceParser.
+func WithAppendParser(slug string, ps ...ParseStep) ParserOption {
 	return func(ph *Parser) {
+		if slug == DefaultSlug {
+			ph.Parsers = append(ph.Parsers, ps...)
+			return
+		}
+
 		if _, ok := ph.LayerParsersBySlug[slug]; !ok {
 			ph.LayerParsersBySlug[slug] = []ParseStep{}
 		}
@@ -164,16 +154,21 @@ func WithAppendLayerParser(slug string, ps ...ParseStep) ParserOption {
 	}
 }
 
-// WithReplaceLayerParser replaces the list of layer parsers with the given ParserFunc.
-func WithReplaceLayerParser(slug string, ps ...ParseStep) ParserOption {
+// WithReplaceParser replaces the list of layer parsers with the given ParserFunc.
+func WithReplaceParser(slug string, ps ...ParseStep) ParserOption {
 	return func(ph *Parser) {
+		if slug == DefaultSlug {
+			ph.Parsers = ps
+			return
+		}
+
 		ph.LayerParsersBySlug[slug] = ps
 	}
 }
 
 // WithGlazeOutputParserOption is a convenience function to override the output and table format glazed settings.
 func WithGlazeOutputParserOption(output string, tableFormat string) ParserOption {
-	return WithAppendLayerParser(
+	return WithAppendParser(
 		"glazed",
 		NewStaticParseStep(map[string]interface{}{
 			"output":       output,
@@ -182,21 +177,42 @@ func WithGlazeOutputParserOption(output string, tableFormat string) ParserOption
 	)
 }
 
-// WithReplaceStaticLayer is a convenience function to use static layer parsing.
+// WithReplaceParameters is a convenience function to use static layer parsing.
 // This entirely replaces current layer parsers, but can later on be amended with other parsers,
-// for example with WithAppendOverrideLayer.
-func WithReplaceStaticLayer(slug string, overrides map[string]interface{}) ParserOption {
-	return WithReplaceLayerParser(
+// for example with WithAppendOverrides.
+//
+// Note that this also replaces the defaults
+func WithReplaceParameters(slug string, overrides map[string]interface{}) ParserOption {
+	return WithReplaceParser(
 		slug,
 		NewStaticParseStep(overrides),
 	)
 }
 
-// WithAppendOverrideLayer is a convenience function to override the parameters of a layer.
+// WithAppendOverrides is a convenience function to override the parameters of a layer.
 // The overrides are appended past currently present parser functions.
-func WithAppendOverrideLayer(slug string, overrides map[string]interface{}) ParserOption {
-	return WithAppendLayerParser(
+func WithAppendOverrides(slug string, overrides map[string]interface{}) ParserOption {
+	return WithAppendParser(
 		slug,
 		NewStaticParseStep(overrides),
+	)
+}
+
+// WithPrependDefaults is a convenience function to set the initial parameters of a layer.
+// If a value is already set, it won't be overwritten.
+func WithPrependDefaults(slug string, defaults map[string]interface{}) ParserOption {
+	return WithPrependParser(
+		slug,
+		NewDefaultParseStep(defaults),
+	)
+}
+
+// WithStopParsing will stop parsing parameters, even if further parser steps are added at the end
+// of the parser chain. This can be used to "seal" parsing and prevent further parameters from being
+// overridden.
+func WithStopParsing(slug string) ParserOption {
+	return WithAppendParser(
+		slug,
+		NewStopParseStep(),
 	)
 }

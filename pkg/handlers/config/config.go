@@ -83,10 +83,12 @@ type CommandDir struct {
 
 	// TODO(manuel, 2023-06-21) Unify support to override the default renderer for individual routes
 	// See https://github.com/go-go-golems/parka/issues/55
+	//
 	// We should probably make it possible to pass multiple template directories for the renderer options
 	// so that we can bundle the embedded templates and override them with external ones, as well
 	// as merge together multiple datatables renderers.
 	TemplateDirectory string `yaml:"templateDirectory,omitempty"`
+
 	TemplateName      string `yaml:"templateName,omitempty"`
 	IndexTemplateName string `yaml:"indexTemplateName,omitempty"`
 

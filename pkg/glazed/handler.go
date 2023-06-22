@@ -123,16 +123,8 @@ func CreateJSONProcessor(_ *gin.Context, pc *CommandContext) (
 	return gp, nil
 }
 
-// GinHandleGlazedCommand returns a gin.HandlerFunc that is responsible for
-// running the provided command, parsing the necessary context from the provided handlers.
-// This context is then used to create a cmds.Processor and to provide
-// the necessary parameters and layers to the command, calling Run.
-//
-// TODO(manuel, 2023-04-16) Here we want to pass handlers that can modify the resulting output
-// For example, take the HTML and add a page around it. Take the response and render it into a template
-// (although that might be able to get done with the standard setup).
-//
-// NOTE(manuel, 2023-04-16)
+// GinHandleGlazedCommand returns a gin.HandlerFunc that runs a glazed.Command and writes
+// the results to the gin.Context ResponseWriter.
 func GinHandleGlazedCommand(
 	cmd cmds.GlazeCommand,
 	opts *HandleOptions,
@@ -153,6 +145,9 @@ func GinHandleGlazedCommand(
 // GinHandleGlazedCommandWithOutputFile returns a gin.HandlerFunc that is responsible for
 // running the GlazeCommand, and then returning the output file as an attachment.
 // This usually requires the caller to provide a temporary file path.
+//
+// TODO(manuel, 2023-06-22) Now that OutputFormatter renders directly into a io.Writer,
+// I don't think we need all this anymore, we just need to set the relevant header.
 func GinHandleGlazedCommandWithOutputFile(
 	cmd cmds.GlazeCommand,
 	outputFile string,
@@ -217,17 +212,16 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 		return err
 	}
 
-	contentType := gp.OutputFormatter().ContentType()
+	of := gp.OutputFormatter()
+	contentType := of.ContentType()
+
+	if opts.Writer == nil {
+		c.Writer.Header().Set("Content-Type", contentType)
+	}
 
 	err = cmd.Run(c, pc.ParsedLayers, pc.ParsedParameters, gp)
 	if err != nil {
 		return err
-	}
-
-	of := gp.OutputFormatter()
-
-	if opts.Writer == nil {
-		c.Writer.Header().Set("Content-Type", contentType)
 	}
 
 	var writer io.Writer = c.Writer

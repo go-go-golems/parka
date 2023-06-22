@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"github.com/go-go-golems/clay/pkg/repositories"
+	"github.com/go-go-golems/glazed/pkg/helpers/strings"
 	"github.com/go-go-golems/parka/pkg/handlers/command-dir"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/handlers/static-dir"
@@ -11,6 +12,8 @@ import (
 	"github.com/go-go-golems/parka/pkg/handlers/template-dir"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/server"
+	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 	"os"
 	"path/filepath"
@@ -184,7 +187,12 @@ func (cfh *ConfigFileHandler) Serve(server_ *server.Server) error {
 	}, cfh.TemplateOptions...)
 
 	for _, route := range cfh.Config.Routes {
+		if route.Command != nil {
+			return errors.New("command routes are not yet supported")
+		}
+
 		if route.CommandDirectory != nil {
+			cd := route.CommandDirectory
 			// TODO(manuel, 2023-05-31) We must pass in the RepositoryConstructor here,
 			// because we need to create an app specific repository, but the config file
 			// contains the directories to load commands from.
@@ -193,31 +201,21 @@ func (cfh *ConfigFileHandler) Serve(server_ *server.Server) error {
 				return ErrNoRepositoryFactory{}
 			}
 
-			r, err := cfh.RepositoryFactory(route.CommandDirectory.Repositories)
+			// TODO(manuel, 2023-06-22) It would be nicer to do that in the constructor for the handler itself
+			repositories := []string{}
+			if *cd.IncludeDefaultRepositories {
+				repositories = viper.GetStringSlice("repositories")
+			}
+			repositories = append(repositories, cd.Repositories...)
+			// remove duplicates
+			repositories = strings.UniqueStrings(repositories)
+
+			r, err := cfh.RepositoryFactory(repositories)
 			if err != nil {
 				return err
 			}
 			directoryOptions := []command_dir.CommandDirHandlerOption{
 				command_dir.WithRepository(r),
-			}
-
-			if route.CommandDirectory.TemplateDirectory != "" {
-				// but here when not loading from a config file, we already set the template lookup externally...
-				templateLookup := render.NewLookupTemplateFromFS(
-					render.WithFS(os.DirFS(route.CommandDirectory.TemplateDirectory)),
-					render.WithBaseDir(""),
-					render.WithPatterns(
-						"**/*.tmpl.md",
-						"**/*.tmpl.html",
-					),
-					render.WithAlwaysReload(cfh.DevMode),
-				)
-				err = templateLookup.Reload()
-				if err != nil {
-					return err
-				}
-
-				directoryOptions = append(directoryOptions, command_dir.WithTemplateLookup(templateLookup))
 			}
 
 			// Because the external options are passed in last, they will overwrite whatever
@@ -226,7 +224,7 @@ func (cfh *ConfigFileHandler) Serve(server_ *server.Server) error {
 			directoryOptions = append(directoryOptions, cfh.CommandDirectoryOptions...)
 
 			cdh, err := command_dir.NewCommandDirHandlerFromConfig(
-				route.CommandDirectory,
+				cd,
 				directoryOptions...,
 			)
 			if err != nil {

@@ -98,16 +98,13 @@ func NewHTMLTemplateLookupCreateProcessorFunc(
 ) glazed.CreateProcessorFunc {
 	return func(c *gin.Context, pc *glazed.CommandContext) (
 		processor.Processor,
-		string, // content type
 		error,
 	) {
-		contextType := "text/html"
-
 		// Lookup template on every request, not up front. That way, templates can be reloaded without recreating the gin
 		// server.
 		t, err := lookup.Lookup(templateName)
 		if err != nil {
-			return nil, contextType, err
+			return nil, err
 		}
 
 		// Here, we use the parsed layer to configure the glazed middlewares.
@@ -130,19 +127,19 @@ func NewHTMLTemplateLookupCreateProcessorFunc(
 		}
 
 		if err != nil {
-			return nil, contextType, err
+			return nil, err
 		}
 
 		layout_, err := layout.ComputeLayout(pc)
 		if err != nil {
-			return nil, contextType, err
+			return nil, err
 		}
 
 		description := pc.Cmd.Description()
 
 		longHTML, err := RenderMarkdownToHTML(description.Long)
 		if err != nil {
-			return nil, contextType, err
+			return nil, err
 		}
 
 		options_ := []HTMLTemplateOutputFormatterOption{
@@ -158,6 +155,6 @@ func NewHTMLTemplateLookupCreateProcessorFunc(
 		of := NewHTMLTemplateOutputFormatter(t, gp.OutputFormatter().(*table.OutputFormatter), options_...)
 		gp2 := processor.NewGlazeProcessor(of)
 
-		return gp2, contextType, nil
+		return gp2, nil
 	}
 }

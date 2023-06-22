@@ -28,6 +28,8 @@ type DataTables struct {
 	Layout *layout.Layout
 	Links  []layout.Link
 
+	BasePath string
+
 	// Stream provides a channel where each element represents a row of the table
 	// to be rendered, already formatted.
 	// Per default, we will render the individual rows as HTML, but the JSRendering
@@ -111,6 +113,12 @@ func WithLinks(links ...layout.Link) DataTablesOutputFormatterOption {
 	}
 }
 
+func WithBasePath(path string) DataTablesOutputFormatterOption {
+	return func(d *DataTablesOutputFormatter) {
+		d.dataTablesData.BasePath = path
+	}
+}
+
 func WithAppendLinks(links ...layout.Link) DataTablesOutputFormatterOption {
 	return func(d *DataTablesOutputFormatter) {
 		d.dataTablesData.Links = append(d.dataTablesData.Links, links...)
@@ -137,13 +145,6 @@ func WithUseDataTables() DataTablesOutputFormatterOption {
 
 //go:embed templates/*
 var templateFS embed.FS
-
-func NewDataTablesHTMLTemplateCreateProcessorFunc(
-	options ...render.HTMLTemplateOutputFormatterOption,
-) (glazed.CreateProcessorFunc, error) {
-	l := NewDataTablesLookupTemplate()
-	return render.NewHTMLTemplateLookupCreateProcessorFunc(l, "data-tables.tmpl.html", options...), nil
-}
 
 func NewDataTablesLookupTemplate() *render.LookupTemplateFromFS {
 	l := render.NewLookupTemplateFromFS(
@@ -172,6 +173,10 @@ func NewDataTablesOutputFormatter(
 	}
 
 	return ret
+}
+
+func (d *DataTablesOutputFormatter) ContentType() string {
+	return "text/html; charset=utf-8"
 }
 
 func (d *DataTablesOutputFormatter) Output(ctx context.Context, w io.Writer) error {
@@ -209,16 +214,13 @@ func NewDataTablesCreateOutputProcessorFunc(
 ) glazed.CreateProcessorFunc {
 	return func(c *gin.Context, pc *glazed.CommandContext) (
 		processor.Processor,
-		string, // content type
 		error,
 	) {
-		contextType := "text/html"
-
 		// Lookup template on every request, not up front. That way, templates can be reloaded without recreating the gin
 		// server.
 		t, err := lookup.Lookup(templateName)
 		if err != nil {
-			return nil, contextType, err
+			return nil, err
 		}
 
 		l, ok := pc.ParsedLayers["glazed"]
@@ -237,19 +239,19 @@ func NewDataTablesCreateOutputProcessorFunc(
 		}
 
 		if err != nil {
-			return nil, contextType, err
+			return nil, err
 		}
 
 		layout_, err := layout.ComputeLayout(pc)
 		if err != nil {
-			return nil, contextType, err
+			return nil, err
 		}
 
 		description := pc.Cmd.Description()
 
 		longHTML, err := render.RenderMarkdownToHTML(description.Long)
 		if err != nil {
-			return nil, contextType, err
+			return nil, err
 		}
 
 		options_ := []DataTablesOutputFormatterOption{
@@ -259,10 +261,14 @@ func NewDataTablesCreateOutputProcessorFunc(
 		}
 		options_ = append(options_, options...)
 
-		of := NewDataTablesOutputFormatter(t, gp.OutputFormatter().(*table.OutputFormatter), options_...)
+		of := NewDataTablesOutputFormatter(
+			t,
+			gp.OutputFormatter().(*table.OutputFormatter),
+			options_...,
+		)
 
 		gp2 := processor.NewGlazeProcessor(of)
 
-		return gp2, contextType, nil
+		return gp2, nil
 	}
 }

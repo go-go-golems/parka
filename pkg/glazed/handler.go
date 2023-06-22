@@ -4,13 +4,10 @@ import (
 	"bytes"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/formatters/csv"
 	"github.com/go-go-golems/glazed/pkg/formatters/json"
-	"github.com/go-go-golems/glazed/pkg/formatters/table"
-	"github.com/go-go-golems/glazed/pkg/formatters/template"
-	"github.com/go-go-golems/glazed/pkg/formatters/yaml"
 	"github.com/go-go-golems/glazed/pkg/processor"
 	"github.com/go-go-golems/glazed/pkg/settings"
+	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"io"
 	"net/http"
 	"os"
@@ -18,9 +15,12 @@ import (
 
 // CreateProcessorFunc is a simple func type to create a cmds.GlazeProcessor
 // and formatters.OutputFormatter out of a CommandContext.
+//
+// This is so that we can create a processor that is configured based on the input
+// data provided in CommandContext. For example, the user might want to request a specific response
+// format through a query argument or through a header.
 type CreateProcessorFunc func(c *gin.Context, pc *CommandContext) (
 	processor.Processor,
-	string, // content type
 	error,
 )
 
@@ -28,13 +28,18 @@ type CreateProcessorFunc func(c *gin.Context, pc *CommandContext) (
 type HandleOptions struct {
 	// ParserOptions are passed to the given parser (the thing that gathers the glazed.Command
 	// flags and arguments.
-	ParserOptions []ParserOption
+	ParserOptions []parser.ParserOption
 
-	// Handlers are run right at the start to build up the CommandContext based on the
-	// gin.Context and the previous value of CommandContext.
+	// Handlers are run right at the start of the gin.Handler to build up the CommandContext based on the
+	// gin.Context. They can be chained because they get passed the previous CommandContext.
 	//
-	// TODO(manuel, 2023-06-04) It is unclear how CommandHandler and Parser interact, since
-	// NewCommandHandlerFunc takes a parser (see HandleSimpleQueryOutputFileCommand and HandleSimpleQueryCommand)
+	// NOTE(manuel, 2023-06-22) We currently use a single CommandHandler, which is created with NewParserCommandHandlerFunc.
+	// This creates a command handler that uses a parser.Parser to parse the gin.Context and return a CommandContext.
+	// For example, the FormParser will parse command parameters passed as a HTML form.
+	//
+	// While we currently only use a single handler, the current setup allows us to chain a middleware of handlers.
+	// This would potentially allow us to catch parse errors and return an appropriate error template
+	// I'm not entirely sure if this all makes sense.
 	Handlers []CommandHandlerFunc
 
 	// CreateProcessor takes a gin.Context and a CommandContext and returns a processor.Processor (and a content-type)
@@ -69,7 +74,7 @@ func NewHandleOptions(options []HandleOption) *HandleOptions {
 	return opts
 }
 
-func WithParserOptions(parserOptions ...ParserOption) HandleOption {
+func WithParserOptions(parserOptions ...parser.ParserOption) HandleOption {
 	return func(o *HandleOptions) {
 		o.ParserOptions = parserOptions
 	}
@@ -95,7 +100,6 @@ func WithCreateProcessor(createProcessor CreateProcessorFunc) HandleOption {
 
 func CreateJSONProcessor(_ *gin.Context, pc *CommandContext) (
 	processor.Processor,
-	string, // content type
 	error,
 ) {
 	l, ok := pc.ParsedLayers["glazed"]
@@ -113,22 +117,14 @@ func CreateJSONProcessor(_ *gin.Context, pc *CommandContext) (
 	}
 
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	return gp, "application/json", nil
+	return gp, nil
 }
 
-// GinHandleGlazedCommand returns a gin.HandlerFunc that is responsible for
-// running the provided command, parsing the necessary context from the provided handlers.
-// This context is then used to create a cmds.Processor and to provide
-// the necessary parameters and layers to the command, calling Run.
-//
-// TODO(manuel, 2023-04-16) Here we want to pass handlers that can modify the resulting output
-// For example, take the HTML and add a page around it. Take the response and render it into a template
-// (although that might be able to get done with the standard setup).
-//
-// NOTE(manuel, 2023-04-16)
+// GinHandleGlazedCommand returns a gin.HandlerFunc that runs a glazed.Command and writes
+// the results to the gin.Context ResponseWriter.
 func GinHandleGlazedCommand(
 	cmd cmds.GlazeCommand,
 	opts *HandleOptions,
@@ -149,6 +145,9 @@ func GinHandleGlazedCommand(
 // GinHandleGlazedCommandWithOutputFile returns a gin.HandlerFunc that is responsible for
 // running the GlazeCommand, and then returning the output file as an attachment.
 // This usually requires the caller to provide a temporary file path.
+//
+// TODO(manuel, 2023-06-22) Now that OutputFormatter renders directly into a io.Writer,
+// I don't think we need all this anymore, we just need to set the relevant header.
 func GinHandleGlazedCommandWithOutputFile(
 	cmd cmds.GlazeCommand,
 	outputFile string,
@@ -201,13 +200,11 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 
 	var gp processor.Processor
 
-	var contentType string
-
 	var err error
 	if opts.CreateProcessor != nil {
 		// TODO(manuel, 2023-03-02) We might want to switch on the requested content type here too
 		// This would be done by passing in a handler that configures the glazed layer accordingly.
-		gp, contentType, err = opts.CreateProcessor(c, pc)
+		gp, err = opts.CreateProcessor(c, pc)
 	} else {
 		gp, err = SetupProcessor(pc)
 	}
@@ -215,43 +212,16 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 		return err
 	}
 
-	err = cmd.Run(c, pc.ParsedLayers, pc.ParsedParameters, gp)
-	if err != nil {
-		return err
-	}
-
-	// NOTE(manuel, 2023-04-16) API design wise, we might want to reuse gin.HandlerFunc here for lower processing
-	// For example, computing the response (?) I'm not sure this makes sense
-
 	of := gp.OutputFormatter()
-
-	if contentType == "" {
-		switch of_ := of.(type) {
-		case *json.OutputFormatter:
-			contentType = "application/json"
-		case *csv.OutputFormatter:
-			contentType = "text/csv"
-		case *table.OutputFormatter:
-			//exhaustive:ignore
-			switch of_.TableFormat {
-			case "html":
-				contentType = "text/html"
-			case "markdown":
-				contentType = "text/markdown"
-			default:
-				contentType = "text/plain"
-			}
-		case *yaml.OutputFormatter:
-			contentType = "application/x-yaml"
-		case *template.OutputFormatter:
-			// TODO(manuel, 2023-03-02) Unclear how to render HTML templates or text templates here
-			// probably the best idea is to have the formatter return a content type anyway
-			contentType = "text/html"
-		}
-	}
+	contentType := of.ContentType()
 
 	if opts.Writer == nil {
 		c.Writer.Header().Set("Content-Type", contentType)
+	}
+
+	err = cmd.Run(c, pc.ParsedLayers, pc.ParsedParameters, gp)
+	if err != nil {
+		return err
 	}
 
 	var writer io.Writer = c.Writer

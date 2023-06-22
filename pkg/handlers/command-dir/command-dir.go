@@ -7,11 +7,13 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/parka/pkg/glazed"
+	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/render/datatables"
 	"github.com/go-go-golems/parka/pkg/render/layout"
 	parka "github.com/go-go-golems/parka/pkg/server"
+	"github.com/pkg/errors"
 	"os"
 	"strings"
 	"time"
@@ -90,6 +92,9 @@ type CommandDirHandler struct {
 	// Repository is the command repository that is exposed over HTTP through this handler.
 	Repository *repositories.Repository
 
+	// AdditionalData is passed to the template being rendered.
+	AdditionalData map[string]interface{}
+
 	Overrides *HandlerParameters
 	Defaults  *HandlerParameters
 }
@@ -124,11 +129,29 @@ func WithDefaultIndexTemplateName(name string) CommandDirHandlerOption {
 	}
 }
 
+// WithMergeAdditionalData merges the passed in map with the handler's AdditionalData map.
+// If a value is already set in the AdditionalData map and override is true, it will get overwritten.
+func WithMergeAdditionalData(data map[string]interface{}, override bool) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		if handler.AdditionalData == nil {
+			handler.AdditionalData = data
+		} else {
+			for k, v := range data {
+				if _, ok := handler.AdditionalData[k]; !ok || override {
+					handler.AdditionalData[k] = v
+				}
+			}
+		}
+	}
+}
+
 func WithTemplateLookup(lookup render.TemplateLookup) CommandDirHandlerOption {
 	return func(handler *CommandDirHandler) {
 		handler.TemplateLookup = lookup
 	}
 }
+
+// handling all the ways to configure overrides
 
 func WithReplaceOverrides(overrides *HandlerParameters) CommandDirHandlerOption {
 	return func(handler *CommandDirHandler) {
@@ -164,16 +187,33 @@ func WithOverrideArgument(name string, value string) CommandDirHandlerOption {
 	}
 }
 
-func WithMergeOverrideLayer(name string, layer *layers.ParsedParameterLayer) CommandDirHandlerOption {
+func WithMergeOverrideLayer(name string, layer map[string]interface{}) CommandDirHandlerOption {
 	return func(handler *CommandDirHandler) {
 		if handler.Overrides == nil {
 			handler.Overrides = NewHandlerParameters()
 		}
-		for k, v := range layer.Parameters {
+		for k, v := range layer {
 			if _, ok := handler.Overrides.Layers[name]; !ok {
 				handler.Overrides.Layers[name] = map[string]interface{}{}
 			}
 			handler.Overrides.Layers[name][k] = v
+		}
+	}
+}
+
+// WithLayerDefaults populates the defaults for the given layer. If a value is already set, the value is skipped.
+func WithLayerDefaults(name string, layer map[string]interface{}) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		if handler.Overrides == nil {
+			handler.Overrides = NewHandlerParameters()
+		}
+		for k, v := range layer {
+			if _, ok := handler.Overrides.Layers[name]; !ok {
+				handler.Overrides.Layers[name] = map[string]interface{}{}
+			}
+			if _, ok := handler.Overrides.Layers[name][k]; !ok {
+				handler.Overrides.Layers[name][k] = v
+			}
 		}
 	}
 }
@@ -184,6 +224,69 @@ func WithReplaceOverrideLayer(name string, layer map[string]interface{}) Command
 			handler.Overrides = NewHandlerParameters()
 		}
 		handler.Overrides.Layers[name] = layer
+	}
+}
+
+// TODO(manuel, 2023-05-25) We can't currently override defaults, since they are parsed up front.
+// For that we would need https://github.com/go-go-golems/glazed/issues/239
+// So for now, we only deal with overrides.
+//
+// Handling all the way to configure defaults.
+
+func WithReplaceDefaults(defaults *HandlerParameters) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		handler.Defaults = defaults
+	}
+}
+
+func WithMergeDefaults(defaults *HandlerParameters) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		if handler.Defaults == nil {
+			handler.Defaults = defaults
+		} else {
+			handler.Defaults.Merge(defaults)
+		}
+	}
+}
+
+func WithDefaultFlag(name string, value string) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		if handler.Defaults == nil {
+			handler.Defaults = NewHandlerParameters()
+		}
+		handler.Defaults.Flags[name] = value
+	}
+}
+
+func WithDefaultArgument(name string, value string) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		if handler.Defaults == nil {
+			handler.Defaults = NewHandlerParameters()
+		}
+		handler.Defaults.Arguments[name] = value
+	}
+}
+
+func WithMergeDefaultLayer(name string, layer *layers.ParsedParameterLayer) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		if handler.Defaults == nil {
+			handler.Defaults = NewHandlerParameters()
+		}
+		for k, v := range layer.Parameters {
+			if _, ok := handler.Defaults.Layers[name]; !ok {
+				handler.Defaults.Layers[name] = map[string]interface{}{}
+			}
+			handler.Defaults.Layers[name][k] = v
+		}
+	}
+}
+
+func WithReplaceDefaultLayer(name string, layer map[string]interface{}) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		if handler.Defaults == nil {
+			handler.Defaults = NewHandlerParameters()
+		}
+		handler.Defaults.Layers[name] = layer
 	}
 }
 
@@ -206,16 +309,100 @@ func NewCommandDirHandlerFromConfig(
 	cd := &CommandDirHandler{
 		TemplateName:      config.TemplateName,
 		IndexTemplateName: config.IndexTemplateName,
+		AdditionalData:    config.AdditionalData,
 	}
 
-	// TODO(manuel, 2023-06-20) Handle all the options from the config file
-	// Overrides, TemplateDirectory, IndexTemplateName, Defaults, Overrides
+	if config.Overrides != nil {
+		cd.Overrides = &HandlerParameters{
+			Flags:     config.Overrides.Flags,
+			Arguments: config.Overrides.Arguments,
+			Layers:    config.Overrides.Layers,
+		}
+	}
+
+	if config.Defaults != nil {
+		cd.Defaults = &HandlerParameters{
+			Flags:     config.Defaults.Flags,
+			Arguments: config.Defaults.Arguments,
+			Layers:    config.Defaults.Layers,
+		}
+	}
 
 	for _, option := range options {
 		option(cd)
 	}
 
+	// we run this after the options in order to get the DevMode value
+
+	if cd.TemplateLookup == nil {
+		if config.TemplateLookup != nil {
+			patterns := config.TemplateLookup.Patterns
+			if len(patterns) == 0 {
+				patterns = []string{"**/*.tmpl.md", "**/*.tmpl.html"}
+			}
+			// we currently only support a single directory
+			if len(config.TemplateLookup.Directories) != 1 {
+				return nil, errors.New("template lookup directories must be exactly one")
+			}
+			cd.TemplateLookup = render.NewLookupTemplateFromFS(
+				render.WithFS(os.DirFS(config.TemplateLookup.Directories[0])),
+				render.WithBaseDir(""),
+				render.WithPatterns(patterns...),
+				render.WithAlwaysReload(cd.DevMode),
+			)
+		} else {
+			cd.TemplateLookup = datatables.NewDataTablesLookupTemplate()
+		}
+
+	}
+
+	err := cd.TemplateLookup.Reload()
+	if err != nil {
+		return nil, err
+	}
+
 	return cd, nil
+}
+
+func (cd *CommandDirHandler) computeParserOptions() []parser.ParserOption {
+	parserOptions := []parser.ParserOption{}
+
+	// TODO(manuel, 2023-06-21) This needs to be handled for each backend, not just the HTML one
+	if cd.Overrides != nil {
+		if cd.Overrides.Flags != nil && len(cd.Overrides.Flags) > 0 {
+			parserOptions = append(parserOptions,
+				parser.WithAppendOverrides(parser.DefaultSlug, cd.Overrides.Flags),
+			)
+		}
+		if cd.Overrides.Arguments != nil && len(cd.Overrides.Arguments) > 0 {
+			parserOptions = append(parserOptions,
+				parser.WithAppendOverrides(parser.DefaultSlug, cd.Overrides.Arguments),
+			)
+		}
+		for slug, layer := range cd.Overrides.Layers {
+			parserOptions = append(parserOptions, parser.WithAppendOverrides(slug, layer))
+		}
+	}
+
+	if cd.Defaults != nil {
+		if cd.Defaults.Flags != nil && len(cd.Defaults.Flags) > 0 {
+			parserOptions = append(parserOptions,
+				parser.WithPrependDefaults(parser.DefaultSlug, cd.Defaults.Flags),
+			)
+		}
+		if cd.Defaults.Arguments != nil && len(cd.Defaults.Arguments) > 0 {
+			parserOptions = append(parserOptions,
+				parser.WithPrependDefaults(parser.DefaultSlug, cd.Defaults.Arguments),
+			)
+		}
+		for slug, layer := range cd.Defaults.Layers {
+			// we use prepend because that way, later options will actually override earlier flag values,
+			// since they will be applied earlier.
+			parserOptions = append(parserOptions, parser.WithPrependDefaults(slug, layer))
+		}
+	}
+
+	return parserOptions
 }
 
 func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
@@ -234,22 +421,9 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			return
 		}
 
-		jsonProcessorFunc := glazed.CreateJSONProcessor
-
-		// TODO(manuel, 2023-05-25) We can't currently override defaults, since they are parsed up front.
-		// For that we would need https://github.com/go-go-golems/glazed/issues/239
-		// So for now, we only deal with overrides.
-
-		parserOptions := []glazed.ParserOption{}
-
-		if cd.Overrides != nil {
-			for slug, layer := range cd.Overrides.Layers {
-				parserOptions = append(parserOptions, glazed.WithAppendOverrideLayer(slug, layer))
-			}
-		}
 		handle := server.HandleSimpleQueryCommand(sqlCommand,
-			glazed.WithCreateProcessor(jsonProcessorFunc),
-			glazed.WithParserOptions(parserOptions...),
+			glazed.WithCreateProcessor(glazed.CreateJSONProcessor),
+			glazed.WithParserOptions(cd.computeParserOptions()...),
 		)
 
 		handle(c)
@@ -271,32 +445,32 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			dateTime := time.Now().Format("2006-01-02--15-04-05")
 			links := []layout.Link{
 				{
-					Href:  fmt.Sprintf("/download/%s/%s-%s.csv", commandPath, dateTime, name),
+					Href:  fmt.Sprintf("%s/download/%s/%s-%s.csv", path, commandPath, dateTime, name),
 					Text:  "Download CSV",
 					Class: "download",
 				},
 				{
-					Href:  fmt.Sprintf("/download/%s/%s-%s.json", commandPath, dateTime, name),
+					Href:  fmt.Sprintf("%s/download/%s/%s-%s.json", path, commandPath, dateTime, name),
 					Text:  "Download JSON",
 					Class: "download",
 				},
 				{
-					Href:  fmt.Sprintf("/download/%s/%s-%s.xlsx", commandPath, dateTime, name),
+					Href:  fmt.Sprintf("%s/download/%s/%s-%s.xlsx", path, commandPath, dateTime, name),
 					Text:  "Download Excel",
 					Class: "download",
 				},
 				{
-					Href:  fmt.Sprintf("/download/%s/%s-%s.md", commandPath, dateTime, name),
+					Href:  fmt.Sprintf("%s/download/%s/%s-%s.md", path, commandPath, dateTime, name),
 					Text:  "Download Markdown",
 					Class: "download",
 				},
 				{
-					Href:  fmt.Sprintf("/download/%s/%s-%s.html", commandPath, dateTime, name),
+					Href:  fmt.Sprintf("%s/download/%s/%s-%s.html", path, commandPath, dateTime, name),
 					Text:  "Download HTML",
 					Class: "download",
 				},
 				{
-					Href:  fmt.Sprintf("/download/%s/%s-%s.txt", commandPath, dateTime, name),
+					Href:  fmt.Sprintf("%s/download/%s/%s-%s.txt", path, commandPath, dateTime, name),
 					Text:  "Download Text",
 					Class: "download",
 				},
@@ -311,26 +485,14 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 				cd.TemplateName,
 				datatables.WithLinks(links...),
 				datatables.WithJSRendering(),
+				datatables.WithAdditionalData(cd.AdditionalData),
+				datatables.WithBasePath(path),
 			)
-
-			// TODO(manuel, 2023-05-25) We can't currently override defaults, since they are parsed up front.
-			// For that we would need https://github.com/go-go-golems/glazed/issues/239
-			// So for now, we only deal with overrides.
-
-			parserOptions := []glazed.ParserOption{}
-
-			if cd.Overrides != nil {
-				for slug, layer := range cd.Overrides.Layers {
-					parserOptions = append(parserOptions, glazed.WithAppendOverrideLayer(slug, layer))
-				}
-			}
 
 			handle := server.HandleSimpleQueryCommand(
 				sqlCommand,
-				glazed.WithCreateProcessor(
-					dataTablesProcessorFunc,
-				),
-				glazed.WithParserOptions(parserOptions...),
+				glazed.WithCreateProcessor(dataTablesProcessorFunc),
+				glazed.WithParserOptions(cd.computeParserOptions()...),
 			)
 
 			handle(c)
@@ -352,7 +514,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		commandPath := strings.TrimPrefix(path[:index], "/")
 		sqlCommand, ok := getRepositoryCommand(c, cd.Repository, commandPath)
 		if !ok {
-			c.JSON(404, gin.H{"error": "command not found"})
+			// JSON output and error code already handled by getRepositoryCommand
 			return
 		}
 
@@ -362,7 +524,9 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			c.JSON(500, gin.H{"error": "could not create temporary file"})
 			return
 		}
-		defer os.Remove(tmpFile.Name())
+		defer func(name string) {
+			_ = os.Remove(name)
+		}(tmpFile.Name())
 
 		// now check file suffix for content-type
 		glazedOverrides := map[string]interface{}{
@@ -394,16 +558,10 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			return
 		}
 
-		parserOptions := []glazed.ParserOption{}
-
-		if cd.Overrides != nil {
-			for slug, layer := range cd.Overrides.Layers {
-				parserOptions = append(parserOptions, glazed.WithAppendOverrideLayer(slug, layer))
-			}
-		}
+		parserOptions := cd.computeParserOptions()
 
 		// override parameter layers at the end
-		parserOptions = append(parserOptions, glazed.WithAppendOverrideLayer("glazed", glazedOverrides))
+		parserOptions = append(parserOptions, parser.WithAppendOverrides("glazed", glazedOverrides))
 
 		handle := server.HandleSimpleQueryOutputFileCommand(
 			sqlCommand,
@@ -426,7 +584,6 @@ func getRepositoryCommand(c *gin.Context, r *repositories.Repository, commandPat
 	path := strings.Split(commandPath, "/")
 	commands := r.Root.CollectCommands(path, false)
 	if len(commands) == 0 {
-		c.JSON(404, gin.H{"error": "command not found"})
 		return nil, false
 	}
 

@@ -75,58 +75,130 @@ func expandPath(path string) string {
 	return path
 }
 
+// TemplateLookupConfig is used to configured a directory based template lookup.
+type TemplateLookupConfig struct {
+	// Directories is a list of directories that will be searched for templates.
+	Directories []string `yaml:"directories,omitempty"`
+	// Patterns is a list of glob patterns that will be used to match files in the directories.
+	// If the list is empty, the default of **/*.tmpl.md and **/*.tmpl.html will be used
+	Patterns []string `yaml:"patterns,omitempty"`
+}
+
 // TODO(manuel, 2023-06-20) We should probably allow for environment values to be passed as data as well
 
 type CommandDir struct {
 	Repositories               []string `yaml:"repositories"`
-	IncludeDefaultRepositories bool     `yaml:"includeDefaultRepositories"`
+	IncludeDefaultRepositories *bool    `yaml:"includeDefaultRepositories"`
 
-	// TODO(manuel, 2023-06-21) Unify support to override the default renderer for individual routes
-	// See https://github.com/go-go-golems/parka/issues/55
-	// We should probably make it possible to pass multiple template directories for the renderer options
-	// so that we can bundle the embedded templates and override them with external ones, as well
-	// as merge together multiple datatables renderers.
-	TemplateDirectory string `yaml:"templateDirectory,omitempty"`
+	TemplateLookup *TemplateLookupConfig `yaml:"templateLookup,omitempty"`
+
 	TemplateName      string `yaml:"templateName,omitempty"`
 	IndexTemplateName string `yaml:"indexTemplateName,omitempty"`
 
-	AdditionalData map[string]string `yaml:"additionalData,omitempty"`
-	Defaults       *LayerParams      `yaml:"defaults,omitempty"`
-	Overrides      *LayerParams      `yaml:"overrides,omitempty"`
+	AdditionalData map[string]interface{} `yaml:"additionalData,omitempty"`
+	Defaults       *LayerParams           `yaml:"defaults,omitempty"`
+	Overrides      *LayerParams           `yaml:"overrides,omitempty"`
 }
 
-func (c *CommandDir) ExpandPaths() error {
-	c.TemplateDirectory = expandPath(c.TemplateDirectory)
-	repositories := []string{}
+func expandPaths(paths []string) ([]string, error) {
+	expandedPaths := []string{}
+	for _, path := range paths {
+		path_, err := evaluateEnv(path)
+		if err != nil {
+			return nil, err
+		}
+		path = expandPath(path_.(string))
 
-	for _, repository := range c.Repositories {
-		repository = expandPath(repository)
-
-		// skip if path doesn't exist
-		if _, err := os.Stat(repository); os.IsNotExist(err) {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
 			continue
 		}
 
-		repositories = append(repositories, repository)
+		expandedPaths = append(expandedPaths, expandPath(path))
 	}
 
-	if len(repositories) == 0 {
-		return errors.Errorf("no repositories found: %s", strings.Join(c.Repositories, ", "))
+	return expandedPaths, nil
+}
+
+func (c *CommandDir) ExpandPaths() error {
+	var err error
+
+	if c.TemplateLookup != nil {
+		c.TemplateLookup.Directories, err = expandPaths(c.TemplateLookup.Directories)
+		if err != nil {
+			return err
+		}
+	}
+
+	if c.IncludeDefaultRepositories == nil {
+		c.IncludeDefaultRepositories = boolPtr(true)
+	}
+
+	repositories, err := expandPaths(c.Repositories)
+	if err != nil {
+		return err
+	}
+
+	if len(repositories) == 0 && !*c.IncludeDefaultRepositories {
+		return errors.Errorf("no repositories found: %s", strings.Join(repositories, ", "))
 	}
 	c.Repositories = repositories
+
+	evaluatedData, err := evaluateEnv(c.AdditionalData)
+	if err != nil {
+		return err
+	}
+	c.AdditionalData = evaluatedData.(map[string]interface{})
+
+	if c.Defaults != nil {
+		evaluatedDefaults, err := evaluateLayerParams(c.Defaults)
+		if err != nil {
+			return err
+		}
+		c.Defaults = evaluatedDefaults
+	}
+	if c.Overrides != nil {
+		evaluatedOverrides, err := evaluateLayerParams(c.Overrides)
+		if err != nil {
+			return err
+		}
+		c.Overrides = evaluatedOverrides
+	}
+
 	return nil
 }
 
 type Command struct {
-	File           string            `yaml:"file"`
-	TemplateName   string            `yaml:"templateName"`
-	AdditionalData map[string]string `yaml:"additionalData,omitempty"`
-	Defaults       *LayerParams      `yaml:"defaults,omitempty"`
-	Overrides      *LayerParams      `yaml:"overrides,omitempty"`
+	File         string `yaml:"file"`
+	TemplateName string `yaml:"templateName"`
+
+	AdditionalData map[string]interface{} `yaml:"additionalData,omitempty"`
+	Defaults       *LayerParams           `yaml:"defaults,omitempty"`
+	Overrides      *LayerParams           `yaml:"overrides,omitempty"`
 }
 
 func (c *Command) ExpandPaths() error {
 	c.File = expandPath(c.File)
+
+	evaluatedData, err := evaluateEnv(c.AdditionalData)
+	if err != nil {
+		return err
+	}
+	c.AdditionalData = evaluatedData.(map[string]interface{})
+
+	if c.Defaults != nil {
+		evaluatedDefaults, err := evaluateLayerParams(c.Defaults)
+		if err != nil {
+			return err
+		}
+		c.Defaults = evaluatedDefaults
+	}
+	if c.Overrides != nil {
+		evaluatedOverrides, err := evaluateLayerParams(c.Overrides)
+		if err != nil {
+			return err
+		}
+		c.Overrides = evaluatedOverrides
+	}
 	return nil
 }
 
@@ -159,19 +231,32 @@ type TemplateDir struct {
 
 func (t *TemplateDir) ExpandPaths() error {
 	t.LocalDirectory = expandPath(t.LocalDirectory)
+
+	evaluatedData, err := evaluateEnv(t.AdditionalData)
+	if err != nil {
+		return err
+	}
+	t.AdditionalData = evaluatedData.(map[string]interface{})
+
 	return nil
 }
 
 type Template struct {
 	// every request will be rendered from the template file, using the default renderer in the case of markdown
 	// content.
-	TemplateFile string `yaml:"templateFile"`
-	// TODO(manuel, 2023-06-20) Add the option to pass in data to the template
+	TemplateFile   string                 `yaml:"templateFile"`
 	AdditionalData map[string]interface{} `yaml:"additionalData,omitempty"`
 }
 
 func (t *Template) ExpandPaths() error {
 	t.TemplateFile = expandPath(t.TemplateFile)
+
+	evaluatedData, err := evaluateEnv(t.AdditionalData)
+	if err != nil {
+		return err
+	}
+	t.AdditionalData = evaluatedData.(map[string]interface{})
+
 	return nil
 }
 

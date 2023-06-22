@@ -1,0 +1,7 @@
+- name: test
+  type: string
+  short: Test flag
+- name: testDefault
+  type: string
+  short: Test flag with default
+  default: default

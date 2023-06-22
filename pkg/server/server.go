@@ -92,6 +92,21 @@ func WithDefaultRenderer(r *render.Renderer) ServerOption {
 	}
 }
 
+func GetDefaultParkaTemplateLookup() (render.TemplateLookup, error) {
+	// this should be overloaded too
+	parkaLookup := render.NewLookupTemplateFromFS(
+		render.WithFS(templateFS),
+		render.WithBaseDir("web/src/templates"),
+		render.WithPatterns("**/*.tmpl.*"),
+	)
+	err := parkaLookup.Reload()
+	if err != nil {
+		return nil, err
+	}
+
+	return parkaLookup, nil
+}
+
 // GetDefaultParkaRendererOptions will return the default options for the parka renderer.
 // This includes looking up templates from the embedded templateFS to provide support for
 // markdown rendering with tailwind. This includes css files.
@@ -209,7 +224,7 @@ func (s *Server) HandleSimpleQueryCommand(
 ) gin.HandlerFunc {
 	opts := glazed.NewHandleOptions(options)
 	opts.Handlers = append(opts.Handlers,
-		glazed.NewCommandHandlerFunc(cmd,
+		glazed.NewParserCommandHandlerFunc(cmd,
 			glazed.NewCommandQueryParser(cmd, opts.ParserOptions...)),
 	)
 	return glazed.GinHandleGlazedCommand(cmd, opts)
@@ -223,7 +238,7 @@ func (s *Server) HandleSimpleQueryOutputFileCommand(
 ) gin.HandlerFunc {
 	opts := glazed.NewHandleOptions(options)
 	opts.Handlers = append(opts.Handlers,
-		glazed.NewCommandHandlerFunc(cmd, glazed.NewCommandQueryParser(cmd, opts.ParserOptions...)),
+		glazed.NewParserCommandHandlerFunc(cmd, glazed.NewCommandQueryParser(cmd, opts.ParserOptions...)),
 	)
 	return glazed.GinHandleGlazedCommandWithOutputFile(cmd, outputFile, fileName, opts)
 }
@@ -239,7 +254,7 @@ func (s *Server) HandleSimpleFormCommand(
 		option(opts)
 	}
 	opts.Handlers = append(opts.Handlers,
-		glazed.NewCommandHandlerFunc(cmd, glazed.NewCommandFormParser(cmd, opts.ParserOptions...)),
+		glazed.NewParserCommandHandlerFunc(cmd, glazed.NewCommandFormParser(cmd, opts.ParserOptions...)),
 	)
 	return glazed.GinHandleGlazedCommand(cmd, opts)
 }

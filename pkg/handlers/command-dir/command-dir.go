@@ -390,17 +390,6 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 				datatables.WithJSRendering(),
 			)
 
-			// TODO(manuel, 2023-05-25) We can't currently override defaults, since they are parsed up front.
-			// For that we would need https://github.com/go-go-golems/glazed/issues/239
-			// So for now, we only deal with overrides.
-			//
-			// ANSWER(manuel, 2023-06-22) Defaults should actually work by prepending them to the parsers,
-			// so that they fill the initial value. Not fully sure yet, let's give it a try actually.
-			//
-			// ANSWER(manuel, 2023-06-22) I had to modify the QUeryParseStep and FormParseStep to actually
-			// use the default value from the ParameterDefinition only if the value hadn't been set yet,
-			// which makes sense.
-
 			parserOptions := []parser.ParserOption{}
 
 			// TODO(manuel, 2023-06-21) This needs to be handled for each backend, not just the HTML one

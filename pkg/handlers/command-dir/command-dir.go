@@ -396,6 +396,10 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			//
 			// ANSWER(manuel, 2023-06-22) Defaults should actually work by prepending them to the parsers,
 			// so that they fill the initial value. Not fully sure yet, let's give it a try actually.
+			//
+			// ANSWER(manuel, 2023-06-22) I had to modify the QUeryParseStep and FormParseStep to actually
+			// use the default value from the ParameterDefinition only if the value hadn't been set yet,
+			// which makes sense.
 
 			parserOptions := []parser.ParserOption{}
 

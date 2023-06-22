@@ -88,15 +88,7 @@ type TemplateLookupConfig struct {
 
 type CommandDir struct {
 	Repositories               []string `yaml:"repositories"`
-	IncludeDefaultRepositories bool     `yaml:"includeDefaultRepositories"`
-
-	// TODO(manuel, 2023-06-21) Unify support to override the default renderer for individual routes
-	// See https://github.com/go-go-golems/parka/issues/55
-	//
-	// We should probably make it possible to pass multiple template directories for the renderer options
-	// so that we can bundle the embedded templates and override them with external ones, as well
-	// as merge together multiple datatables renderers.
-	TemplateDirectory string `yaml:"templateDirectory,omitempty"`
+	IncludeDefaultRepositories *bool    `yaml:"includeDefaultRepositories"`
 
 	TemplateLookup *TemplateLookupConfig `yaml:"templateLookup,omitempty"`
 
@@ -108,23 +100,46 @@ type CommandDir struct {
 	Overrides      *LayerParams           `yaml:"overrides,omitempty"`
 }
 
-func (c *CommandDir) ExpandPaths() error {
-	c.TemplateDirectory = expandPath(c.TemplateDirectory)
-	repositories := []string{}
+func expandPaths(paths []string) ([]string, error) {
+	expandedPaths := []string{}
+	for _, path := range paths {
+		path_, err := evaluateEnv(path)
+		if err != nil {
+			return nil, err
+		}
+		path = expandPath(path_.(string))
 
-	for _, repository := range c.Repositories {
-		repository = expandPath(repository)
-
-		// skip if path doesn't exist
-		if _, err := os.Stat(repository); os.IsNotExist(err) {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
 			continue
 		}
 
-		repositories = append(repositories, repository)
+		expandedPaths = append(expandedPaths, expandPath(path))
 	}
 
-	if len(repositories) == 0 {
-		return errors.Errorf("no repositories found: %s", strings.Join(c.Repositories, ", "))
+	return expandedPaths, nil
+}
+
+func (c *CommandDir) ExpandPaths() error {
+	var err error
+
+	if c.TemplateLookup != nil {
+		c.TemplateLookup.Directories, err = expandPaths(c.TemplateLookup.Directories)
+		if err != nil {
+			return err
+		}
+	}
+
+	if c.IncludeDefaultRepositories == nil {
+		c.IncludeDefaultRepositories = boolPtr(true)
+	}
+
+	repositories, err := expandPaths(c.Repositories)
+	if err != nil {
+		return err
+	}
+
+	if len(repositories) == 0 && !*c.IncludeDefaultRepositories {
+		return errors.Errorf("no repositories found: %s", strings.Join(repositories, ", "))
 	}
 	c.Repositories = repositories
 

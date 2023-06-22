@@ -203,40 +203,19 @@ func (cfh *ConfigFileHandler) Serve(server_ *server.Server) error {
 
 			// TODO(manuel, 2023-06-22) It would be nicer to do that in the constructor for the handler itself
 			repositories := []string{}
-			if cd.IncludeDefaultRepositories {
+			if *cd.IncludeDefaultRepositories {
 				repositories = viper.GetStringSlice("repositories")
 			}
 			repositories = append(repositories, cd.Repositories...)
 			// remove duplicates
 			repositories = strings.UniqueStrings(repositories)
 
-			r, err := cfh.RepositoryFactory(cd.Repositories)
+			r, err := cfh.RepositoryFactory(repositories)
 			if err != nil {
 				return err
 			}
 			directoryOptions := []command_dir.CommandDirHandlerOption{
 				command_dir.WithRepository(r),
-			}
-
-			// TODO(manuel, 2023-06-21) We should have a unified way of configuring the renderers for each route
-			// See https://github.com/go-go-golems/parka/issues/55
-			if cd.TemplateDirectory != "" {
-				// but here when not loading from a config file, we already set the template lookup externally...
-				templateLookup := render.NewLookupTemplateFromFS(
-					render.WithFS(os.DirFS(cd.TemplateDirectory)),
-					render.WithBaseDir(""),
-					render.WithPatterns(
-						"**/*.tmpl.md",
-						"**/*.tmpl.html",
-					),
-					render.WithAlwaysReload(cfh.DevMode),
-				)
-				err = templateLookup.Reload()
-				if err != nil {
-					return err
-				}
-
-				directoryOptions = append(directoryOptions, command_dir.WithTemplateLookup(templateLookup))
 			}
 
 			// Because the external options are passed in last, they will overwrite whatever

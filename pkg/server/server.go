@@ -92,6 +92,21 @@ func WithDefaultRenderer(r *render.Renderer) ServerOption {
 	}
 }
 
+func GetDefaultParkaTemplateLookup() (render.TemplateLookup, error) {
+	// this should be overloaded too
+	parkaLookup := render.NewLookupTemplateFromFS(
+		render.WithFS(templateFS),
+		render.WithBaseDir("web/src/templates"),
+		render.WithPatterns("**/*.tmpl.*"),
+	)
+	err := parkaLookup.Reload()
+	if err != nil {
+		return nil, err
+	}
+
+	return parkaLookup, nil
+}
+
 // GetDefaultParkaRendererOptions will return the default options for the parka renderer.
 // This includes looking up templates from the embedded templateFS to provide support for
 // markdown rendering with tailwind. This includes css files.

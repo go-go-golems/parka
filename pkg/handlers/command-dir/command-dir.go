@@ -13,6 +13,7 @@ import (
 	"github.com/go-go-golems/parka/pkg/render/datatables"
 	"github.com/go-go-golems/parka/pkg/render/layout"
 	parka "github.com/go-go-golems/parka/pkg/server"
+	"github.com/pkg/errors"
 	"os"
 	"strings"
 	"time"
@@ -331,6 +332,35 @@ func NewCommandDirHandlerFromConfig(
 		option(cd)
 	}
 
+	// we run this after the options in order to get the DevMode value
+
+	if cd.TemplateLookup == nil {
+		if config.TemplateLookup != nil {
+			patterns := config.TemplateLookup.Patterns
+			if len(patterns) == 0 {
+				patterns = []string{"**/*.tmpl.md", "**/*.tmpl.html"}
+			}
+			// we currently only support a single directory
+			if len(config.TemplateLookup.Directories) != 1 {
+				return nil, errors.New("template lookup directories must be exactly one")
+			}
+			cd.TemplateLookup = render.NewLookupTemplateFromFS(
+				render.WithFS(os.DirFS(config.TemplateLookup.Directories[0])),
+				render.WithBaseDir(""),
+				render.WithPatterns(patterns...),
+				render.WithAlwaysReload(cd.DevMode),
+			)
+		} else {
+			cd.TemplateLookup = datatables.NewDataTablesLookupTemplate()
+		}
+
+	}
+
+	err := cd.TemplateLookup.Reload()
+	if err != nil {
+		return nil, err
+	}
+
 	return cd, nil
 }
 
@@ -497,7 +527,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		commandPath := strings.TrimPrefix(path[:index], "/")
 		sqlCommand, ok := getRepositoryCommand(c, cd.Repository, commandPath)
 		if !ok {
-			c.JSON(404, gin.H{"error": "command not found"})
+			// JSON output and error code already handled by getRepositoryCommand
 			return
 		}
 
@@ -567,7 +597,6 @@ func getRepositoryCommand(c *gin.Context, r *repositories.Repository, commandPat
 	path := strings.Split(commandPath, "/")
 	commands := r.Root.CollectCommands(path, false)
 	if len(commands) == 0 {
-		c.JSON(404, gin.H{"error": "command not found"})
 		return nil, false
 	}
 

@@ -33,7 +33,7 @@ func TestEmptyQueryOnlyDefined(t *testing.T) {
 	ps := NewQueryParseStep(true)
 
 	parameterDefinitions, _ := parameters.LoadParameterDefinitionsFromYAML(queryYAML)
-	state := &ParseState{
+	state := &LayerParseState{
 		// can we parse that from yaml
 		ParameterDefinitions: parameterDefinitions,
 		Defaults:             map[string]string{},
@@ -52,7 +52,7 @@ func TestEmptyQuery(t *testing.T) {
 	ps := NewQueryParseStep(false)
 
 	parameterDefinitions, _ := parameters.LoadParameterDefinitionsFromYAML(queryYAML)
-	state := &ParseState{
+	state := &LayerParseState{
 		// can we parse that from yaml
 		ParameterDefinitions: parameterDefinitions,
 		Defaults:             map[string]string{},

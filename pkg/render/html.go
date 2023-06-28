@@ -6,6 +6,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/formatters/table"
 	"github.com/go-go-golems/glazed/pkg/processor"
 	"github.com/go-go-golems/glazed/pkg/settings"
+	"github.com/go-go-golems/glazed/pkg/types"
 	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/render/layout"
 	"html/template"
@@ -71,14 +72,13 @@ func NewHTMLTemplateOutputFormatter(
 	return ret
 }
 
-func (H *HTMLTemplateOutputFormatter) Output(ctx context.Context, w io.Writer) error {
+func (H *HTMLTemplateOutputFormatter) Output(ctx context.Context, table *types.Table, w io.Writer) error {
 	data := map[string]interface{}{}
 	for k, v := range H.Data {
 
 		data[k] = v
 	}
-	data["Columns"] = H.OutputFormatter.Table.Columns
-	data["Table"] = H.OutputFormatter.Table
+	data["Columns"] = table.Columns
 
 	err := H.Template.Execute(w, data)
 

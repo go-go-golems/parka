@@ -228,7 +228,7 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 	if opts.Writer != nil {
 		writer = opts.Writer
 	}
-	err = of.Output(c, writer)
+	err = of.Output(c, gp.Processor().GetTable(), writer)
 	if err != nil {
 		return err
 	}

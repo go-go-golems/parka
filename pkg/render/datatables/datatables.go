@@ -10,6 +10,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/formatters/table"
 	"github.com/go-go-golems/glazed/pkg/processor"
 	"github.com/go-go-golems/glazed/pkg/settings"
+	"github.com/go-go-golems/glazed/pkg/types"
 	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/render/layout"
@@ -179,21 +180,21 @@ func (d *DataTablesOutputFormatter) ContentType() string {
 	return "text/html; charset=utf-8"
 }
 
-func (d *DataTablesOutputFormatter) Output(ctx context.Context, w io.Writer) error {
+func (d *DataTablesOutputFormatter) Output(ctx context.Context, table *types.Table, w io.Writer) error {
 	dt := d.dataTablesData
 	if dt.JSRendering {
-		jsonOutputFormatter := json.NewOutputFormatter(json.WithTable(d.OutputFormatter.Table))
-		dt.JSStream = formatters.StartFormatIntoChannel[template.JS](ctx, jsonOutputFormatter)
+		jsonOutputFormatter := json.NewOutputFormatter()
+		dt.JSStream = formatters.StartFormatIntoChannel[template.JS](ctx, table, jsonOutputFormatter)
 	} else {
-		dt.HTMLStream = formatters.StartFormatIntoChannel[template.HTML](ctx, d.OutputFormatter)
+		dt.HTMLStream = formatters.StartFormatIntoChannel[template.HTML](ctx, table, d.OutputFormatter)
 	}
 
 	// TODO(manuel, 2023-06-20) We need to properly pass the columns here, which can't be set upstream
 	// since we already pass in the JSStream here and we keep it, I think we are better off cloning the
 	// DataTables struct, or even separating it out to make d.dataTablesData immutable and just contain the
 	// toplevel config.
-	if d.OutputFormatter.Table != nil {
-		dt.Columns = d.OutputFormatter.Table.Columns
+	if table != nil {
+		dt.Columns = table.Columns
 	}
 
 	err := d.HTMLTemplateOutputFormatter.Template.Execute(w, dt)

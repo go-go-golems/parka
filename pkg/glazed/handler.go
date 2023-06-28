@@ -20,7 +20,7 @@ import (
 // data provided in CommandContext. For example, the user might want to request a specific response
 // format through a query argument or through a header.
 type CreateProcessorFunc func(c *gin.Context, pc *CommandContext) (
-	processor.Processor,
+	processor.TableProcessor,
 	error,
 )
 
@@ -42,7 +42,7 @@ type HandleOptions struct {
 	// I'm not entirely sure if this all makes sense.
 	Handlers []CommandHandlerFunc
 
-	// CreateProcessor takes a gin.Context and a CommandContext and returns a processor.Processor (and a content-type)
+	// CreateProcessor takes a gin.Context and a CommandContext and returns a processor.TableProcessor (and a content-type)
 	CreateProcessor CreateProcessorFunc
 
 	// This is the actual gin output writer
@@ -99,7 +99,7 @@ func WithCreateProcessor(createProcessor CreateProcessorFunc) HandleOption {
 }
 
 func CreateJSONProcessor(_ *gin.Context, pc *CommandContext) (
-	processor.Processor,
+	processor.TableProcessor,
 	error,
 ) {
 	l, ok := pc.ParsedLayers["glazed"]
@@ -198,7 +198,7 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 		}
 	}
 
-	var gp processor.Processor
+	var gp processor.TableProcessor
 
 	var err error
 	if opts.CreateProcessor != nil {
@@ -228,7 +228,7 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 	if opts.Writer != nil {
 		writer = opts.Writer
 	}
-	err = of.Output(c, writer)
+	err = of.Output(c, gp.GetTable(), writer)
 	if err != nil {
 		return err
 	}
@@ -248,7 +248,10 @@ func SetupProcessor(pc *CommandContext, options ...processor.GlazeProcessorOptio
 	of := json.NewOutputFormatter(
 		json.WithOutputIndividualRows(true),
 	)
-	gp := processor.NewGlazeProcessor(of, options...)
+	gp, err := processor.NewGlazeProcessor(of, options...)
+	if err != nil {
+		return nil, err
+	}
 
 	return gp, nil
 }

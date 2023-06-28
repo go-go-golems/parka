@@ -7,6 +7,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/processor"
+	"github.com/go-go-golems/glazed/pkg/types"
 	"github.com/go-go-golems/parka/pkg/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,12 +27,12 @@ func (t *TestCommand) Run(
 	ctx context.Context,
 	parsedLayers map[string]*layers.ParsedParameterLayer,
 	ps map[string]interface{},
-	gp processor.Processor,
+	gp processor.TableProcessor,
 ) error {
-	err := gp.ProcessInputObject(ctx, map[string]interface{}{
-		"foo": 1,
-		"bar": "baz",
-	})
+	err := gp.AddRow(ctx, types.NewRow(
+		types.MRP("foo", 1),
+		types.MRP("bar", "baz"),
+	))
 
 	if err != nil {
 		return err
@@ -58,7 +59,9 @@ func TestRunGlazedCommand(t *testing.T) {
 	t.Run("test-simple-command", func(t *testing.T) {
 		resp, err := http.Get(server.URL + "/test")
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func(Body io.ReadCloser) {
+			_ = Body.Close()
+		}(resp.Body)
 
 		body, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)

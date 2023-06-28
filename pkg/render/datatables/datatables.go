@@ -214,7 +214,7 @@ func NewDataTablesCreateOutputProcessorFunc(
 	options ...DataTablesOutputFormatterOption,
 ) glazed.CreateProcessorFunc {
 	return func(c *gin.Context, pc *glazed.CommandContext) (
-		processor.Processor,
+		processor.TableProcessor,
 		error,
 	) {
 		// Lookup template on every request, not up front. That way, templates can be reloaded without recreating the gin
@@ -268,7 +268,10 @@ func NewDataTablesCreateOutputProcessorFunc(
 			options_...,
 		)
 
-		gp2 := processor.NewGlazeProcessor(of)
+		gp2, err := processor.NewGlazeProcessor(of)
+		if err != nil {
+			return nil, err
+		}
 
 		return gp2, nil
 	}

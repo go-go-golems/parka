@@ -7,6 +7,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/processor"
+	"github.com/go-go-golems/glazed/pkg/types"
 )
 
 type ExampleCommand struct {
@@ -108,35 +109,36 @@ func (e *ExampleCommand) Run(
 	ctx context.Context,
 	parsedLayers map[string]*layers.ParsedParameterLayer,
 	ps map[string]interface{},
-	gp processor.Processor,
+	gp processor.TableProcessor,
 ) error {
-	obj := map[string]interface{}{
-		"test":             ps["test"],
-		"string":           ps["string"],
-		"string_from_file": ps["string_from_file"],
-		"object_from_file": ps["object_from_file"],
-		"integer":          ps["integer"],
-		"float":            ps["float"],
-		"bool":             ps["bool"],
-		"date":             ps["date"],
-		"string_list":      ps["string_list"],
-		"integer_list":     ps["integer_list"],
-		"float_list":       ps["float_list"],
-		"choice":           ps["choice"],
-	}
-	err := gp.ProcessInputObject(ctx, obj)
+	obj := types.NewRow(
+		types.MRP("test", ps["test"]),
+		types.MRP("string", ps["string"]),
+		types.MRP("string_from_file", ps["string_from_file"]),
+		types.MRP("object_from_file", ps["object_from_file"]),
+		types.MRP("integer", ps["integer"]),
+
+		types.MRP("float", ps["float"]),
+		types.MRP("bool", ps["bool"]),
+		types.MRP("date", ps["date"]),
+		types.MRP("string_list", ps["string_list"]),
+		types.MRP("integer_list", ps["integer_list"]),
+		types.MRP("float_list", ps["float_list"]),
+		types.MRP("choice", ps["choice"]),
+	)
+	err := gp.AddRow(ctx, obj)
 	if err != nil {
 		return err
 	}
 
-	err = gp.ProcessInputObject(ctx, map[string]interface{}{
-		"test":  "test",
-		"test2": []int{123, 123, 123, 123},
-		"test3": map[string]interface{}{
+	err = gp.AddRow(ctx, types.NewRow(
+		types.MRP("test", "test"),
+		types.MRP("test2", []int{123, 123, 123, 123}),
+		types.MRP("test3", map[string]interface{}{
 			"test":  "test",
 			"test2": []int{123, 123, 123, 123},
-		},
-	})
+		}),
+	))
 	if err != nil {
 		return err
 	}

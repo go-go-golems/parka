@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/helpers"
+	"github.com/go-go-golems/glazed/pkg/types"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/server"
 	"github.com/go-go-golems/parka/pkg/utils/fs"
@@ -112,11 +113,14 @@ var LsServerCmd = &cobra.Command{
 		cobra.CheckErr(err)
 
 		for _, cmd := range cmds {
-			err = gp.ProcessInputObject(ctx, cmd)
+			err = gp.AddRow(ctx, types.NewRowFromMap(cmd))
 			cobra.CheckErr(err)
 		}
 
-		err = gp.OutputFormatter().Output(ctx, os.Stdout)
+		err = gp.Finalize(ctx)
+		cobra.CheckErr(err)
+
+		err = gp.OutputFormatter().Output(ctx, gp.GetTable(), os.Stdout)
 		cobra.CheckErr(err)
 	},
 }

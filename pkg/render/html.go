@@ -16,16 +16,16 @@ import (
 // NOTE(manuel, 2023-06-04): I don'Template think any of this is necessary.
 //
 // So it looks like the steps to output glazed data is to use a CreateProcessorFunc to create
-// a processor.Processor. Here we create a processor that uses a HTMLTemplateOutputFormatter (which
+// a processor.TableProcessor. Here we create a processor that uses a HTMLTemplateOutputFormatter (which
 // we are converting to a more specialized DataTableOutputFormatter), and then wrap all this through a
 // HTMLTableProcessor. But really the HTMLTableProcessor is just there to wrap the output formatter and
 // the template used. But the template used should be captured by the OutputFormatter in the first place.
 //
-// As such, we can use a generic Processor (why is there even a processor to be overloaded, if the definition of
-// processor.Processor is the following:
+// As such, we can use a generic TableProcessor (why is there even a processor to be overloaded, if the definition of
+// processor.TableProcessor is the following:
 //
-//type Processor interface {
-//	ProcessInputObject(ctx context.Context, obj map[string]interface{}) error
+//type TableProcessor interface {
+//	AddRow(ctx context.Context, obj map[string]interface{}) error
 //	OutputFormatter() formatters.OutputFormatter
 //}
 //
@@ -97,7 +97,7 @@ func NewHTMLTemplateLookupCreateProcessorFunc(
 	options ...HTMLTemplateOutputFormatterOption,
 ) glazed.CreateProcessorFunc {
 	return func(c *gin.Context, pc *glazed.CommandContext) (
-		processor.Processor,
+		processor.TableProcessor,
 		error,
 	) {
 		// Lookup template on every request, not up front. That way, templates can be reloaded without recreating the gin
@@ -153,7 +153,10 @@ func NewHTMLTemplateLookupCreateProcessorFunc(
 		options_ = append(options_, options...)
 
 		of := NewHTMLTemplateOutputFormatter(t, gp.OutputFormatter().(*table.OutputFormatter), options_...)
-		gp2 := processor.NewGlazeProcessor(of)
+		gp2, err := processor.NewGlazeProcessor(of)
+		if err != nil {
+			return nil, err
+		}
 
 		return gp2, nil
 	}

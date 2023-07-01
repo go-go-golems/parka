@@ -6,7 +6,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
-	"github.com/go-go-golems/glazed/pkg/processor"
+	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/types"
 )
 
@@ -109,7 +109,7 @@ func (e *ExampleCommand) Run(
 	ctx context.Context,
 	parsedLayers map[string]*layers.ParsedParameterLayer,
 	ps map[string]interface{},
-	gp processor.TableProcessor,
+	gp middlewares.Processor,
 ) error {
 	obj := types.NewRow(
 		types.MRP("test", ps["test"]),
@@ -149,6 +149,11 @@ func (e *ExampleCommand) Description() *cmds.CommandDescription {
 	return e.description
 }
 
-func (e *ExampleCommand) RunFromParka(c *gin.Context, parsedLayers map[string]*layers.ParsedParameterLayer, ps map[string]interface{}, gp *processor.GlazeProcessor) error {
+func (e *ExampleCommand) RunFromParka(
+	c *gin.Context,
+	parsedLayers map[string]*layers.ParsedParameterLayer,
+	ps map[string]interface{},
+	gp middlewares.Processor,
+) error {
 	return e.Run(c, parsedLayers, ps, gp)
 }

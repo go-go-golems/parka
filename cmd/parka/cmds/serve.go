@@ -117,10 +117,7 @@ var LsServerCmd = &cobra.Command{
 			cobra.CheckErr(err)
 		}
 
-		err = gp.Finalize(ctx)
-		cobra.CheckErr(err)
-
-		err = gp.OutputFormatter().Output(ctx, gp.GetTable(), os.Stdout)
+		err = gp.RunTableMiddlewares(ctx)
 		cobra.CheckErr(err)
 	},
 }

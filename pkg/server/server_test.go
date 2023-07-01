@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/processor"
+	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/types"
 	"github.com/go-go-golems/parka/pkg/server"
 	"github.com/stretchr/testify/assert"
@@ -27,7 +27,7 @@ func (t *TestCommand) Run(
 	ctx context.Context,
 	parsedLayers map[string]*layers.ParsedParameterLayer,
 	ps map[string]interface{},
-	gp processor.TableProcessor,
+	gp middlewares.Processor,
 ) error {
 	err := gp.AddRow(ctx, types.NewRow(
 		types.MRP("foo", 1),
@@ -75,5 +75,4 @@ func TestRunGlazedCommand(t *testing.T) {
 		assert.Equal(t, float64(1), v["foo"])
 		assert.Equal(t, "baz", v["bar"])
 	})
-
 }

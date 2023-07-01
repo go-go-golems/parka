@@ -480,13 +480,19 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			// See https://github.com/go-go-golems/sqleton/issues/162
 			_ = cd.IndexTemplateName
 
+			dt := &datatables.DataTables{
+				Command:        sqlCommand.Description(),
+				Links:          links,
+				BasePath:       path,
+				JSRendering:    true,
+				UseDataTables:  false,
+				AdditionalData: cd.AdditionalData,
+			}
+
 			dataTablesProcessorFunc := datatables.NewDataTablesCreateOutputProcessorFunc(
 				cd.TemplateLookup,
 				cd.TemplateName,
-				datatables.WithLinks(links...),
-				datatables.WithJSRendering(),
-				datatables.WithAdditionalData(cd.AdditionalData),
-				datatables.WithBasePath(path),
+				dt,
 			)
 
 			handle := server.HandleSimpleQueryCommand(

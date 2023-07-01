@@ -4,25 +4,26 @@ import (
 	"bytes"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/formatters"
 	"github.com/go-go-golems/glazed/pkg/formatters/json"
-	"github.com/go-go-golems/glazed/pkg/processor"
+	"github.com/go-go-golems/glazed/pkg/middlewares"
+	"github.com/go-go-golems/glazed/pkg/middlewares/table"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/parka/pkg/glazed/parser"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"net/http"
 	"os"
 )
 
-// CreateProcessorFunc is a simple func type to create a cmds.GlazeProcessor
-// and formatters.OutputFormatter out of a CommandContext.
-//
-// This is so that we can create a processor that is configured based on the input
-// data provided in CommandContext. For example, the user might want to request a specific response
-// format through a query argument or through a header.
-type CreateProcessorFunc func(c *gin.Context, pc *CommandContext) (
-	processor.TableProcessor,
-	error,
-)
+type GinOutputFormatter interface {
+	Output(w io.Writer) error
+	RegisterMiddlewares(p *middlewares.TableProcessor) error
+}
+
+type GinOutputFormatterFactory interface {
+	CreateOutputFormatter(c *gin.Context, pc *CommandContext) (GinOutputFormatter, error)
+}
 
 // HandleOptions groups all the settings for a gin handler that handles a glazed command.
 type HandleOptions struct {
@@ -43,7 +44,7 @@ type HandleOptions struct {
 	Handlers []CommandHandlerFunc
 
 	// CreateProcessor takes a gin.Context and a CommandContext and returns a processor.TableProcessor (and a content-type)
-	CreateProcessor CreateProcessorFunc
+	OutputFormatterFactory GinOutputFormatterFactory
 
 	// This is the actual gin output writer
 	Writer io.Writer
@@ -53,10 +54,10 @@ type HandleOption func(*HandleOptions)
 
 func (h *HandleOptions) Copy(options ...HandleOption) *HandleOptions {
 	ret := &HandleOptions{
-		ParserOptions:   h.ParserOptions,
-		Handlers:        h.Handlers,
-		CreateProcessor: h.CreateProcessor,
-		Writer:          h.Writer,
+		ParserOptions:          h.ParserOptions,
+		Handlers:               h.Handlers,
+		OutputFormatterFactory: h.OutputFormatterFactory,
+		Writer:                 h.Writer,
 	}
 
 	for _, option := range options {
@@ -92,26 +93,20 @@ func WithWriter(w io.Writer) HandleOption {
 	}
 }
 
-func WithCreateProcessor(createProcessor CreateProcessorFunc) HandleOption {
-	return func(o *HandleOptions) {
-		o.CreateProcessor = createProcessor
-	}
-}
-
 func CreateJSONProcessor(_ *gin.Context, pc *CommandContext) (
-	processor.TableProcessor,
+	*middlewares.TableProcessor,
 	error,
 ) {
 	l, ok := pc.ParsedLayers["glazed"]
 	l.Parameters["output"] = "json"
 
-	var gp *processor.GlazeProcessor
+	var gp *middlewares.TableProcessor
 	var err error
 
 	if ok {
-		gp, err = settings.SetupProcessor(l.Parameters)
+		gp, err = settings.SetupTableProcessor(l.Parameters)
 	} else {
-		gp, err = settings.SetupProcessor(map[string]interface{}{
+		gp, err = settings.SetupTableProcessor(map[string]interface{}{
 			"output": "json",
 		})
 	}
@@ -146,7 +141,7 @@ func GinHandleGlazedCommand(
 // running the GlazeCommand, and then returning the output file as an attachment.
 // This usually requires the caller to provide a temporary file path.
 //
-// TODO(manuel, 2023-06-22) Now that OutputFormatter renders directly into a io.Writer,
+// TODO(manuel, 2023-06-22) Now that TableOutputFormatter renders directly into a io.Writer,
 // I don't think we need all this anymore, we just need to set the relevant header.
 func GinHandleGlazedCommandWithOutputFile(
 	cmd cmds.GlazeCommand,
@@ -198,60 +193,83 @@ func runGlazeCommand(c *gin.Context, cmd cmds.GlazeCommand, opts *HandleOptions)
 		}
 	}
 
-	var gp processor.TableProcessor
-
+	var gp *middlewares.TableProcessor
 	var err error
-	if opts.CreateProcessor != nil {
-		// TODO(manuel, 2023-03-02) We might want to switch on the requested content type here too
-		// This would be done by passing in a handler that configures the glazed layer accordingly.
-		gp, err = opts.CreateProcessor(c, pc)
+
+	glazedLayer := pc.ParsedLayers["glazed"]
+
+	if glazedLayer != nil {
+		gp, err = settings.SetupTableProcessor(glazedLayer.Parameters)
+		if err != nil {
+			return err
+		}
 	} else {
-		gp, err = SetupProcessor(pc)
-	}
-	if err != nil {
-		return err
-	}
-
-	of := gp.OutputFormatter()
-	contentType := of.ContentType()
-
-	if opts.Writer == nil {
-		c.Writer.Header().Set("Content-Type", contentType)
-	}
-
-	err = cmd.Run(c, pc.ParsedLayers, pc.ParsedParameters, gp)
-	if err != nil {
-		return err
+		gp = middlewares.NewTableProcessor()
 	}
 
 	var writer io.Writer = c.Writer
 	if opts.Writer != nil {
 		writer = opts.Writer
 	}
-	err = of.Output(c, gp.GetTable(), writer)
+
+	if opts.OutputFormatterFactory != nil {
+		of, err := opts.OutputFormatterFactory.CreateOutputFormatter(c, pc)
+		if err != nil {
+			return err
+		}
+		// remove table middlewares to do streaming rows
+		gp.ReplaceTableMiddleware()
+
+		// create rowOutputChannelMiddleware here? But that's actually a responsibility of the OutputFormatterFactory.
+		// we need to create these before running the command, and we need to figure out a way to get the Columns.
+
+		err = of.RegisterMiddlewares(gp)
+		if err != nil {
+			return err
+		}
+
+		eg := &errgroup.Group{}
+		eg.Go(func() error {
+			return cmd.Run(c, pc.ParsedLayers, pc.ParsedParameters, gp)
+		})
+
+		eg.Go(func() error {
+			// we somehow need to pass the channels to the OutputFormatterFactory
+			return of.Output(writer)
+		})
+
+		// no cancellation on error?
+
+		return eg.Wait()
+	}
+
+	// here we run a normal full table render
+	var of formatters.TableOutputFormatter
+	if glazedLayer != nil {
+		of, err = settings.SetupTableOutputFormatter(glazedLayer.Parameters)
+		if err != nil {
+			return err
+		}
+	} else {
+		of = json.NewOutputFormatter(
+			json.WithOutputIndividualRows(true),
+		)
+	}
+	if opts.Writer == nil {
+		c.Writer.Header().Set("Content-Type", of.ContentType())
+	}
+
+	gp.AddTableMiddleware(table.NewOutputMiddleware(of, writer))
+
+	err = cmd.Run(c, pc.ParsedLayers, pc.ParsedParameters, gp)
 	if err != nil {
 		return err
 	}
 
-	return err
-}
-
-// SetupProcessor creates a new cmds.GlazeProcessor. It uses the parsed layer glazed if present, and return
-// a simple JsonOutputFormatter and standard glazed processor otherwise.
-func SetupProcessor(pc *CommandContext, options ...processor.GlazeProcessorOption) (*processor.GlazeProcessor, error) {
-	l, ok := pc.ParsedLayers["glazed"]
-	if ok {
-		gp, err := settings.SetupProcessor(l.Parameters)
-		return gp, err
-	}
-
-	of := json.NewOutputFormatter(
-		json.WithOutputIndividualRows(true),
-	)
-	gp, err := processor.NewGlazeProcessor(of, options...)
+	err = gp.RunTableMiddlewares(c)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return gp, nil
+	return nil
 }

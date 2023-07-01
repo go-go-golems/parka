@@ -1,15 +1,14 @@
 package datatables
 
 import (
-	"context"
 	"embed"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/formatters"
 	"github.com/go-go-golems/glazed/pkg/formatters/json"
-	"github.com/go-go-golems/glazed/pkg/formatters/table"
-	"github.com/go-go-golems/glazed/pkg/processor"
-	"github.com/go-go-golems/glazed/pkg/settings"
+	table_formatter "github.com/go-go-golems/glazed/pkg/formatters/table"
+	"github.com/go-go-golems/glazed/pkg/middlewares"
+	"github.com/go-go-golems/glazed/pkg/middlewares/row"
 	"github.com/go-go-golems/glazed/pkg/types"
 	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/render"
@@ -56,94 +55,6 @@ type DataTables struct {
 	AdditionalData map[string]interface{}
 }
 
-type DataTablesOutputFormatter struct {
-	*render.HTMLTemplateOutputFormatter
-	dataTablesData *DataTables
-}
-
-type DataTablesOutputFormatterOption func(*DataTablesOutputFormatter)
-
-func WithCommand(cmd *cmds.CommandDescription) DataTablesOutputFormatterOption {
-	return func(d *DataTablesOutputFormatter) {
-		d.dataTablesData.Command = cmd
-	}
-}
-
-func WithLongDescription(desc string) DataTablesOutputFormatterOption {
-	return func(d *DataTablesOutputFormatter) {
-		d.dataTablesData.LongDescription = desc
-	}
-}
-
-func WithReplaceAdditionalData(data map[string]interface{}) DataTablesOutputFormatterOption {
-	return func(d *DataTablesOutputFormatter) {
-		d.dataTablesData.AdditionalData = data
-	}
-}
-
-func WithAdditionalData(data map[string]interface{}) DataTablesOutputFormatterOption {
-	return func(d *DataTablesOutputFormatter) {
-		if d.dataTablesData.AdditionalData == nil {
-			d.dataTablesData.AdditionalData = data
-		} else {
-			for k, v := range data {
-				d.dataTablesData.AdditionalData[k] = v
-			}
-		}
-	}
-}
-
-// WithJSRendering enables JS rendering for the DataTables renderer.
-// This means that we will render the table into the toplevel element
-// `tableData` in javascript, and not call the parent output formatter
-func WithJSRendering() DataTablesOutputFormatterOption {
-	return func(d *DataTablesOutputFormatter) {
-		d.dataTablesData.JSRendering = true
-	}
-}
-
-func WithLayout(l *layout.Layout) DataTablesOutputFormatterOption {
-	return func(d *DataTablesOutputFormatter) {
-		d.dataTablesData.Layout = l
-	}
-}
-
-func WithLinks(links ...layout.Link) DataTablesOutputFormatterOption {
-	return func(d *DataTablesOutputFormatter) {
-		d.dataTablesData.Links = links
-	}
-}
-
-func WithBasePath(path string) DataTablesOutputFormatterOption {
-	return func(d *DataTablesOutputFormatter) {
-		d.dataTablesData.BasePath = path
-	}
-}
-
-func WithAppendLinks(links ...layout.Link) DataTablesOutputFormatterOption {
-	return func(d *DataTablesOutputFormatter) {
-		d.dataTablesData.Links = append(d.dataTablesData.Links, links...)
-	}
-}
-
-func WithPrependLinks(links ...layout.Link) DataTablesOutputFormatterOption {
-	return func(d *DataTablesOutputFormatter) {
-		d.dataTablesData.Links = append(links, d.dataTablesData.Links...)
-	}
-}
-
-func WithColumns(columns ...string) DataTablesOutputFormatterOption {
-	return func(d *DataTablesOutputFormatter) {
-		d.dataTablesData.Columns = columns
-	}
-}
-
-func WithUseDataTables() DataTablesOutputFormatterOption {
-	return func(d *DataTablesOutputFormatter) {
-		d.dataTablesData.UseDataTables = true
-	}
-}
-
 //go:embed templates/*
 var templateFS embed.FS
 
@@ -159,120 +70,113 @@ func NewDataTablesLookupTemplate() *render.LookupTemplateFromFS {
 	return l
 }
 
-func NewDataTablesOutputFormatter(
+func (dt *DataTables) Clone() *DataTables {
+	return &DataTables{
+		Command:         dt.Command,
+		LongDescription: dt.LongDescription,
+		Layout:          dt.Layout,
+		Links:           dt.Links,
+		BasePath:        dt.BasePath,
+		JSStream:        dt.JSStream,
+		HTMLStream:      dt.HTMLStream,
+		JSRendering:     dt.JSRendering,
+		Columns:         dt.Columns,
+		UseDataTables:   dt.UseDataTables,
+		AdditionalData:  dt.AdditionalData,
+	}
+}
+
+type OutputFormatter struct {
+	t  *template.Template
+	dt *DataTables
+	// rowC is the channel where the rows are sent to. They will need to get converted
+	// to template.JS or template.HTML before being sent to either
+	rowC chan string
+	// columnsC is the channel where the column names are sent to. Since the row.ColumnsChannelMiddleware
+	// instance that sends columns to this channel is running before the row firmware, we should be careful
+	// about not blocking. Potentially, this could be done by starting a goroutine in the middleware,
+	// since we have a context there, and there is no need to block the middleware processing.
+	columnsC chan []types.FieldName
+}
+
+func NewOutputFormatter(
 	t *template.Template,
-	of *table.OutputFormatter,
-	options ...DataTablesOutputFormatterOption,
-) *DataTablesOutputFormatter {
-	ret := &DataTablesOutputFormatter{
-		HTMLTemplateOutputFormatter: render.NewHTMLTemplateOutputFormatter(t, of),
-		dataTablesData:              &DataTables{},
-	}
+	dt *DataTables) *OutputFormatter {
 
-	for _, option := range options {
-		option(ret)
-	}
+	// make the NewOutputChannelMiddleware generic to send string/template.JS/template.HTML over the wire
+	rowC := make(chan string, 100)
 
-	return ret
+	// make a channel to receive column names
+	columnsC := make(chan []types.FieldName, 10)
+
+	// we need to make sure that we are closing the channel correctly. Should middlewares have a Close method?
+	// that actually sounds reasonable
+	return &OutputFormatter{
+		t:        t,
+		dt:       dt,
+		rowC:     rowC,
+		columnsC: columnsC,
+	}
 }
 
-func (d *DataTablesOutputFormatter) ContentType() string {
-	return "text/html; charset=utf-8"
+type OutputFormatterFactory struct {
+	TemplateName string
+	Lookup       render.TemplateLookup
+	DataTables   *DataTables
 }
 
-func (d *DataTablesOutputFormatter) Output(ctx context.Context, table *types.Table, w io.Writer) error {
-	dt := d.dataTablesData
-	if dt.JSRendering {
-		jsonOutputFormatter := json.NewOutputFormatter()
-		dt.JSStream = formatters.StartFormatIntoChannel[template.JS](ctx, table, jsonOutputFormatter)
-	} else {
-		dt.HTMLStream = formatters.StartFormatIntoChannel[template.HTML](ctx, table, d.OutputFormatter)
-	}
-
-	// TODO(manuel, 2023-06-20) We need to properly pass the columns here, which can't be set upstream
-	// since we already pass in the JSStream here and we keep it, I think we are better off cloning the
-	// DataTables struct, or even separating it out to make d.dataTablesData immutable and just contain the
-	// toplevel config.
-	if table != nil {
-		dt.Columns = table.Columns
-	}
-
-	err := d.HTMLTemplateOutputFormatter.Template.Execute(w, dt)
-
+func (dtoff *OutputFormatterFactory) CreateOutputFormatter(
+	c *gin.Context,
+	pc *glazed.CommandContext,
+) (*OutputFormatter, error) {
+	// Lookup template on every request, not up front. That way, templates can be reloaded without recreating the gin
+	// server.
+	t, err := dtoff.Lookup.Lookup(dtoff.TemplateName)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	layout_, err := layout.ComputeLayout(pc)
+	if err != nil {
+		return nil, err
+	}
+
+	description := pc.Cmd.Description()
+	dt_ := dtoff.DataTables.Clone()
+
+	longHTML, err := render.RenderMarkdownToHTML(description.Long)
+	if err != nil {
+		return nil, err
+	}
+
+	dt_.LongDescription = longHTML
+	dt_.Layout = layout_
+
+	return NewOutputFormatter(t, dtoff.DataTables), nil
+}
+
+func (dt *OutputFormatter) RegisterMiddlewares(
+	m *middlewares.TableProcessor,
+) error {
+	var of formatters.RowOutputFormatter
+	if dt.dt.JSRendering {
+		of = json.NewOutputFormatter()
+		dt.dt.JSStream = make(chan template.JS, 100)
+	} else {
+		of = table_formatter.NewOutputFormatter("html")
+		dt.dt.HTMLStream = make(chan template.HTML, 100)
+	}
+
+	// TODO add a "get columns" middleware that can be used to get the columns from the table
+	// over a single channel that we can wait on in the render call
+
+	m.AddRowMiddleware(row.NewOutputChannelMiddleware(of, dt.rowC))
 
 	return nil
 }
 
-// NewDataTablesCreateOutputProcessorFunc creates a glazed.CreateProcessorFunc based on a TemplateLookup
-// and a template name.
-func NewDataTablesCreateOutputProcessorFunc(
-	lookup render.TemplateLookup,
-	templateName string,
-	options ...DataTablesOutputFormatterOption,
-) glazed.CreateProcessorFunc {
-	return func(c *gin.Context, pc *glazed.CommandContext) (
-		processor.TableProcessor,
-		error,
-	) {
-		// Lookup template on every request, not up front. That way, templates can be reloaded without recreating the gin
-		// server.
-		t, err := lookup.Lookup(templateName)
-		if err != nil {
-			return nil, err
-		}
+func (dt *OutputFormatter) Output(c *gin.Context, pc *glazed.CommandContext, w io.Writer) error {
+	// clear all table middlewares because we are streaming using a row output middleware
 
-		l, ok := pc.ParsedLayers["glazed"]
-		var gp *processor.GlazeProcessor
-
-		if ok {
-			l.Parameters["output"] = "table"
-			l.Parameters["table-format"] = "html"
-
-			gp, err = settings.SetupProcessor(l.Parameters)
-		} else {
-			gp, err = settings.SetupProcessor(map[string]interface{}{
-				"output":       "table",
-				"table-format": "html",
-			})
-		}
-
-		if err != nil {
-			return nil, err
-		}
-
-		layout_, err := layout.ComputeLayout(pc)
-		if err != nil {
-			return nil, err
-		}
-
-		description := pc.Cmd.Description()
-
-		longHTML, err := render.RenderMarkdownToHTML(description.Long)
-		if err != nil {
-			return nil, err
-		}
-
-		options_ := []DataTablesOutputFormatterOption{
-			WithCommand(description),
-			WithLongDescription(longHTML),
-			WithLayout(layout_),
-		}
-		options_ = append(options_, options...)
-
-		of := NewDataTablesOutputFormatter(
-			t,
-			gp.OutputFormatter().(*table.OutputFormatter),
-			options_...,
-		)
-
-		gp2, err := processor.NewGlazeProcessor(of)
-		if err != nil {
-			return nil, err
-		}
-
-		return gp2, nil
-	}
+	return nil
 }

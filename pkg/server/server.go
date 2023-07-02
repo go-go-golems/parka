@@ -7,9 +7,11 @@ import (
 	"github.com/gin-gonic/contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/parka/pkg/glazed"
+	"github.com/go-go-golems/parka/pkg/glazed/handlers/json"
+	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"github.com/go-go-golems/parka/pkg/render"
 	utils_fs "github.com/go-go-golems/parka/pkg/utils/fs"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"io/fs"
 	"net/http"
@@ -218,43 +220,20 @@ func (s *Server) Run(ctx context.Context) error {
 	return eg.Wait()
 }
 
-func (s *Server) HandleSimpleQueryCommand(
+func (s *Server) HandleJSONQueryHandler(
 	cmd cmds.GlazeCommand,
-	options ...glazed.HandleOption,
+	parserOptions ...parser.ParserOption,
 ) gin.HandlerFunc {
-	opts := glazed.NewHandleOptions(options)
-	opts.Handlers = append(opts.Handlers,
-		glazed.NewParserCommandHandlerFunc(cmd,
-			glazed.NewCommandQueryParser(cmd, opts.ParserOptions...)),
+	handler := json.NewQueryHandler(cmd,
+		json.WithQueryHandlerParserOptions(parserOptions...),
 	)
-	return glazed.GinHandleGlazedCommand(cmd, opts)
-}
-
-func (s *Server) HandleSimpleQueryOutputFileCommand(
-	cmd cmds.GlazeCommand,
-	outputFile string,
-	fileName string,
-	options ...glazed.HandleOption,
-) gin.HandlerFunc {
-	opts := glazed.NewHandleOptions(options)
-	opts.Handlers = append(opts.Handlers,
-		glazed.NewParserCommandHandlerFunc(cmd, glazed.NewCommandQueryParser(cmd, opts.ParserOptions...)),
-	)
-	return glazed.GinHandleGlazedCommandWithOutputFile(cmd, outputFile, fileName, opts)
-}
-
-// TODO(manuel, 2023-02-28) We want to provide a handler to catch errors while parsing parameters
-
-func (s *Server) HandleSimpleFormCommand(
-	cmd cmds.GlazeCommand,
-	options ...glazed.HandleOption,
-) gin.HandlerFunc {
-	opts := &glazed.HandleOptions{}
-	for _, option := range options {
-		option(opts)
+	return func(c *gin.Context) {
+		err := handler.Handle(c, c.Writer)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to handle query")
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+		}
 	}
-	opts.Handlers = append(opts.Handlers,
-		glazed.NewParserCommandHandlerFunc(cmd, glazed.NewCommandFormParser(cmd, opts.ParserOptions...)),
-	)
-	return glazed.GinHandleGlazedCommand(cmd, opts)
 }

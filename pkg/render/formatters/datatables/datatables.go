@@ -1,6 +1,7 @@
 package datatables
 
 import (
+	"context"
 	"embed"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -13,6 +14,7 @@ import (
 	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/render/layout"
+	"golang.org/x/sync/errgroup"
 	"html/template"
 	"io"
 )
@@ -23,7 +25,7 @@ import (
 type DataTables struct {
 	Command *cmds.CommandDescription
 	// LongDescription is the HTML of the rendered markdown of the long description of the command.
-	LongDescription string
+	LongDescription template.HTML
 
 	Layout *layout.Layout
 	Links  []layout.Link
@@ -37,8 +39,8 @@ type DataTables struct {
 	//
 	// TODO(manuel, 2023-06-04): Maybe we could make this be an iterator of rows that provide access to the individual
 	// columns for more interesting HTML shenanigans too.
-	JSStream   <-chan template.JS
-	HTMLStream <-chan template.HTML
+	JSStream   chan template.JS
+	HTMLStream chan template.HTML
 	// Configuring the template to load the table data through javascript, and provide the data itself
 	// as a JSON array inlined in the HTML of the page.
 	JSRendering bool
@@ -119,6 +121,87 @@ func NewOutputFormatter(
 	}
 }
 
+func (of *OutputFormatter) Close(ctx context.Context) error {
+	close(of.rowC)
+	close(of.columnsC)
+	return nil
+}
+
+func (dt *OutputFormatter) RegisterMiddlewares(p *middlewares.TableProcessor, writer io.Writer) error {
+	var of formatters.RowOutputFormatter
+	if dt.dt.JSRendering {
+		of = json.NewOutputFormatter()
+		dt.dt.JSStream = make(chan template.JS, 100)
+	} else {
+		of = table_formatter.NewOutputFormatter("html")
+		dt.dt.HTMLStream = make(chan template.HTML, 100)
+	}
+
+	p.AddRowMiddleware(row.NewColumnsChannelMiddleware(dt.columnsC, true))
+	p.AddRowMiddleware(row.NewOutputChannelMiddleware(of, dt.rowC))
+
+	return nil
+}
+
+func (dt *OutputFormatter) Output(c *gin.Context, pc *glazed.CommandContext, w io.Writer) error {
+	// Here, we use the parsed layer to configure the glazed middlewares.
+	// We then use the created formatters.TableOutputFormatter as a basis for
+	// our own output formatter that renders into an HTML template.
+	var err error
+
+	layout_, err := layout.ComputeLayout(pc)
+	if err != nil {
+		return err
+	}
+
+	description := pc.Cmd.Description()
+
+	longHTML, err := render.RenderMarkdownToHTML(description.Long)
+	if err != nil {
+		return err
+	}
+
+	dt_ := dt.dt.Clone()
+	dt_.Layout = layout_
+	dt_.LongDescription = template.HTML(longHTML)
+	dt_.Command = description
+
+	// Wait for the column names to be sent to the channel. This will only
+	// take the first row into account.
+	columns := <-dt.columnsC
+	dt_.Columns = columns
+
+	// start copying from rowC to HTML or JS stream
+
+	eg, ctx2 := errgroup.WithContext(c)
+
+	eg.Go(func() error {
+		err := dt.t.Execute(w, dt_)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	eg.Go(func() error {
+		for {
+			select {
+			case <-ctx2.Done():
+				return ctx2.Err()
+			case row_ := <-dt.rowC:
+				if dt.dt.JSRendering {
+					dt.dt.JSStream <- template.JS(row_)
+				} else {
+					dt.dt.HTMLStream <- template.HTML(row_)
+				}
+			}
+		}
+	})
+
+	return eg.Wait()
+}
+
 type OutputFormatterFactory struct {
 	TemplateName string
 	Lookup       render.TemplateLookup
@@ -149,34 +232,21 @@ func (dtoff *OutputFormatterFactory) CreateOutputFormatter(
 		return nil, err
 	}
 
-	dt_.LongDescription = longHTML
+	dt_.LongDescription = template.HTML(longHTML)
+
 	dt_.Layout = layout_
 
 	return NewOutputFormatter(t, dtoff.DataTables), nil
 }
 
-func (dt *OutputFormatter) RegisterMiddlewares(
-	m *middlewares.TableProcessor,
-) error {
-	var of formatters.RowOutputFormatter
-	if dt.dt.JSRendering {
-		of = json.NewOutputFormatter()
-		dt.dt.JSStream = make(chan template.JS, 100)
-	} else {
-		of = table_formatter.NewOutputFormatter("html")
-		dt.dt.HTMLStream = make(chan template.HTML, 100)
+func NewOutputFormatterFactory(
+	lookup render.TemplateLookup,
+	templateName string,
+	dataTables *DataTables,
+) *OutputFormatterFactory {
+	return &OutputFormatterFactory{
+		TemplateName: templateName,
+		Lookup:       lookup,
+		DataTables:   dataTables,
 	}
-
-	// TODO add a "get columns" middleware that can be used to get the columns from the table
-	// over a single channel that we can wait on in the render call
-
-	m.AddRowMiddleware(row.NewOutputChannelMiddleware(of, dt.rowC))
-
-	return nil
-}
-
-func (dt *OutputFormatter) Output(c *gin.Context, pc *glazed.CommandContext, w io.Writer) error {
-	// clear all table middlewares because we are streaming using a row output middleware
-
-	return nil
 }

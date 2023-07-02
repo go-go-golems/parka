@@ -1,8 +1,9 @@
-package render
+package formatters
 
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/parka/pkg/glazed"
+	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/render/layout"
 	"html/template"
 	"io"
@@ -32,7 +33,7 @@ import (
 // a template to be added in the back in the front.
 type HTMLTemplateOutputFormatter struct {
 	TemplateName string
-	Lookup       TemplateLookup
+	Lookup       render.TemplateLookup
 	Data         map[string]interface{}
 }
 
@@ -50,7 +51,7 @@ func WithHTMLTemplateOutputFormatterData(data map[string]interface{}) HTMLTempla
 }
 
 func NewHTMLTemplateOutputFormatter(
-	lookup TemplateLookup,
+	lookup render.TemplateLookup,
 	templateName string,
 	options ...HTMLTemplateOutputFormatterOption,
 ) *HTMLTemplateOutputFormatter {
@@ -79,7 +80,7 @@ func (H *HTMLTemplateOutputFormatter) Output(c *gin.Context, pc *glazed.CommandC
 
 	description := pc.Cmd.Description()
 
-	longHTML, err := RenderMarkdownToHTML(description.Long)
+	longHTML, err := render.RenderMarkdownToHTML(description.Long)
 	if err != nil {
 		return err
 	}

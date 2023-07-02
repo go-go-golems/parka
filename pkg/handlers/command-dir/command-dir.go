@@ -6,11 +6,10 @@ import (
 	"github.com/go-go-golems/clay/pkg/repositories"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
-	"github.com/go-go-golems/parka/pkg/render/datatables"
+	"github.com/go-go-golems/parka/pkg/render/formatters/datatables"
 	"github.com/go-go-golems/parka/pkg/render/layout"
 	parka "github.com/go-go-golems/parka/pkg/server"
 	"github.com/pkg/errors"
@@ -413,7 +412,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 	path = strings.TrimSuffix(path, "/")
 
 	server.Router.GET(path+"/data/*path", func(c *gin.Context) {
-		commandPath := c.Param("CommandPath")
+		commandPath := c.Param("path")
 		commandPath = strings.TrimPrefix(commandPath, "/")
 		sqlCommand, ok := getRepositoryCommand(c, cd.Repository, commandPath)
 		if !ok {
@@ -421,9 +420,8 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			return
 		}
 
-		handle := server.HandleSimpleQueryCommand(sqlCommand,
-			glazed.WithCreateProcessor(glazed.CreateJSONProcessor),
-			glazed.WithParserOptions(cd.computeParserOptions()...),
+		handle := server.HandleJSONQueryHandler(sqlCommand,
+			cd.computeParserOptions()...,
 		)
 
 		handle(c)
@@ -489,19 +487,21 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 				AdditionalData: cd.AdditionalData,
 			}
 
-			dataTablesProcessorFunc := datatables.NewDataTablesCreateOutputProcessorFunc(
+			ofFactory := datatables.NewOutputFormatterFactory(
 				cd.TemplateLookup,
 				cd.TemplateName,
 				dt,
 			)
 
-			handle := server.HandleSimpleQueryCommand(
-				sqlCommand,
-				glazed.WithCreateProcessor(dataTablesProcessorFunc),
-				glazed.WithParserOptions(cd.computeParserOptions()...),
-			)
+			_ = ofFactory
 
-			handle(c)
+			//handle := server.HandleJSONQueryHandler(
+			//	sqlCommand,
+			//	glazed.WithOutputFormatterFactory(ofFactory),
+			//	glazed.WithParserOptions(cd.computeParserOptions()...),
+			//)
+			//
+			//handle(c)
 		})
 
 	server.Router.GET(path+"/download/*path", func(c *gin.Context) {
@@ -565,18 +565,18 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		}
 
 		parserOptions := cd.computeParserOptions()
-
 		// override parameter layers at the end
 		parserOptions = append(parserOptions, parser.WithAppendOverrides("glazed", glazedOverrides))
 
-		handle := server.HandleSimpleQueryOutputFileCommand(
-			sqlCommand,
-			tmpFile.Name(),
-			fileName,
-			glazed.WithParserOptions(parserOptions...),
-		)
-
-		handle(c)
+		_ = sqlCommand
+		//handle := server.HandleSimpleQueryOutputFileCommand(
+		//	sqlCommand,
+		//	tmpFile.Name(),
+		//	fileName,
+		//	glazed.WithParserOptions(parserOptions...),
+		//)
+		//
+		//handle(c)
 	})
 
 	return nil

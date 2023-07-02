@@ -223,7 +223,7 @@ func (s *Server) Run(ctx context.Context) error {
 	return eg.Wait()
 }
 
-func (s *Server) HandleJSONQueryHandler(
+func HandleJSONQueryHandler(
 	cmd cmds.GlazeCommand,
 	parserOptions ...parser.ParserOption,
 ) gin.HandlerFunc {
@@ -241,7 +241,7 @@ func (s *Server) HandleJSONQueryHandler(
 	}
 }
 
-func (s *Server) HandleDataTables(
+func HandleDataTables(
 	cmd cmds.GlazeCommand,
 	path string,
 	commandPath string,

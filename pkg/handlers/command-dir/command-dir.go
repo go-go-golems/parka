@@ -418,7 +418,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			return
 		}
 
-		server.HandleJSONQueryHandler(sqlCommand)
+		parka.HandleJSONQueryHandler(sqlCommand)
 	})
 
 	server.Router.GET(path+"/sqleton/*path",
@@ -440,7 +440,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 				datatables.WithAdditionalData(cd.AdditionalData),
 			}
 
-			server.HandleDataTables(sqlCommand, path, commandPath, options...)
+			parka.HandleDataTables(sqlCommand, path, commandPath, options...)
 		})
 
 	server.Router.GET(path+"/download/*path", func(c *gin.Context) {

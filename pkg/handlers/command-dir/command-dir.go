@@ -7,18 +7,13 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
-	"github.com/go-go-golems/parka/pkg/glazed/handlers/json"
 	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
-	"github.com/go-go-golems/parka/pkg/render/layout"
 	parka "github.com/go-go-golems/parka/pkg/server"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
-	"net/http"
 	"os"
 	"strings"
-	"time"
 )
 
 type HandlerParameters struct {
@@ -416,33 +411,20 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 
 	server.Router.GET(path+"/data/*path", func(c *gin.Context) {
 		commandPath := c.Param("path")
-		commandPath = strings.TrimPrefix(commandPath, "/")
+		commandPath = strings.TrimPrefix(commandPath, path)
 		sqlCommand, ok := getRepositoryCommand(c, cd.Repository, commandPath)
 		if !ok {
 			c.JSON(404, gin.H{"error": "command not found"})
 			return
 		}
 
-		handler := json.NewQueryHandler(sqlCommand,
-			json.WithQueryHandlerParserOptions(cd.computeParserOptions()...),
-		)
-		handle := func(c *gin.Context) {
-			err := handler.Handle(c, c.Writer)
-			if err != nil {
-				log.Error().Err(err).Msg("failed to handle query")
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"error": err.Error(),
-				})
-			}
-		}
-
-		handle(c)
+		server.HandleJSONQueryHandler(sqlCommand)
 	})
 
 	server.Router.GET(path+"/sqleton/*path",
 		func(c *gin.Context) {
-			// Get command path from the route
-			commandPath := strings.TrimPrefix(c.Param("path"), "/")
+			commandPath := c.Param("path")
+			commandPath = strings.TrimPrefix(commandPath, path)
 
 			// Get repository command
 			sqlCommand, ok := getRepositoryCommand(c, cd.Repository, commandPath)
@@ -451,68 +433,14 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 				return
 			}
 
-			name := sqlCommand.Description().Name
-			dateTime := time.Now().Format("2006-01-02--15-04-05")
-			links := []layout.Link{
-				{
-					Href:  fmt.Sprintf("%s/download/%s/%s-%s.csv", path, commandPath, dateTime, name),
-					Text:  "Download CSV",
-					Class: "download",
-				},
-				{
-					Href:  fmt.Sprintf("%s/download/%s/%s-%s.json", path, commandPath, dateTime, name),
-					Text:  "Download JSON",
-					Class: "download",
-				},
-				{
-					Href:  fmt.Sprintf("%s/download/%s/%s-%s.xlsx", path, commandPath, dateTime, name),
-					Text:  "Download Excel",
-					Class: "download",
-				},
-				{
-					Href:  fmt.Sprintf("%s/download/%s/%s-%s.md", path, commandPath, dateTime, name),
-					Text:  "Download Markdown",
-					Class: "download",
-				},
-				{
-					Href:  fmt.Sprintf("%s/download/%s/%s-%s.html", path, commandPath, dateTime, name),
-					Text:  "Download HTML",
-					Class: "download",
-				},
-				{
-					Href:  fmt.Sprintf("%s/download/%s/%s-%s.txt", path, commandPath, dateTime, name),
-					Text:  "Download Text",
-					Class: "download",
-				},
+			options := []datatables.QueryHandlerOption{
+				datatables.WithParserOptions(cd.computeParserOptions()...),
+				datatables.WithTemplateLookup(cd.TemplateLookup),
+				datatables.WithTemplateName(cd.TemplateName),
+				datatables.WithAdditionalData(cd.AdditionalData),
 			}
 
-			// TODO(manuel, 2023-05-25) Ignore indexTemplateName for now
-			// See https://github.com/go-go-golems/sqleton/issues/162
-			_ = cd.IndexTemplateName
-
-			dt := &datatables.DataTables{
-				Command:        sqlCommand.Description(),
-				Links:          links,
-				BasePath:       path,
-				JSRendering:    true,
-				UseDataTables:  false,
-				AdditionalData: cd.AdditionalData,
-			}
-
-			handler := datatables.NewQueryHandler(sqlCommand,
-				cd.TemplateLookup,
-				cd.TemplateName,
-				datatables.WithDataTables(dt),
-				datatables.WithQueryHandlerParserOptions(cd.computeParserOptions()...),
-			)
-
-			err := handler.Handle(c, c.Writer)
-			if err != nil {
-				log.Error().Err(err).Msg("error handling query")
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"error": err.Error(),
-				})
-			}
+			server.HandleDataTables(sqlCommand, path, commandPath, options...)
 		})
 
 	server.Router.GET(path+"/download/*path", func(c *gin.Context) {

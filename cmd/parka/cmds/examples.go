@@ -27,7 +27,7 @@ func NewExampleCommand() *ExampleCommand {
 					ShortFlag: "t",
 					Type:      parameters.ParameterTypeString,
 					Help:      "Test string argument",
-					Required:  true,
+					Default:   "test",
 				},
 				{
 					Name:      "string",
@@ -133,8 +133,8 @@ func (e *ExampleCommand) Run(
 
 	err = gp.AddRow(ctx, types.NewRow(
 		types.MRP("test", "test"),
-		types.MRP("test2", []int{123, 123, 123, 123}),
-		types.MRP("test3", map[string]interface{}{
+		types.MRP("integer_list", []int{123, 123, 123, 123}),
+		types.MRP("object_from_file", map[string]interface{}{
 			"test":  "test",
 			"test2": []int{123, 123, 123, 123},
 		}),

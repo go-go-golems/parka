@@ -7,14 +7,17 @@ import (
 	"github.com/gin-gonic/contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/json"
 	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"github.com/go-go-golems/parka/pkg/render"
+	"github.com/go-go-golems/parka/pkg/render/layout"
 	utils_fs "github.com/go-go-golems/parka/pkg/utils/fs"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"io/fs"
 	"net/http"
+	"time"
 )
 
 //go:embed "web/src/templates/*"
@@ -231,6 +234,74 @@ func (s *Server) HandleJSONQueryHandler(
 		err := handler.Handle(c, c.Writer)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to handle query")
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+		}
+	}
+}
+
+func (s *Server) HandleDataTables(
+	cmd cmds.GlazeCommand,
+	path string,
+	commandPath string,
+	options ...datatables.QueryHandlerOption,
+) gin.HandlerFunc {
+	// TODO(manuel, 2023-07-02) Move this to the datatables package
+	return func(c *gin.Context) {
+		name := cmd.Description().Name
+		dateTime := time.Now().Format("2006-01-02--15-04-05")
+		links := []layout.Link{
+			{
+				Href:  fmt.Sprintf("%s/download/%s/%s-%s.csv", path, commandPath, dateTime, name),
+				Text:  "Download CSV",
+				Class: "download",
+			},
+			{
+				Href:  fmt.Sprintf("%s/download/%s/%s-%s.json", path, commandPath, dateTime, name),
+				Text:  "Download JSON",
+				Class: "download",
+			},
+			{
+				Href:  fmt.Sprintf("%s/download/%s/%s-%s.xlsx", path, commandPath, dateTime, name),
+				Text:  "Download Excel",
+				Class: "download",
+			},
+			{
+				Href:  fmt.Sprintf("%s/download/%s/%s-%s.md", path, commandPath, dateTime, name),
+				Text:  "Download Markdown",
+				Class: "download",
+			},
+			{
+				Href:  fmt.Sprintf("%s/download/%s/%s-%s.html", path, commandPath, dateTime, name),
+				Text:  "Download HTML",
+				Class: "download",
+			},
+			{
+				Href:  fmt.Sprintf("%s/download/%s/%s-%s.txt", path, commandPath, dateTime, name),
+				Text:  "Download Text",
+				Class: "download",
+			},
+		}
+
+		dt := &datatables.DataTables{
+			Command:       cmd.Description(),
+			Links:         links,
+			BasePath:      path,
+			JSRendering:   true,
+			UseDataTables: false,
+		}
+
+		options_ := []datatables.QueryHandlerOption{
+			datatables.WithDataTables(dt),
+		}
+		options_ = append(options_, options...)
+
+		handler := datatables.NewQueryHandler(cmd, options_...)
+
+		err := handler.Handle(c, c.Writer)
+		if err != nil {
+			log.Error().Err(err).Msg("error handling query")
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
 			})

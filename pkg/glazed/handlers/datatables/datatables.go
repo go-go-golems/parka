@@ -103,15 +103,13 @@ type QueryHandlerOption func(qh *QueryHandler)
 
 func NewQueryHandler(
 	cmd cmds.GlazeCommand,
-	lookup render.TemplateLookup,
-	templateName string,
 	options ...QueryHandlerOption,
 ) *QueryHandler {
 	qh := &QueryHandler{
 		cmd:          cmd,
 		dt:           &DataTables{},
-		lookup:       lookup,
-		templateName: templateName,
+		lookup:       NewDataTablesLookupTemplate(),
+		templateName: "data-tables.tmpl.html",
 	}
 
 	for _, option := range options {
@@ -127,16 +125,34 @@ func WithDataTables(dt *DataTables) QueryHandlerOption {
 	}
 }
 
-func WithQueryHandlerContextMiddlewares(middlewares ...glazed.ContextMiddleware) QueryHandlerOption {
+func WithContextMiddlewares(middlewares ...glazed.ContextMiddleware) QueryHandlerOption {
 	return func(h *QueryHandler) {
 		h.contextMiddlewares = middlewares
 	}
 }
 
-// WithQueryHandlerParserOptions sets the parser options for the QueryHandler
-func WithQueryHandlerParserOptions(options ...parser.ParserOption) QueryHandlerOption {
+// WithParserOptions sets the parser options for the QueryHandler
+func WithParserOptions(options ...parser.ParserOption) QueryHandlerOption {
 	return func(h *QueryHandler) {
 		h.parserOptions = options
+	}
+}
+
+func WithTemplateLookup(lookup render.TemplateLookup) QueryHandlerOption {
+	return func(h *QueryHandler) {
+		h.lookup = lookup
+	}
+}
+
+func WithTemplateName(templateName string) QueryHandlerOption {
+	return func(h *QueryHandler) {
+		h.templateName = templateName
+	}
+}
+
+func WithAdditionalData(data map[string]interface{}) QueryHandlerOption {
+	return func(h *QueryHandler) {
+		h.dt.AdditionalData = data
 	}
 }
 

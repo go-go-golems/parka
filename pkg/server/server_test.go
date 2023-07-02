@@ -8,6 +8,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/types"
+	json2 "github.com/go-go-golems/parka/pkg/glazed/handlers/json"
 	"github.com/go-go-golems/parka/pkg/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -47,7 +48,7 @@ func TestRunGlazedCommand(t *testing.T) {
 	s, err := server.NewServer()
 	require.NoError(t, err)
 
-	handler := s.HandleJSONQueryHandler(tc)
+	handler := json2.HandleJSONQueryHandler(tc)
 
 	gin.SetMode(gin.TestMode)
 
@@ -69,10 +70,13 @@ func TestRunGlazedCommand(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		// content type json
 		assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
-		v := map[string]interface{}{}
+		v := []map[string]interface{}{}
 		err = json.Unmarshal(body, &v)
 		require.NoError(t, err)
-		assert.Equal(t, float64(1), v["foo"])
-		assert.Equal(t, "baz", v["bar"])
+
+		require.Len(t, v, 1)
+		v_ := v[0]
+		assert.Equal(t, float64(1), v_["foo"])
+		assert.Equal(t, "baz", v_["bar"])
 	})
 }

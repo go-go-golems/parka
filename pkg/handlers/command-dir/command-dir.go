@@ -507,6 +507,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		parserOptions := cd.computeParserOptions()
 		// override parameter layers at the end
 		parserOptions = append(parserOptions, parser.WithAppendOverrides("glazed", glazedOverrides))
+		_ = parserOptions
 
 		_ = sqlCommand
 		//handle := server.HandleSimpleQueryOutputFileCommand(

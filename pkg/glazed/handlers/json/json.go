@@ -73,6 +73,8 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 	gp.ReplaceTableMiddleware()
 	gp.AddRowMiddleware(row.NewOutputMiddleware(json2.NewOutputFormatter(), writer))
 
+	c.Header("Content-Type", "application/json")
+
 	_, err = writer.Write([]byte("[\n"))
 	if err != nil {
 		return err

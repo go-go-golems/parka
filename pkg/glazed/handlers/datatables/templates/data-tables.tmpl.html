@@ -133,7 +133,7 @@
 
 <script>
     {{ if .JSRendering}}
-    const jsData = {{ range $b := .JSStream}}{{$b}}{{end}};
+    const jsData = [{{ range $b := .JSStream}}{{$b}},{{end}}];
     {{else }}const jsData = null;
     {{ end }}
     function getQueryString() {

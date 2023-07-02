@@ -6,13 +6,16 @@ import (
 	"github.com/go-go-golems/clay/pkg/repositories"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
+	"github.com/go-go-golems/parka/pkg/glazed/handlers/json"
 	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
-	"github.com/go-go-golems/parka/pkg/render/formatters/datatables"
 	"github.com/go-go-golems/parka/pkg/render/layout"
 	parka "github.com/go-go-golems/parka/pkg/server"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -420,9 +423,18 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			return
 		}
 
-		handle := server.HandleJSONQueryHandler(sqlCommand,
-			cd.computeParserOptions()...,
+		handler := json.NewQueryHandler(sqlCommand,
+			json.WithQueryHandlerParserOptions(cd.computeParserOptions()...),
 		)
+		handle := func(c *gin.Context) {
+			err := handler.Handle(c, c.Writer)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to handle query")
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": err.Error(),
+				})
+			}
+		}
 
 		handle(c)
 	})
@@ -487,21 +499,20 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 				AdditionalData: cd.AdditionalData,
 			}
 
-			ofFactory := datatables.NewOutputFormatterFactory(
+			handler := datatables.NewQueryHandler(sqlCommand,
 				cd.TemplateLookup,
 				cd.TemplateName,
-				dt,
+				datatables.WithDataTables(dt),
+				datatables.WithQueryHandlerParserOptions(cd.computeParserOptions()...),
 			)
 
-			_ = ofFactory
-
-			//handle := server.HandleJSONQueryHandler(
-			//	sqlCommand,
-			//	glazed.WithOutputFormatterFactory(ofFactory),
-			//	glazed.WithParserOptions(cd.computeParserOptions()...),
-			//)
-			//
-			//handle(c)
+			err := handler.Handle(c, c.Writer)
+			if err != nil {
+				log.Error().Err(err).Msg("error handling query")
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": err.Error(),
+				})
+			}
 		})
 
 	server.Router.GET(path+"/download/*path", func(c *gin.Context) {

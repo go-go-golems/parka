@@ -7,6 +7,8 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/helpers"
 	"github.com/go-go-golems/glazed/pkg/types"
+	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
+	json2 "github.com/go-go-golems/parka/pkg/glazed/handlers/json"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/server"
 	"github.com/go-go-golems/parka/pkg/utils/fs"
@@ -69,8 +71,8 @@ var ServeCmd = &cobra.Command{
 
 		// NOTE(manuel, 2023-05-26) This could also be done with a simple Command config file struct once
 		// implemented as part of sqleton serve
-		s.Router.GET("/api/example", server.HandleJSONQueryHandler(NewExampleCommand()))
-		s.Router.GET("/sqleton/example", server.HandleDataTables(NewExampleCommand(), "", "example"))
+		s.Router.GET("/api/example", json2.HandleJSONQueryHandler(NewExampleCommand()))
+		s.Router.GET("/sqleton/example", datatables.HandleDataTables(NewExampleCommand(), "", "example"))
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()

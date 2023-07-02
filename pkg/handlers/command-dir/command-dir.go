@@ -7,6 +7,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
+	"github.com/go-go-golems/parka/pkg/glazed/handlers/json"
 	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
@@ -418,7 +419,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			return
 		}
 
-		parka.HandleJSONQueryHandler(sqlCommand)
+		json.HandleJSONQueryHandler(sqlCommand)
 	})
 
 	server.Router.GET(path+"/sqleton/*path",
@@ -440,7 +441,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 				datatables.WithAdditionalData(cd.AdditionalData),
 			}
 
-			parka.HandleDataTables(sqlCommand, path, commandPath, options...)
+			datatables.HandleDataTables(sqlCommand, path, commandPath, options...)
 		})
 
 	server.Router.GET(path+"/download/*path", func(c *gin.Context) {

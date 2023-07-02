@@ -2,6 +2,7 @@ package datatables
 
 import (
 	"embed"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/formatters"
@@ -14,9 +15,12 @@ import (
 	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/render/layout"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"html/template"
 	"io"
+	"net/http"
+	"time"
 )
 
 // DataTables describes the data passed to  the template displaying the results of a glazed command.
@@ -311,4 +315,72 @@ func (qh *QueryHandler) renderTemplate(
 	}
 
 	return nil
+}
+
+func HandleDataTables(
+	cmd cmds.GlazeCommand,
+	path string,
+	commandPath string,
+	options ...QueryHandlerOption,
+) gin.HandlerFunc {
+	// TODO(manuel, 2023-07-02) Move this to the datatables package
+	return func(c *gin.Context) {
+		name := cmd.Description().Name
+		dateTime := time.Now().Format("2006-01-02--15-04-05")
+		links := []layout.Link{
+			{
+				Href:  fmt.Sprintf("%s/download/%s/%s-%s.csv", path, commandPath, dateTime, name),
+				Text:  "Download CSV",
+				Class: "download",
+			},
+			{
+				Href:  fmt.Sprintf("%s/download/%s/%s-%s.json", path, commandPath, dateTime, name),
+				Text:  "Download JSON",
+				Class: "download",
+			},
+			{
+				Href:  fmt.Sprintf("%s/download/%s/%s-%s.xlsx", path, commandPath, dateTime, name),
+				Text:  "Download Excel",
+				Class: "download",
+			},
+			{
+				Href:  fmt.Sprintf("%s/download/%s/%s-%s.md", path, commandPath, dateTime, name),
+				Text:  "Download Markdown",
+				Class: "download",
+			},
+			{
+				Href:  fmt.Sprintf("%s/download/%s/%s-%s.html", path, commandPath, dateTime, name),
+				Text:  "Download HTML",
+				Class: "download",
+			},
+			{
+				Href:  fmt.Sprintf("%s/download/%s/%s-%s.txt", path, commandPath, dateTime, name),
+				Text:  "Download Text",
+				Class: "download",
+			},
+		}
+
+		dt := &DataTables{
+			Command:       cmd.Description(),
+			Links:         links,
+			BasePath:      path,
+			JSRendering:   true,
+			UseDataTables: false,
+		}
+
+		options_ := []QueryHandlerOption{
+			WithDataTables(dt),
+		}
+		options_ = append(options_, options...)
+
+		handler := NewQueryHandler(cmd, options_...)
+
+		err := handler.Handle(c, c.Writer)
+		if err != nil {
+			log.Error().Err(err).Msg("error handling query")
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+		}
+	}
 }

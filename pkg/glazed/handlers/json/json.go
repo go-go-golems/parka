@@ -8,7 +8,9 @@ import (
 	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
 	"github.com/go-go-golems/parka/pkg/glazed/parser"
+	"github.com/rs/zerolog/log"
 	"io"
+	"net/http"
 )
 
 type QueryHandler struct {
@@ -93,4 +95,22 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 	}
 
 	return nil
+}
+
+func HandleJSONQueryHandler(
+	cmd cmds.GlazeCommand,
+	parserOptions ...parser.ParserOption,
+) gin.HandlerFunc {
+	handler := NewQueryHandler(cmd,
+		WithQueryHandlerParserOptions(parserOptions...),
+	)
+	return func(c *gin.Context) {
+		err := handler.Handle(c, c.Writer)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to handle query")
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+		}
+	}
 }

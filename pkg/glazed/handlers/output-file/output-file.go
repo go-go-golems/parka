@@ -57,7 +57,7 @@ func (h *OutputFileHandler) Handle(c *gin.Context, w io.Writer) error {
 	return nil
 }
 
-func HandleGlazedOutputFileHandler(
+func CreateGlazedFileHandler(
 	cmd cmds.GlazeCommand,
 	fileName string,
 	parserOptions ...parser.ParserOption,

@@ -48,7 +48,7 @@ func TestRunGlazedCommand(t *testing.T) {
 	s, err := server.NewServer()
 	require.NoError(t, err)
 
-	handler := json2.HandleJSONQueryHandler(tc)
+	handler := json2.CreateJSONQueryHandler(tc)
 
 	gin.SetMode(gin.TestMode)
 

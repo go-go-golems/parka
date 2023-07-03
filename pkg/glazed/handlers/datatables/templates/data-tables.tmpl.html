@@ -72,7 +72,7 @@
 </div>
 {{ end }}
 
-<div class="container">
+<div class="container" id="formContainer">
     <p><a href="{{.BasePath}}/sqleton">Top</a></p>
     <h1>{{.Command.Name}}</h1>
     <p>{{.Command.Short}}</p>
@@ -178,7 +178,7 @@
         }
         {{ end }}
 
-        if (jsData !== null) {
+        if (jsData !== null && jsData.length > 0) {
             setupDataTables(columnDefs, jsData);
         }
 
@@ -227,5 +227,28 @@
         }
     });
 </script>
+
+    <!-- This needs to be at the bottom to avoid deadlock,
+         because the row and column channels get populated first -->
+    {{ $hasError := false }}
+    {{ range .ErrorStream }}
+    {{ $hasError = true }}
+    <div class="container">
+        <div class="row">
+            <div class="column">
+                <div class="alert alert-danger">
+                    <strong>Error:</strong> {{.}}
+                </div>
+            </div>
+        </div>
+    </div>
+    {{ end }}
+    {{ if $hasError }}
+    <script>
+       // hide #tableContainer
+        document.getElementById("formContainer").style.display = "none";
+    </script>
+    {{ end }}
+
 </body>
 </html>

@@ -413,20 +413,20 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 
 	server.Router.GET(path+"/data/*path", func(c *gin.Context) {
 		commandPath := c.Param("path")
-		commandPath = strings.TrimPrefix(commandPath, path)
+		commandPath = strings.TrimPrefix(commandPath, path+"/")
 		sqlCommand, ok := getRepositoryCommand(c, cd.Repository, commandPath)
 		if !ok {
 			c.JSON(404, gin.H{"error": "command not found"})
 			return
 		}
 
-		json.HandleJSONQueryHandler(sqlCommand)
+		json.CreateJSONQueryHandler(sqlCommand)(c)
 	})
 
 	server.Router.GET(path+"/sqleton/*path",
 		func(c *gin.Context) {
 			commandPath := c.Param("path")
-			commandPath = strings.TrimPrefix(commandPath, path)
+			commandPath = strings.TrimPrefix(commandPath, path+"/")
 
 			// Get repository command
 			sqlCommand, ok := getRepositoryCommand(c, cd.Repository, commandPath)
@@ -442,23 +442,24 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 				datatables.WithAdditionalData(cd.AdditionalData),
 			}
 
-			datatables.HandleDataTables(sqlCommand, path, commandPath, options...)
+			datatables.CreateDataTablesHandler(sqlCommand, path, commandPath, options...)(c)
 		})
 
 	server.Router.GET(path+"/download/*path", func(c *gin.Context) {
-		// get file name at end of path
-		index := strings.LastIndex(path, "/")
+		path_ := c.Param("path")
+		path_ = strings.TrimPrefix(path_, path+"/")
+		index := strings.LastIndex(path_, "/")
 		if index == -1 {
 			c.JSON(500, gin.H{"error": "could not find file name"})
 			return
 		}
-		if index >= len(path)-1 {
+		if index >= len(path_)-1 {
 			c.JSON(500, gin.H{"error": "could not find file name"})
 			return
 		}
-		fileName := path[index+1:]
+		fileName := path_[index+1:]
 
-		commandPath := strings.TrimPrefix(path[:index], "/")
+		commandPath := strings.TrimPrefix(path_[:index], path+"/")
 		sqlCommand, ok := getRepositoryCommand(c, cd.Repository, commandPath)
 		if !ok {
 			// JSON output and error code already handled by getRepositoryCommand
@@ -466,11 +467,13 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		}
 		parserOptions := cd.computeParserOptions()
 
-		output_file.HandleGlazedOutputFileHandler(
+		// TODO(manuel, 223-07-03) this is really only necessary for excel, I think.
+		// Other formats can render straight to the stream
+		output_file.CreateGlazedFileHandler(
 			sqlCommand,
 			fileName,
 			parserOptions...,
-		)
+		)(c)
 	})
 
 	return nil

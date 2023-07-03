@@ -72,9 +72,9 @@ var ServeCmd = &cobra.Command{
 
 		// NOTE(manuel, 2023-05-26) This could also be done with a simple Command config file struct once
 		// implemented as part of sqleton serve
-		s.Router.GET("/api/example", json2.HandleJSONQueryHandler(NewExampleCommand()))
-		s.Router.GET("/example", datatables.HandleDataTables(NewExampleCommand(), "", "example"))
-		s.Router.GET("/download/example.csv", output_file.HandleGlazedOutputFileHandler(NewExampleCommand(), "example.csv"))
+		s.Router.GET("/api/example", json2.CreateJSONQueryHandler(NewExampleCommand()))
+		s.Router.GET("/example", datatables.CreateDataTablesHandler(NewExampleCommand(), "", "example"))
+		s.Router.GET("/download/example.csv", output_file.CreateGlazedFileHandler(NewExampleCommand(), "example.csv"))
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -118,7 +118,7 @@ var LsServerCmd = &cobra.Command{
 		err = json.Unmarshal(body, &cmds)
 		cobra.CheckErr(err)
 
-		gp, err := cli.CreateGlazedProcessorFromCobra(cmd)
+		gp, _, err := cli.CreateGlazedProcessorFromCobra(cmd)
 		cobra.CheckErr(err)
 
 		for _, cmd := range cmds {

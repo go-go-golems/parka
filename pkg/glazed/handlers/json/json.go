@@ -99,7 +99,7 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 	return nil
 }
 
-func HandleJSONQueryHandler(
+func CreateJSONQueryHandler(
 	cmd cmds.GlazeCommand,
 	parserOptions ...parser.ParserOption,
 ) gin.HandlerFunc {

@@ -1,6 +1,7 @@
 package datatables
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -15,11 +16,11 @@ import (
 	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/render/layout"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"html/template"
 	"io"
-	"net/http"
 	"time"
 )
 
@@ -43,8 +44,9 @@ type DataTables struct {
 	//
 	// TODO(manuel, 2023-06-04): Maybe we could make this be an iterator of rows that provide access to the individual
 	// columns for more interesting HTML shenanigans too.
-	JSStream   chan template.JS
-	HTMLStream chan template.HTML
+	JSStream    chan template.JS
+	HTMLStream  chan template.HTML
+	ErrorStream chan string
 	// Configuring the template to load the table data through javascript, and provide the data itself
 	// as a JSON array inlined in the HTML of the page.
 	JSRendering bool
@@ -190,6 +192,8 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 
 	dt_ := qh.dt.Clone()
 	var of formatters.RowOutputFormatter
+	// buffered so that we don't hang on it when exciting
+	dt_.ErrorStream = make(chan string, 1)
 	if dt_.JSRendering {
 		of = json.NewOutputFormatter()
 		dt_.JSStream = make(chan template.JS, 100)
@@ -207,7 +211,9 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	gp.AddRowMiddleware(row.NewColumnsChannelMiddleware(columnsC, true))
 	gp.AddRowMiddleware(row.NewOutputChannelMiddleware(of, rowC))
 
-	eg, ctx2 := errgroup.WithContext(c.Request.Context())
+	ctx := c.Request.Context()
+	ctx2, cancel := context.WithCancel(ctx)
+	eg, ctx3 := errgroup.WithContext(ctx2)
 
 	// copy the json rows to the template stream
 	eg.Go(func() error {
@@ -220,12 +226,12 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 		}()
 		for {
 			select {
-			case <-ctx2.Done():
-				return ctx2.Err()
+			case <-ctx3.Done():
+				return ctx3.Err()
 			case row_, ok := <-rowC:
 				// check if channel is closed
 				if !ok {
-					return nil
+					continue
 				}
 
 				if dt_.JSRendering {
@@ -240,16 +246,19 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	// actually run the command
 	eg.Go(func() error {
 		defer func() {
-			defer close(rowC)
-			defer close(columnsC)
+			close(rowC)
+			close(columnsC)
+			close(dt_.ErrorStream)
+			cancel()
 		}()
 
-		err = qh.cmd.Run(ctx2, pc.ParsedLayers, pc.ParsedParameters, gp)
+		err = qh.cmd.Run(ctx3, pc.ParsedLayers, pc.ParsedParameters, gp)
 		if err != nil {
+			dt_.ErrorStream <- err.Error()
 			return err
 		}
 
-		err = gp.Close(ctx2)
+		err = gp.Close(ctx3)
 		if err != nil {
 			return err
 		}
@@ -317,7 +326,7 @@ func (qh *QueryHandler) renderTemplate(
 	return nil
 }
 
-func HandleDataTables(
+func CreateDataTablesHandler(
 	cmd cmds.GlazeCommand,
 	path string,
 	commandPath string,
@@ -376,11 +385,8 @@ func HandleDataTables(
 		handler := NewQueryHandler(cmd, options_...)
 
 		err := handler.Handle(c, c.Writer)
-		if err != nil {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			log.Error().Err(err).Msg("error handling query")
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
 		}
 	}
 }

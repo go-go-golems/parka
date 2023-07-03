@@ -45,10 +45,6 @@ func (h *OutputFileHandler) Handle(c *gin.Context, w io.Writer) error {
 		_ = f.Close()
 	}(f)
 
-	baseName := filepath.Base(h.outputFileName)
-
-	c.Writer.Header().Set("Content-Disposition", "attachment; filename="+baseName)
-
 	_, err = io.Copy(c.Writer, f)
 	if err != nil {
 		return err
@@ -63,20 +59,10 @@ func CreateGlazedFileHandler(
 	parserOptions ...parser.ParserOption,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// create a temporary file for glazed output
-		tmpFile, err := os.CreateTemp("/tmp", fmt.Sprintf("glazed-output-*.%s", fileName))
-		if err != nil {
-			c.JSON(500, gin.H{"error": "could not create temporary file"})
-			return
-		}
-		defer func(name string) {
-			_ = os.Remove(name)
-		}(tmpFile.Name())
+		glazedOverrides := map[string]interface{}{}
+		needsRealFileOutput := false
 
-		// now check file suffix for content-type
-		glazedOverrides := map[string]interface{}{
-			"output-file": tmpFile.Name(),
-		}
+		// create a temporary file for glazed output
 		if strings.HasSuffix(fileName, ".csv") {
 			glazedOverrides["output"] = "table"
 			glazedOverrides["table-format"] = "csv"
@@ -95,6 +81,7 @@ func CreateGlazedFileHandler(
 			glazedOverrides["output"] = "yaml"
 		} else if strings.HasSuffix(fileName, ".xlsx") {
 			glazedOverrides["output"] = "excel"
+			needsRealFileOutput = true
 		} else if strings.HasSuffix(fileName, ".txt") {
 			glazedOverrides["output"] = "table"
 			glazedOverrides["table-format"] = "ascii"
@@ -103,17 +90,48 @@ func CreateGlazedFileHandler(
 			return
 		}
 
-		// override parameter layers at the end
-		parserOptions = append(parserOptions, parser.WithAppendOverrides("glazed", glazedOverrides))
+		var tmpFile *os.File
+		var err error
 
-		handler := glazed.NewQueryHandler(cmd, glazed.WithQueryHandlerParserOptions(parserOptions...))
-		outputFileHandler := NewOutputFileHandler(handler, tmpFile.Name())
+		// excel output needs a real output file, otherwise we can go stream to the HTTP response
+		if needsRealFileOutput {
+			tmpFile, err = os.CreateTemp("/tmp", fmt.Sprintf("glazed-output-*.%s", fileName))
+			if err != nil {
+				c.JSON(500, gin.H{"error": "could not create temporary file"})
+				return
+			}
+			defer func(name string) {
+				_ = os.Remove(name)
+			}(tmpFile.Name())
 
-		err = outputFileHandler.Handle(c, c.Writer)
-		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
+			// now check file suffix for content-type
+			glazedOverrides["output-file"] = tmpFile.Name()
 		}
+
+		parserOptions = append(parserOptions, parser.WithAppendOverrides("glazed", glazedOverrides))
+		handler := glazed.NewQueryHandler(cmd, glazed.WithQueryHandlerParserOptions(parserOptions...))
+
+		baseName := filepath.Base(fileName)
+		c.Writer.Header().Set("Content-Disposition", "attachment; filename="+baseName)
+
+		if needsRealFileOutput {
+			outputFileHandler := NewOutputFileHandler(handler, tmpFile.Name())
+
+			err = outputFileHandler.Handle(c, c.Writer)
+			if err != nil {
+				c.JSON(500, gin.H{"error": err.Error()})
+				return
+			}
+		} else {
+
+			err = handler.Handle(c, c.Writer)
+			if err != nil {
+				c.JSON(500, gin.H{"error": err.Error()})
+				return
+			}
+		}
+
+		// override parameter layers at the end
 
 	}
 }

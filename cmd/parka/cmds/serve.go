@@ -7,6 +7,9 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/helpers"
 	"github.com/go-go-golems/glazed/pkg/types"
+	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
+	json2 "github.com/go-go-golems/parka/pkg/glazed/handlers/json"
+	output_file "github.com/go-go-golems/parka/pkg/glazed/handlers/output-file"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/server"
 	"github.com/go-go-golems/parka/pkg/utils/fs"
@@ -22,10 +25,15 @@ var ServeCmd = &cobra.Command{
 	Short: "Starts the server",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		_, err := cmd.Flags().GetUint16("port")
+		port, err := cmd.Flags().GetUint16("port")
+		cobra.CheckErr(err)
+		host, err := cmd.Flags().GetString("host")
 		cobra.CheckErr(err)
 
-		serverOptions := []server.ServerOption{}
+		serverOptions := []server.ServerOption{
+			server.WithPort(port),
+			server.WithAddress(host),
+		}
 		defaultLookups := []render.TemplateLookup{}
 
 		dev, _ := cmd.Flags().GetBool("dev")
@@ -64,8 +72,9 @@ var ServeCmd = &cobra.Command{
 
 		// NOTE(manuel, 2023-05-26) This could also be done with a simple Command config file struct once
 		// implemented as part of sqleton serve
-		s.Router.GET("/api/example", s.HandleSimpleQueryCommand(NewExampleCommand()))
-		s.Router.POST("/api/example", s.HandleSimpleFormCommand(NewExampleCommand()))
+		s.Router.GET("/api/example", json2.CreateJSONQueryHandler(NewExampleCommand()))
+		s.Router.GET("/example", datatables.CreateDataTablesHandler(NewExampleCommand(), "", "example"))
+		s.Router.GET("/download/example.csv", output_file.CreateGlazedFileHandler(NewExampleCommand(), "example.csv"))
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -109,7 +118,7 @@ var LsServerCmd = &cobra.Command{
 		err = json.Unmarshal(body, &cmds)
 		cobra.CheckErr(err)
 
-		gp, err := cli.CreateGlazedProcessorFromCobra(cmd)
+		gp, _, err := cli.CreateGlazedProcessorFromCobra(cmd)
 		cobra.CheckErr(err)
 
 		for _, cmd := range cmds {
@@ -117,16 +126,14 @@ var LsServerCmd = &cobra.Command{
 			cobra.CheckErr(err)
 		}
 
-		err = gp.Finalize(ctx)
-		cobra.CheckErr(err)
-
-		err = gp.OutputFormatter().Output(ctx, gp.GetTable(), os.Stdout)
+		err = gp.Close(ctx)
 		cobra.CheckErr(err)
 	},
 }
 
 func init() {
 	ServeCmd.Flags().Uint16("port", 8080, "Port to listen on")
+	ServeCmd.Flags().String("host", "localhost", "Port to listen on")
 	ServeCmd.Flags().String("template-dir", "pkg/web/src/templates", "Directory containing templates")
 	ServeCmd.Flags().Bool("dev", false, "Enable development mode")
 

@@ -6,17 +6,16 @@ import (
 	"github.com/go-go-golems/clay/pkg/repositories"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/parka/pkg/glazed"
+	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
+	"github.com/go-go-golems/parka/pkg/glazed/handlers/json"
+	output_file "github.com/go-go-golems/parka/pkg/glazed/handlers/output-file"
 	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
-	"github.com/go-go-golems/parka/pkg/render/datatables"
-	"github.com/go-go-golems/parka/pkg/render/layout"
 	parka "github.com/go-go-golems/parka/pkg/server"
 	"github.com/pkg/errors"
 	"os"
 	"strings"
-	"time"
 )
 
 type HandlerParameters struct {
@@ -413,26 +412,21 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 	path = strings.TrimSuffix(path, "/")
 
 	server.Router.GET(path+"/data/*path", func(c *gin.Context) {
-		commandPath := c.Param("CommandPath")
-		commandPath = strings.TrimPrefix(commandPath, "/")
+		commandPath := c.Param("path")
+		commandPath = strings.TrimPrefix(commandPath, path+"/")
 		sqlCommand, ok := getRepositoryCommand(c, cd.Repository, commandPath)
 		if !ok {
 			c.JSON(404, gin.H{"error": "command not found"})
 			return
 		}
 
-		handle := server.HandleSimpleQueryCommand(sqlCommand,
-			glazed.WithCreateProcessor(glazed.CreateJSONProcessor),
-			glazed.WithParserOptions(cd.computeParserOptions()...),
-		)
-
-		handle(c)
+		json.CreateJSONQueryHandler(sqlCommand)(c)
 	})
 
 	server.Router.GET(path+"/sqleton/*path",
 		func(c *gin.Context) {
-			// Get command path from the route
-			commandPath := strings.TrimPrefix(c.Param("path"), "/")
+			commandPath := c.Param("path")
+			commandPath = strings.TrimPrefix(commandPath, path+"/")
 
 			// Get repository command
 			sqlCommand, ok := getRepositoryCommand(c, cd.Repository, commandPath)
@@ -441,136 +435,45 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 				return
 			}
 
-			name := sqlCommand.Description().Name
-			dateTime := time.Now().Format("2006-01-02--15-04-05")
-			links := []layout.Link{
-				{
-					Href:  fmt.Sprintf("%s/download/%s/%s-%s.csv", path, commandPath, dateTime, name),
-					Text:  "Download CSV",
-					Class: "download",
-				},
-				{
-					Href:  fmt.Sprintf("%s/download/%s/%s-%s.json", path, commandPath, dateTime, name),
-					Text:  "Download JSON",
-					Class: "download",
-				},
-				{
-					Href:  fmt.Sprintf("%s/download/%s/%s-%s.xlsx", path, commandPath, dateTime, name),
-					Text:  "Download Excel",
-					Class: "download",
-				},
-				{
-					Href:  fmt.Sprintf("%s/download/%s/%s-%s.md", path, commandPath, dateTime, name),
-					Text:  "Download Markdown",
-					Class: "download",
-				},
-				{
-					Href:  fmt.Sprintf("%s/download/%s/%s-%s.html", path, commandPath, dateTime, name),
-					Text:  "Download HTML",
-					Class: "download",
-				},
-				{
-					Href:  fmt.Sprintf("%s/download/%s/%s-%s.txt", path, commandPath, dateTime, name),
-					Text:  "Download Text",
-					Class: "download",
-				},
+			options := []datatables.QueryHandlerOption{
+				datatables.WithParserOptions(cd.computeParserOptions()...),
+				datatables.WithTemplateLookup(cd.TemplateLookup),
+				datatables.WithTemplateName(cd.TemplateName),
+				datatables.WithAdditionalData(cd.AdditionalData),
 			}
 
-			// TODO(manuel, 2023-05-25) Ignore indexTemplateName for now
-			// See https://github.com/go-go-golems/sqleton/issues/162
-			_ = cd.IndexTemplateName
-
-			dataTablesProcessorFunc := datatables.NewDataTablesCreateOutputProcessorFunc(
-				cd.TemplateLookup,
-				cd.TemplateName,
-				datatables.WithLinks(links...),
-				datatables.WithJSRendering(),
-				datatables.WithAdditionalData(cd.AdditionalData),
-				datatables.WithBasePath(path),
-			)
-
-			handle := server.HandleSimpleQueryCommand(
-				sqlCommand,
-				glazed.WithCreateProcessor(dataTablesProcessorFunc),
-				glazed.WithParserOptions(cd.computeParserOptions()...),
-			)
-
-			handle(c)
+			datatables.CreateDataTablesHandler(sqlCommand, path, commandPath, options...)(c)
 		})
 
 	server.Router.GET(path+"/download/*path", func(c *gin.Context) {
-		// get file name at end of path
-		index := strings.LastIndex(path, "/")
+		path_ := c.Param("path")
+		path_ = strings.TrimPrefix(path_, path+"/")
+		index := strings.LastIndex(path_, "/")
 		if index == -1 {
 			c.JSON(500, gin.H{"error": "could not find file name"})
 			return
 		}
-		if index >= len(path)-1 {
+		if index >= len(path_)-1 {
 			c.JSON(500, gin.H{"error": "could not find file name"})
 			return
 		}
-		fileName := path[index+1:]
+		fileName := path_[index+1:]
 
-		commandPath := strings.TrimPrefix(path[:index], "/")
+		commandPath := strings.TrimPrefix(path_[:index], path+"/")
 		sqlCommand, ok := getRepositoryCommand(c, cd.Repository, commandPath)
 		if !ok {
 			// JSON output and error code already handled by getRepositoryCommand
 			return
 		}
-
-		// create a temporary file for glazed output
-		tmpFile, err := os.CreateTemp("/tmp", fmt.Sprintf("glazed-output-*.%s", fileName))
-		if err != nil {
-			c.JSON(500, gin.H{"error": "could not create temporary file"})
-			return
-		}
-		defer func(name string) {
-			_ = os.Remove(name)
-		}(tmpFile.Name())
-
-		// now check file suffix for content-type
-		glazedOverrides := map[string]interface{}{
-			"output-file": tmpFile.Name(),
-		}
-		if strings.HasSuffix(fileName, ".csv") {
-			glazedOverrides["output"] = "table"
-			glazedOverrides["table-format"] = "csv"
-		} else if strings.HasSuffix(fileName, ".tsv") {
-			glazedOverrides["output"] = "table"
-			glazedOverrides["table-format"] = "tsv"
-		} else if strings.HasSuffix(fileName, ".md") {
-			glazedOverrides["output"] = "table"
-			glazedOverrides["table-format"] = "markdown"
-		} else if strings.HasSuffix(fileName, ".html") {
-			glazedOverrides["output"] = "table"
-			glazedOverrides["table-format"] = "html"
-		} else if strings.HasSuffix(fileName, ".json") {
-			glazedOverrides["output"] = "json"
-		} else if strings.HasSuffix(fileName, ".yaml") {
-			glazedOverrides["yaml"] = "yaml"
-		} else if strings.HasSuffix(fileName, ".xlsx") {
-			glazedOverrides["output"] = "excel"
-		} else if strings.HasSuffix(fileName, ".txt") {
-			glazedOverrides["output"] = "table"
-			glazedOverrides["table-format"] = "ascii"
-		} else {
-			c.JSON(500, gin.H{"error": "could not determine output format"})
-			return
-		}
-
 		parserOptions := cd.computeParserOptions()
 
-		// override parameter layers at the end
-		parserOptions = append(parserOptions, parser.WithAppendOverrides("glazed", glazedOverrides))
-
-		handle := server.HandleSimpleQueryOutputFileCommand(
+		// TODO(manuel, 223-07-03) this is really only necessary for excel, I think.
+		// Other formats can render straight to the stream
+		output_file.CreateGlazedFileHandler(
 			sqlCommand,
-			tmpFile.Name(),
 			fileName,
-			glazed.WithParserOptions(parserOptions...),
-		)
-
-		handle(c)
+			parserOptions...,
+		)(c)
 	})
 
 	return nil

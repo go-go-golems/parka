@@ -74,45 +74,64 @@ func (pc *CommandContext) GetAllParameterValues() map[string]interface{} {
 	return ret
 }
 
-// CommandHandlerFunc mirrors gin's HandlerFunc, but also gets passed a CommandContext.
-// That allows it to reuse data from the gin.Context, most importantly the request itself.
-type CommandHandlerFunc func(*gin.Context, *CommandContext) error
+// ContextMiddleware is used to build up a CommandContext. It is similar to the HandlerFunc
+// in gin, but instead of handling the HTTP response, it is only used to build up the CommandContext.
+type ContextMiddleware interface {
+	Handle(*gin.Context, *CommandContext) error
+}
 
-// HandlePrepopulatedParameters sets the given parameters in the CommandContext's ParsedParameters.
-// If any of the given parameters also belong to a layer, they are also set there.
-func HandlePrepopulatedParameters(ps map[string]interface{}) CommandHandlerFunc {
-	return func(c *gin.Context, pc *CommandContext) error {
-		for k, v := range ps {
-			pc.ParsedParameters[k] = v
+// PrepopulatedContextMiddleware is a ContextMiddleware that prepopulates the CommandContext with
+// the given map of parameters. It overwrites existing parameters in pc.ParsedParameters,
+// and overwrites parameters in individual parser layers if they have already been set.
+type PrepopulatedContextMiddleware struct {
+	ps map[string]interface{}
+}
 
-			// Now check if the parameter is in any of the layers, and if so, set it there as well
-			for _, layer := range pc.ParsedLayers {
-				if _, ok := layer.Parameters[k]; ok {
-					layer.Parameters[k] = v
-				}
+func (p *PrepopulatedContextMiddleware) Handle(c *gin.Context, pc *CommandContext) error {
+	for k, v := range p.ps {
+		pc.ParsedParameters[k] = v
+
+		// Now check if the parameter is in any of the layers, and if so, set it there as well
+		for _, layer := range pc.ParsedLayers {
+			if _, ok := layer.Parameters[k]; ok {
+				layer.Parameters[k] = v
 			}
 		}
-		return nil
+	}
+	return nil
+}
+
+func NewPrepopulatedContextMiddleware(ps map[string]interface{}) *PrepopulatedContextMiddleware {
+	return &PrepopulatedContextMiddleware{
+		ps: ps,
 	}
 }
 
-// HandlePrepopulatedParsedLayers sets the given layers in the CommandContext's Layers,
-// overriding the parameters of any layers that are already present.
-// This means that if a parameter is not set in layers_ but is set in the Layers,
-// the value in the Layers will be kept.
-func HandlePrepopulatedParsedLayers(layers_ map[string]*layers.ParsedParameterLayer) CommandHandlerFunc {
-	return func(c *gin.Context, pc *CommandContext) error {
-		for k, v := range layers_ {
-			parsedLayer, ok := pc.ParsedLayers[k]
-			if ok {
-				for k2, v2 := range v.Parameters {
-					parsedLayer.Parameters[k2] = v2
-				}
-			} else {
-				pc.ParsedLayers[k] = v
+// PrepopulatedParsedLayersContextMiddleware is a ContextMiddleware that prepopulates the CommandContext with
+// the given map of layers. If a layer already exists, it overwrites its parameters.
+type PrepopulatedParsedLayersContextMiddleware struct {
+	layers map[string]*layers.ParsedParameterLayer
+}
+
+func (p *PrepopulatedParsedLayersContextMiddleware) Handle(c *gin.Context, pc *CommandContext) error {
+	for k, v := range p.layers {
+		parsedLayer, ok := pc.ParsedLayers[k]
+		if ok {
+			for k2, v2 := range v.Parameters {
+				parsedLayer.Parameters[k2] = v2
 			}
+		} else {
+			pc.ParsedLayers[k] = v
 		}
-		return nil
+	}
+	return nil
+}
+
+func NewPrepopulatedParsedLayersContextMiddleware(
+	layers map[string]*layers.ParsedParameterLayer,
+) *PrepopulatedParsedLayersContextMiddleware {
+	return &PrepopulatedParsedLayersContextMiddleware{
+		layers: layers,
 	}
 }
 
@@ -164,31 +183,39 @@ func NewCommandFormParser(cmd cmds.GlazeCommand, options ...parser.ParserOption)
 	return ph
 }
 
-// NewParserCommandHandlerFunc creates a CommandHandlerFunc using the given parser.Parser.
-// It also first establishes a set of defaults by loading them from an alias definition.
-func NewParserCommandHandlerFunc(cmd cmds.GlazeCommand, parserHandler *parser.Parser) CommandHandlerFunc {
-	return func(c *gin.Context, pc *CommandContext) error {
-		parseState := parser.NewParseStateFromCommandDescription(cmd)
-		err := parserHandler.Parse(c, parseState)
-		if err != nil {
-			return err
-		}
+type ContextParserMiddleware struct {
+	command cmds.GlazeCommand
+	parser  *parser.Parser
+}
 
-		pc.ParsedParameters = parseState.FlagsAndArguments.Parameters
-		pc.ParsedLayers = map[string]*layers.ParsedParameterLayer{}
-		commandLayers := pc.Cmd.Description().Layers
-		for _, v := range commandLayers {
-			parsedParameterLayer := &layers.ParsedParameterLayer{
-				Layer:      v,
-				Parameters: map[string]interface{}{},
-			}
-			parsedLayers, ok := parseState.Layers[v.GetSlug()]
-			if ok {
-				parsedParameterLayer.Parameters = parsedLayers.Parameters
-			}
-			pc.ParsedLayers[v.GetSlug()] = parsedParameterLayer
-		}
+func (cpm *ContextParserMiddleware) Handle(c *gin.Context, pc *CommandContext) error {
+	parseState := parser.NewParseStateFromCommandDescription(cpm.command)
+	err := cpm.parser.Parse(c, parseState)
+	if err != nil {
+		return err
+	}
 
-		return nil
+	pc.ParsedParameters = parseState.FlagsAndArguments.Parameters
+	pc.ParsedLayers = map[string]*layers.ParsedParameterLayer{}
+	commandLayers := pc.Cmd.Description().Layers
+	for _, v := range commandLayers {
+		parsedParameterLayer := &layers.ParsedParameterLayer{
+			Layer:      v,
+			Parameters: map[string]interface{}{},
+		}
+		parsedLayers, ok := parseState.Layers[v.GetSlug()]
+		if ok {
+			parsedParameterLayer.Parameters = parsedLayers.Parameters
+		}
+		pc.ParsedLayers[v.GetSlug()] = parsedParameterLayer
+	}
+
+	return nil
+}
+
+func NewContextParserMiddleware(cmd cmds.GlazeCommand, parser *parser.Parser) *ContextParserMiddleware {
+	return &ContextParserMiddleware{
+		command: cmd,
+		parser:  parser,
 	}
 }

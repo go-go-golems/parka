@@ -1,12 +1,11 @@
-package json
+package glazed
 
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	json2 "github.com/go-go-golems/glazed/pkg/formatters/json"
-	"github.com/go-go-golems/glazed/pkg/middlewares/row"
+	"github.com/go-go-golems/glazed/pkg/middlewares/table"
+	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/parka/pkg/glazed"
-	"github.com/go-go-golems/parka/pkg/glazed/handlers"
 	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"github.com/rs/zerolog/log"
 	"io"
@@ -64,21 +63,28 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 		}
 	}
 
-	gp, err := handlers.CreateTableProcessorWithOutput(pc, "json", "")
+	glazedLayer := pc.ParsedLayers["glazed"]
+
+	ps := make(map[string]interface{})
+	if glazedLayer != nil {
+		ps = glazedLayer.Parameters
+	}
+
+	gp, err := settings.SetupTableProcessor(ps)
 	if err != nil {
 		return err
 	}
 
-	// remove table middlewares because we are a streaming handler
-	gp.ReplaceTableMiddleware()
-	gp.AddRowMiddleware(row.NewOutputMiddleware(json2.NewOutputFormatter(), writer))
-
-	c.Header("Content-Type", "application/json")
-
-	_, err = writer.Write([]byte("[\n"))
+	of, err := settings.SetupTableOutputFormatter(ps)
 	if err != nil {
 		return err
 	}
+
+	// TODO(manuel, 2023-07-02) It would be good to use streaming here for the formats that support it
+	// See: https://github.com/go-go-golems/parka/issues/68
+	gp.AddTableMiddleware(table.NewOutputMiddleware(of, writer))
+
+	c.Header("Content-Type", of.ContentType())
 
 	ctx := c.Request.Context()
 	err = h.cmd.Run(ctx, pc.ParsedLayers, pc.ParsedParameters, gp)
@@ -91,15 +97,10 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 		return err
 	}
 
-	_, err = writer.Write([]byte("\n]"))
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
-func HandleJSONQueryHandler(
+func HandleQueryHandler(
 	cmd cmds.GlazeCommand,
 	parserOptions ...parser.ParserOption,
 ) gin.HandlerFunc {

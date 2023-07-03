@@ -6,7 +6,7 @@ import (
 	"github.com/go-go-golems/parka/pkg/glazed"
 )
 
-func CreateTableProcessor(pc *glazed.CommandContext, outputType string, tableType string) (*middlewares.TableProcessor, error) {
+func CreateTableProcessorWithOutput(pc *glazed.CommandContext, outputType string, tableFormat string) (*middlewares.TableProcessor, error) {
 	var gp *middlewares.TableProcessor
 	var err error
 
@@ -14,16 +14,34 @@ func CreateTableProcessor(pc *glazed.CommandContext, outputType string, tableTyp
 
 	if glazedLayer != nil {
 		glazedLayer.Parameters["output"] = outputType
-		glazedLayer.Parameters["table"] = tableType
+		glazedLayer.Parameters["table"] = tableFormat
 		gp, err = settings.SetupTableProcessor(glazedLayer.Parameters)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		gp, err = settings.SetupTableProcessor(map[string]interface{}{
-			"output": outputType,
-			"table":  tableType,
+			"output":       outputType,
+			"table-format": tableFormat,
 		})
+	}
+
+	return gp, err
+}
+
+func CreateTableProcessor(pc *glazed.CommandContext) (*middlewares.TableProcessor, error) {
+	var gp *middlewares.TableProcessor
+	var err error
+
+	glazedLayer := pc.ParsedLayers["glazed"]
+
+	if glazedLayer != nil {
+		gp, err = settings.SetupTableProcessor(glazedLayer.Parameters)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		gp, err = settings.SetupTableProcessor(map[string]interface{}{})
 	}
 
 	return gp, err

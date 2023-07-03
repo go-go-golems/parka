@@ -9,6 +9,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/types"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
 	json2 "github.com/go-go-golems/parka/pkg/glazed/handlers/json"
+	output_file "github.com/go-go-golems/parka/pkg/glazed/handlers/output-file"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/server"
 	"github.com/go-go-golems/parka/pkg/utils/fs"
@@ -72,7 +73,8 @@ var ServeCmd = &cobra.Command{
 		// NOTE(manuel, 2023-05-26) This could also be done with a simple Command config file struct once
 		// implemented as part of sqleton serve
 		s.Router.GET("/api/example", json2.HandleJSONQueryHandler(NewExampleCommand()))
-		s.Router.GET("/sqleton/example", datatables.HandleDataTables(NewExampleCommand(), "", "example"))
+		s.Router.GET("/example", datatables.HandleDataTables(NewExampleCommand(), "", "example"))
+		s.Router.GET("/download/example.csv", output_file.HandleGlazedOutputFileHandler(NewExampleCommand(), "example.csv"))
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()

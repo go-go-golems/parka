@@ -8,6 +8,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/json"
+	output_file "github.com/go-go-golems/parka/pkg/glazed/handlers/output-file"
 	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
@@ -463,61 +464,13 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			// JSON output and error code already handled by getRepositoryCommand
 			return
 		}
-
-		// create a temporary file for glazed output
-		tmpFile, err := os.CreateTemp("/tmp", fmt.Sprintf("glazed-output-*.%s", fileName))
-		if err != nil {
-			c.JSON(500, gin.H{"error": "could not create temporary file"})
-			return
-		}
-		defer func(name string) {
-			_ = os.Remove(name)
-		}(tmpFile.Name())
-
-		// now check file suffix for content-type
-		glazedOverrides := map[string]interface{}{
-			"output-file": tmpFile.Name(),
-		}
-		if strings.HasSuffix(fileName, ".csv") {
-			glazedOverrides["output"] = "table"
-			glazedOverrides["table-format"] = "csv"
-		} else if strings.HasSuffix(fileName, ".tsv") {
-			glazedOverrides["output"] = "table"
-			glazedOverrides["table-format"] = "tsv"
-		} else if strings.HasSuffix(fileName, ".md") {
-			glazedOverrides["output"] = "table"
-			glazedOverrides["table-format"] = "markdown"
-		} else if strings.HasSuffix(fileName, ".html") {
-			glazedOverrides["output"] = "table"
-			glazedOverrides["table-format"] = "html"
-		} else if strings.HasSuffix(fileName, ".json") {
-			glazedOverrides["output"] = "json"
-		} else if strings.HasSuffix(fileName, ".yaml") {
-			glazedOverrides["yaml"] = "yaml"
-		} else if strings.HasSuffix(fileName, ".xlsx") {
-			glazedOverrides["output"] = "excel"
-		} else if strings.HasSuffix(fileName, ".txt") {
-			glazedOverrides["output"] = "table"
-			glazedOverrides["table-format"] = "ascii"
-		} else {
-			c.JSON(500, gin.H{"error": "could not determine output format"})
-			return
-		}
-
 		parserOptions := cd.computeParserOptions()
-		// override parameter layers at the end
-		parserOptions = append(parserOptions, parser.WithAppendOverrides("glazed", glazedOverrides))
-		_ = parserOptions
 
-		_ = sqlCommand
-		//handle := server.HandleSimpleQueryOutputFileCommand(
-		//	sqlCommand,
-		//	tmpFile.Name(),
-		//	fileName,
-		//	glazed.WithParserOptions(parserOptions...),
-		//)
-		//
-		//handle(c)
+		output_file.HandleGlazedOutputFileHandler(
+			sqlCommand,
+			fileName,
+			parserOptions...,
+		)
 	})
 
 	return nil

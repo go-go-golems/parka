@@ -7,7 +7,9 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
+	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
+	"github.com/spf13/cobra"
 )
 
 type ExampleCommand struct {
@@ -15,93 +17,100 @@ type ExampleCommand struct {
 }
 
 func NewExampleCommand() *ExampleCommand {
-	return &ExampleCommand{
-		description: &cmds.CommandDescription{
-			Name:  "example",
-			Short: "Short parka example command",
-			Long:  "",
-			Flags: []*parameters.ParameterDefinition{
-				// required string test argument
-				{
-					Name:      "test",
-					ShortFlag: "t",
-					Type:      parameters.ParameterTypeString,
-					Help:      "Test string argument",
-					Default:   "test",
-				},
-				{
-					Name:      "string",
-					ShortFlag: "s",
-					Type:      parameters.ParameterTypeString,
-					Help:      "Test string flag",
-					Default:   "default",
-					Required:  false,
-				},
-				{
-					Name: "string_from_file",
-					Type: parameters.ParameterTypeStringFromFile,
-					Help: "Test string from file flag",
-				},
-				{
-					Name: "object_from_file",
-					Type: parameters.ParameterTypeObjectFromFile,
-					Help: "Test object from file flag",
-				},
-				{
-					Name:      "integer",
-					ShortFlag: "i",
-					Type:      parameters.ParameterTypeInteger,
-					Help:      "Test integer flag",
-					Default:   1,
-				},
-				{
-					Name:      "float",
-					ShortFlag: "f",
-					Type:      parameters.ParameterTypeFloat,
-					Help:      "Test float flag",
-					Default:   1.0,
-				},
-				{
-					Name:      "bool",
-					ShortFlag: "b",
-					Type:      parameters.ParameterTypeBool,
-					Help:      "Test bool flag",
-				},
-				{
-					Name:      "date",
-					ShortFlag: "d",
-					Type:      parameters.ParameterTypeDate,
-					Help:      "Test date flag",
-				},
-				{
-					Name:      "string_list",
-					ShortFlag: "l",
-					Type:      parameters.ParameterTypeStringList,
-					Help:      "Test string list flag",
-					Default:   []string{"default", "default2"},
-				},
-				{
-					Name:    "integer_list",
-					Type:    parameters.ParameterTypeIntegerList,
-					Help:    "Test integer list flag",
-					Default: []int{1, 2},
-				},
-				{
-					Name:    "float_list",
-					Type:    parameters.ParameterTypeFloatList,
-					Help:    "Test float list flag",
-					Default: []float64{1.0, 2.0},
-				},
-				{
-					Name:      "choice",
-					ShortFlag: "c",
-					Type:      parameters.ParameterTypeChoice,
-					Help:      "Test choice flag",
-					Choices:   []string{"choice1", "choice2"},
-					Default:   "choice1",
-				},
+	glazedParameterLayer, err := settings.NewGlazedParameterLayers()
+	cobra.CheckErr(err)
+
+	description := &cmds.CommandDescription{
+		Name:  "example",
+		Short: "Short parka example command",
+		Long:  "",
+		Flags: []*parameters.ParameterDefinition{
+			// required string test argument
+			{
+				Name:      "test",
+				ShortFlag: "t",
+				Type:      parameters.ParameterTypeString,
+				Help:      "Test string argument",
+				Default:   "test",
+			},
+			{
+				Name:      "string",
+				ShortFlag: "s",
+				Type:      parameters.ParameterTypeString,
+				Help:      "Test string flag",
+				Default:   "default",
+				Required:  false,
+			},
+			{
+				Name: "string_from_file",
+				Type: parameters.ParameterTypeStringFromFile,
+				Help: "Test string from file flag",
+			},
+			{
+				Name: "object_from_file",
+				Type: parameters.ParameterTypeObjectFromFile,
+				Help: "Test object from file flag",
+			},
+			{
+				Name:      "integer",
+				ShortFlag: "i",
+				Type:      parameters.ParameterTypeInteger,
+				Help:      "Test integer flag",
+				Default:   1,
+			},
+			{
+				Name:      "float",
+				ShortFlag: "f",
+				Type:      parameters.ParameterTypeFloat,
+				Help:      "Test float flag",
+				Default:   1.0,
+			},
+			{
+				Name:      "bool",
+				ShortFlag: "b",
+				Type:      parameters.ParameterTypeBool,
+				Help:      "Test bool flag",
+			},
+			{
+				Name:      "date",
+				ShortFlag: "d",
+				Type:      parameters.ParameterTypeDate,
+				Help:      "Test date flag",
+			},
+			{
+				Name:      "string_list",
+				ShortFlag: "l",
+				Type:      parameters.ParameterTypeStringList,
+				Help:      "Test string list flag",
+				Default:   []string{"default", "default2"},
+			},
+			{
+				Name:    "integer_list",
+				Type:    parameters.ParameterTypeIntegerList,
+				Help:    "Test integer list flag",
+				Default: []int{1, 2},
+			},
+			{
+				Name:    "float_list",
+				Type:    parameters.ParameterTypeFloatList,
+				Help:    "Test float list flag",
+				Default: []float64{1.0, 2.0},
+			},
+			{
+				Name:      "choice",
+				ShortFlag: "c",
+				Type:      parameters.ParameterTypeChoice,
+				Help:      "Test choice flag",
+				Choices:   []string{"choice1", "choice2"},
+				Default:   "choice1",
 			},
 		},
+		Layers: []layers.ParameterLayer{
+			glazedParameterLayer,
+		},
+	}
+	return &ExampleCommand{
+		description: description,
 	}
 }
 

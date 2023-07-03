@@ -2,7 +2,10 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"github.com/go-go-golems/clay/pkg/repositories"
+	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/loaders"
 	"github.com/go-go-golems/glazed/pkg/helpers/strings"
 	"github.com/go-go-golems/parka/pkg/handlers/command-dir"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
@@ -13,6 +16,7 @@ import (
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/server"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 	"os"
@@ -25,6 +29,47 @@ import (
 // RepositoryFactory is a function that returns a repository given a list of directories.
 // This is used to provision the CommandDir handlers.
 type RepositoryFactory func(dirs []string) (*repositories.Repository, error)
+
+func NewRepositoryFactoryFromLoaders(
+	commandLoader loaders.ReaderCommandLoader,
+	fsLoader loaders.FSCommandLoader,
+) RepositoryFactory {
+	return func(dirs []string) (*repositories.Repository, error) {
+		r := repositories.NewRepository(
+			repositories.WithDirectories(dirs),
+			repositories.WithUpdateCallback(func(cmd cmds.Command) error {
+				description := cmd.Description()
+				log.Info().Str("name", description.Name).
+					Str("source", description.Source).
+					Msg("Updating cmd")
+				// TODO(manuel, 2023-04-19) This is where we would recompute the HandlerFunc used below in GET and POST
+				return nil
+			}),
+			repositories.WithRemoveCallback(func(cmd cmds.Command) error {
+				description := cmd.Description()
+				log.Info().Str("name", description.Name).
+					Str("source", description.Source).
+					Msg("Removing cmd")
+				// TODO(manuel, 2023-04-19) This is where we would recompute the HandlerFunc used below in GET and POST
+				// NOTE(manuel, 2023-05-25) Regarding the above TODO, why?
+				// We don't need to recompute the func, since it fetches the command at runtime.
+				return nil
+			}),
+			repositories.WithCommandLoader(commandLoader),
+			repositories.WithFSLoader(fsLoader),
+		)
+
+		err := r.LoadCommands()
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "Error initializing commands: %s\n", err)
+			os.Exit(1)
+		}
+
+		return r, nil
+
+	}
+
+}
 
 // ConfigFileHandler contains everything needed to serve a config file
 type ConfigFileHandler struct {

@@ -198,7 +198,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 		dt_.HTMLStream = make(chan template.HTML, 100)
 	}
 
-	gp, err := handlers.CreateTableProcessor(pc, "table", "")
+	gp, err := handlers.CreateTableProcessorWithOutput(pc, "table", "")
 	if err != nil {
 		return err
 	}

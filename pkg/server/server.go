@@ -11,6 +11,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"io/fs"
 	"net/http"
+	"net/http/pprof"
 )
 
 //go:embed "web/src/templates/*"
@@ -183,6 +184,27 @@ func NewServer(options ...ServerOption) (*Server, error) {
 	}
 
 	return s, nil
+}
+
+func (s *Server) RegisterDebugRoutes() {
+	handlers_ := map[string]http.HandlerFunc{
+		"/debug/pprof/cmdline":   pprof.Cmdline,
+		"/debug/pprof/profile":   pprof.Profile,
+		"/debug/pprof/symbol":    pprof.Symbol,
+		"/debug/pprof/trace":     pprof.Trace,
+		"/debug/pprof/mutex":     pprof.Index,
+		"/debug/pprof/allocs":    pprof.Index,
+		"/debug/pprof/block":     pprof.Index,
+		"/debug/pprof/goroutine": pprof.Index,
+	}
+
+	for route, handler := range handlers_ {
+		route_ := route
+		handler_ := handler
+		s.Router.GET(route_, func(c *gin.Context) {
+			handler_(c.Writer, c.Request)
+		})
+	}
 }
 
 // Run will start the server and listen on the given address and port.

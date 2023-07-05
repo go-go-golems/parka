@@ -10,6 +10,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/formatters/json"
 	table_formatter "github.com/go-go-golems/glazed/pkg/formatters/table"
 	"github.com/go-go-golems/glazed/pkg/middlewares/row"
+	"github.com/go-go-golems/glazed/pkg/middlewares/table"
 	"github.com/go-go-golems/glazed/pkg/types"
 	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
@@ -61,6 +62,11 @@ type DataTables struct {
 
 	// AdditionalData to be passed to the rendering engine
 	AdditionalData map[string]interface{}
+	// StreamRows is used to control whether the rows should be streamed or not.
+	// If set to false, a TableMiddleware used (which collects all rows, but thus also all column names)
+	// into memory before passing them to the template.
+	// This is useful when the rows are "ragged" (i.e. not all rows have the same number of columns).
+	StreamRows bool
 }
 
 //go:embed templates/*
@@ -162,6 +168,12 @@ func WithAdditionalData(data map[string]interface{}) QueryHandlerOption {
 	}
 }
 
+func WithStreamRows(streamRows bool) QueryHandlerOption {
+	return func(h *QueryHandler) {
+		h.dt.StreamRows = streamRows
+	}
+}
+
 func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	pc := glazed.NewCommandContext(qh.cmd)
 
@@ -202,14 +214,20 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 		dt_.HTMLStream = make(chan template.HTML, 100)
 	}
 
+	// manually create a streaming output TableProcessor
 	gp, err := handlers.CreateTableProcessorWithOutput(pc, "table", "")
 	if err != nil {
 		return err
 	}
 
-	gp.ReplaceTableMiddleware()
-	gp.AddRowMiddleware(row.NewColumnsChannelMiddleware(columnsC, true))
-	gp.AddRowMiddleware(row.NewOutputChannelMiddleware(of, rowC))
+	if dt_.StreamRows {
+		gp.ReplaceTableMiddleware()
+		gp.AddRowMiddleware(row.NewColumnsChannelMiddleware(columnsC, true))
+		gp.AddRowMiddleware(row.NewOutputChannelMiddleware(of, rowC))
+	} else {
+		gp.AddTableMiddleware(table.NewColumnsChannelMiddleware(columnsC))
+		gp.AddTableMiddleware(table.NewOutputChannelMiddleware(of, rowC))
+	}
 
 	ctx := c.Request.Context()
 	ctx2, cancel := context.WithCancel(ctx)
@@ -332,7 +350,6 @@ func CreateDataTablesHandler(
 	commandPath string,
 	options ...QueryHandlerOption,
 ) gin.HandlerFunc {
-	// TODO(manuel, 2023-07-02) Move this to the datatables package
 	return func(c *gin.Context) {
 		name := cmd.Description().Name
 		dateTime := time.Now().Format("2006-01-02--15-04-05")

@@ -53,6 +53,11 @@ func (h *OutputFileHandler) Handle(c *gin.Context, w io.Writer) error {
 	return nil
 }
 
+// CreateGlazedFileHandler creates a handler that will run a glazed command and write the output
+// with a Content-Disposition header to the response writer.
+//
+// If an output format requires writing to a temporary file locally, such as excel,
+// the handler is wrapped in a temporary file handler.
 func CreateGlazedFileHandler(
 	cmd cmds.GlazeCommand,
 	fileName string,

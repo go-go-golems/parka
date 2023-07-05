@@ -96,6 +96,15 @@ type CommandDirHandler struct {
 
 	Overrides *HandlerParameters
 	Defaults  *HandlerParameters
+
+	// If true, all glazed outputs will try to use a row output if possible.
+	// This means that "ragged" objects (where columns might not all be present)
+	// will have missing columns, only the fields of the first object will be used
+	// as rows.
+	//
+	// This is true per default, and needs to be explicitly set to false to use
+	// a normal TableMiddleware oriented output.
+	Stream bool
 }
 
 type CommandDirHandlerOption func(handler *CommandDirHandler)
@@ -327,6 +336,13 @@ func NewCommandDirHandlerFromConfig(
 		}
 	}
 
+	// by default, we stream
+	if config.Stream != nil {
+		cd.Stream = *config.Stream
+	} else {
+		cd.Stream = true
+	}
+
 	for _, option := range options {
 		option(cd)
 	}
@@ -365,6 +381,15 @@ func NewCommandDirHandlerFromConfig(
 
 func (cd *CommandDirHandler) computeParserOptions() []parser.ParserOption {
 	parserOptions := []parser.ParserOption{}
+
+	if cd.Stream {
+		// if the config file says to use stream (which is the default), override the stream glazed flag,
+		// which will make it prefer the row output when possible
+		parserOptions = append(parserOptions,
+			parser.WithAppendOverrides("glazed", map[string]interface{}{
+				"stream": true,
+			}))
+	}
 
 	// TODO(manuel, 2023-06-21) This needs to be handled for each backend, not just the HTML one
 	if cd.Overrides != nil {
@@ -440,6 +465,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 				datatables.WithTemplateLookup(cd.TemplateLookup),
 				datatables.WithTemplateName(cd.TemplateName),
 				datatables.WithAdditionalData(cd.AdditionalData),
+				datatables.WithStreamRows(cd.Stream),
 			}
 
 			datatables.CreateDataTablesHandler(sqlCommand, path, commandPath, options...)(c)
@@ -467,8 +493,6 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		}
 		parserOptions := cd.computeParserOptions()
 
-		// TODO(manuel, 223-07-03) this is really only necessary for excel, I think.
-		// Other formats can render straight to the stream
 		output_file.CreateGlazedFileHandler(
 			sqlCommand,
 			fileName,

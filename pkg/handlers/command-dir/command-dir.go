@@ -465,6 +465,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 				datatables.WithTemplateLookup(cd.TemplateLookup),
 				datatables.WithTemplateName(cd.TemplateName),
 				datatables.WithAdditionalData(cd.AdditionalData),
+				datatables.WithStreamRows(cd.Stream),
 			}
 
 			datatables.CreateDataTablesHandler(sqlCommand, path, commandPath, options...)(c)

@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"github.com/go-go-golems/clay/pkg/repositories"
+	"github.com/go-go-golems/clay/pkg/repositories/fs"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/loaders"
 	"github.com/go-go-golems/glazed/pkg/helpers/strings"
@@ -28,16 +28,16 @@ import (
 
 // RepositoryFactory is a function that returns a repository given a list of directories.
 // This is used to provision the CommandDir handlers.
-type RepositoryFactory func(dirs []string) (*repositories.Repository, error)
+type RepositoryFactory func(dirs []string) (*fs.Repository, error)
 
 func NewRepositoryFactoryFromLoaders(
 	commandLoader loaders.ReaderCommandLoader,
 	fsLoader loaders.FSCommandLoader,
 ) RepositoryFactory {
-	return func(dirs []string) (*repositories.Repository, error) {
-		r := repositories.NewRepository(
-			repositories.WithDirectories(dirs),
-			repositories.WithUpdateCallback(func(cmd cmds.Command) error {
+	return func(dirs []string) (*fs.Repository, error) {
+		r := fs.NewRepository(
+			fs.WithDirectories(dirs),
+			fs.WithUpdateCallback(func(cmd cmds.Command) error {
 				description := cmd.Description()
 				log.Info().Str("name", description.Name).
 					Str("source", description.Source).
@@ -45,7 +45,7 @@ func NewRepositoryFactoryFromLoaders(
 				// TODO(manuel, 2023-04-19) This is where we would recompute the HandlerFunc used below in GET and POST
 				return nil
 			}),
-			repositories.WithRemoveCallback(func(cmd cmds.Command) error {
+			fs.WithRemoveCallback(func(cmd cmds.Command) error {
 				description := cmd.Description()
 				log.Info().Str("name", description.Name).
 					Str("source", description.Source).
@@ -55,8 +55,8 @@ func NewRepositoryFactoryFromLoaders(
 				// We don't need to recompute the func, since it fetches the command at runtime.
 				return nil
 			}),
-			repositories.WithCommandLoader(commandLoader),
-			repositories.WithFSLoader(fsLoader),
+			fs.WithCommandLoader(commandLoader),
+			fs.WithFSLoader(fsLoader),
 		)
 
 		err := r.LoadCommands()

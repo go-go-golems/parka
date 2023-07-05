@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/clay/pkg/repositories"
+	"github.com/go-go-golems/clay/pkg/repositories/fs"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
@@ -89,7 +90,7 @@ type CommandDirHandler struct {
 	TemplateLookup render.TemplateLookup
 
 	// Repository is the command repository that is exposed over HTTP through this handler.
-	Repository *repositories.Repository
+	Repository *fs.Repository
 
 	// AdditionalData is passed to the template being rendered.
 	AdditionalData map[string]interface{}
@@ -304,7 +305,7 @@ func WithDevMode(devMode bool) CommandDirHandlerOption {
 	}
 }
 
-func WithRepository(r *repositories.Repository) CommandDirHandlerOption {
+func WithRepository(r *fs.Repository) CommandDirHandlerOption {
 	return func(handler *CommandDirHandler) {
 		handler.Repository = r
 	}
@@ -507,9 +508,9 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 // or sends an error code over HTTP using the gin.Context.
 //
 // TODO(manuel, 2023-05-31) This is an odd API, is it necessary?
-func getRepositoryCommand(c *gin.Context, r *repositories.Repository, commandPath string) (cmds.GlazeCommand, bool) {
+func getRepositoryCommand(c *gin.Context, r repositories.Repository, commandPath string) (cmds.GlazeCommand, bool) {
 	path := strings.Split(commandPath, "/")
-	commands := r.Root.CollectCommands(path, false)
+	commands := r.CollectCommands(path, false)
 	if len(commands) == 0 {
 		return nil, false
 	}

@@ -84,8 +84,7 @@ type TemplateLookupConfig struct {
 	Patterns []string `yaml:"patterns,omitempty"`
 }
 
-// TODO(manuel, 2023-06-20) We should probably allow for environment values to be passed as data as well
-
+// CommandDir represents the config file entry for a command directory route.
 type CommandDir struct {
 	Repositories               []string `yaml:"repositories"`
 	IncludeDefaultRepositories *bool    `yaml:"includeDefaultRepositories"`
@@ -98,6 +97,8 @@ type CommandDir struct {
 	AdditionalData map[string]interface{} `yaml:"additionalData,omitempty"`
 	Defaults       *LayerParams           `yaml:"defaults,omitempty"`
 	Overrides      *LayerParams           `yaml:"overrides,omitempty"`
+
+	Stream *bool `yaml:"stream,omitempty"`
 }
 
 func expandPaths(paths []string) ([]string, error) {

@@ -202,6 +202,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 		dt_.HTMLStream = make(chan template.HTML, 100)
 	}
 
+	// manually create a streaming output TableProcessor
 	gp, err := handlers.CreateTableProcessorWithOutput(pc, "table", "")
 	if err != nil {
 		return err
@@ -332,7 +333,6 @@ func CreateDataTablesHandler(
 	commandPath string,
 	options ...QueryHandlerOption,
 ) gin.HandlerFunc {
-	// TODO(manuel, 2023-07-02) Move this to the datatables package
 	return func(c *gin.Context) {
 		name := cmd.Description().Name
 		dateTime := time.Now().Format("2006-01-02--15-04-05")

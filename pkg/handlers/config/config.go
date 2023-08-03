@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 	"os"
 	"strings"
@@ -111,6 +112,7 @@ func expandPaths(paths []string) ([]string, error) {
 		path = expandPath(path_.(string))
 
 		if _, err := os.Stat(path); os.IsNotExist(err) {
+			log.Warn().Str("path", path).Msg("path does not exist")
 			continue
 		}
 

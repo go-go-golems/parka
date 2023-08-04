@@ -9,7 +9,6 @@ import (
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/json"
 	output_file "github.com/go-go-golems/parka/pkg/glazed/handlers/output-file"
-	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
 	parka "github.com/go-go-golems/parka/pkg/server"
@@ -138,6 +137,8 @@ func NewCommandDirHandlerFromConfig(
 		OverridesAndDefaults: &config.OverridesAndDefaults{},
 	}
 
+	// NOTE(manuel, 2023-08-03) most of this matches CommandDirHandler, maybe at some point we could unify them both
+	// Let's see when this starts causing trouble again
 	if config_.Overrides != nil {
 		cd.OverridesAndDefaults.Overrides = &config.HandlerParameters{
 			Flags:     config_.Overrides.Flags,
@@ -178,7 +179,6 @@ func NewCommandDirHandlerFromConfig(
 	}
 
 	// we run this after the options in order to get the DevMode value
-
 	if cd.TemplateLookup == nil {
 		if config_.TemplateLookup != nil {
 			patterns := config_.TemplateLookup.Patterns
@@ -198,7 +198,6 @@ func NewCommandDirHandlerFromConfig(
 		} else {
 			cd.TemplateLookup = datatables.NewDataTablesLookupTemplate()
 		}
-
 	}
 
 	err := cd.TemplateLookup.Reload()
@@ -207,48 +206,6 @@ func NewCommandDirHandlerFromConfig(
 	}
 
 	return cd, nil
-}
-
-func (cd *CommandDirHandler) computeParserOptions() []parser.ParserOption {
-	parserOptions := []parser.ParserOption{}
-
-	if cd.Stream {
-		// if the config file says to use stream (which is the default), override the stream glazed flag,
-		// which will make it prefer the row output when possible
-		parserOptions = append(parserOptions,
-			parser.WithAppendOverrides("glazed", map[string]interface{}{
-				"stream": true,
-			}))
-	}
-
-	// TODO(manuel, 2023-06-21) This needs to be handled for each backend, not just the HTML one
-	if cd.OverridesAndDefaults.Overrides != nil {
-		parserOptions = append(parserOptions,
-			parser.WithAppendOverrides(parser.DefaultSlug, cd.OverridesAndDefaults.Overrides.Flags),
-		)
-		parserOptions = append(parserOptions,
-			parser.WithAppendOverrides(parser.DefaultSlug, cd.OverridesAndDefaults.Overrides.Arguments),
-		)
-		for slug, layer := range cd.OverridesAndDefaults.Overrides.Layers {
-			parserOptions = append(parserOptions, parser.WithAppendOverrides(slug, layer))
-		}
-	}
-
-	if cd.OverridesAndDefaults.Defaults != nil {
-		parserOptions = append(parserOptions,
-			parser.WithPrependDefaults(parser.DefaultSlug, cd.OverridesAndDefaults.Defaults.Flags),
-		)
-		parserOptions = append(parserOptions,
-			parser.WithPrependDefaults(parser.DefaultSlug, cd.OverridesAndDefaults.Defaults.Arguments),
-		)
-		for slug, layer := range cd.OverridesAndDefaults.Defaults.Layers {
-			// we use prepend because that way, later options will actually override earlier flag values,
-			// since they will be applied earlier.
-			parserOptions = append(parserOptions, parser.WithPrependDefaults(slug, layer))
-		}
-	}
-
-	return parserOptions
 }
 
 func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
@@ -283,7 +240,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			}
 
 			options := []datatables.QueryHandlerOption{
-				datatables.WithParserOptions(cd.computeParserOptions()...),
+				datatables.WithParserOptions(cd.OverridesAndDefaults.ComputeParserOptions(cd.Stream)...),
 				datatables.WithTemplateLookup(cd.TemplateLookup),
 				datatables.WithTemplateName(cd.TemplateName),
 				datatables.WithAdditionalData(cd.AdditionalData),
@@ -313,7 +270,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			// JSON output and error code already handled by getRepositoryCommand
 			return
 		}
-		parserOptions := cd.computeParserOptions()
+		parserOptions := cd.OverridesAndDefaults.ComputeParserOptions(cd.Stream)
 
 		output_file.CreateGlazedFileHandler(
 			sqlCommand,

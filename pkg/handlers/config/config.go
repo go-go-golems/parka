@@ -174,9 +174,13 @@ type Command struct {
 	File         string `yaml:"file"`
 	TemplateName string `yaml:"templateName"`
 
+	TemplateLookup *TemplateLookupConfig `yaml:"templateLookup,omitempty"`
+
 	AdditionalData map[string]interface{} `yaml:"additionalData,omitempty"`
 	Defaults       *LayerParams           `yaml:"defaults,omitempty"`
 	Overrides      *LayerParams           `yaml:"overrides,omitempty"`
+
+	Stream *bool `yaml:"stream,omitempty"`
 }
 
 func (c *Command) ExpandPaths() error {
@@ -202,6 +206,14 @@ func (c *Command) ExpandPaths() error {
 		}
 		c.Overrides = evaluatedOverrides
 	}
+
+	if c.TemplateLookup != nil {
+		c.TemplateLookup.Directories, err = expandPaths(c.TemplateLookup.Directories)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

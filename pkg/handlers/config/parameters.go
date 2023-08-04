@@ -1,6 +1,9 @@
 package config
 
-import "github.com/go-go-golems/glazed/pkg/cmds/layers"
+import (
+	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/parka/pkg/glazed/parser"
+)
 
 type HandlerParameters struct {
 	Layers    map[string]map[string]interface{}
@@ -202,4 +205,46 @@ func WithReplaceDefaultLayer(name string, layer map[string]interface{}) Override
 		}
 		handler.Defaults.Layers[name] = layer
 	}
+}
+
+func (od *OverridesAndDefaults) ComputeParserOptions(stream bool) []parser.ParserOption {
+	parserOptions := []parser.ParserOption{}
+
+	if stream {
+		// if the config file says to use stream (which is the default), override the stream glazed flag,
+		// which will make it prefer the row output when possible
+		parserOptions = append(parserOptions,
+			parser.WithAppendOverrides("glazed", map[string]interface{}{
+				"stream": true,
+			}))
+	}
+
+	// TODO(manuel, 2023-06-21) This needs to be handled for each backend, not just the HTML one
+	if od.Overrides != nil {
+		parserOptions = append(parserOptions,
+			parser.WithAppendOverrides(parser.DefaultSlug, od.Overrides.Flags),
+		)
+		parserOptions = append(parserOptions,
+			parser.WithAppendOverrides(parser.DefaultSlug, od.Overrides.Arguments),
+		)
+		for slug, layer := range od.Overrides.Layers {
+			parserOptions = append(parserOptions, parser.WithAppendOverrides(slug, layer))
+		}
+	}
+
+	if od.Defaults != nil {
+		parserOptions = append(parserOptions,
+			parser.WithPrependDefaults(parser.DefaultSlug, od.Defaults.Flags),
+		)
+		parserOptions = append(parserOptions,
+			parser.WithPrependDefaults(parser.DefaultSlug, od.Defaults.Arguments),
+		)
+		for slug, layer := range od.Defaults.Layers {
+			// we use prepend because that way, later options will actually override earlier flag values,
+			// since they will be applied earlier.
+			parserOptions = append(parserOptions, parser.WithPrependDefaults(slug, layer))
+		}
+	}
+
+	return parserOptions
 }

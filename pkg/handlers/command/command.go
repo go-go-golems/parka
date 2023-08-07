@@ -163,6 +163,24 @@ func NewCommandHandlerFromConfig(
 		allCmds = append(allCmds, alias)
 	}
 
+	if len(allCmds) == 0 {
+		return nil, errors.Errorf(
+			"no commands found in %s",
+			filePath,
+		)
+	}
+
+	if len(allCmds) > 1 {
+		return nil, errors.Errorf(
+			"more than one command found in %s, please specify which one to use",
+			filePath,
+		)
+	}
+
+	c.Command = allCmds[0]
+
+	// TODO(manuel, 2023-08-06) I think we hav eto find the proper command here
+
 	// NOTE(manuel, 2023-08-03) most of this matches CommandDirHandler, maybe at some point we could unify them both
 	// Let's see when this starts causing trouble again
 	if config_.Overrides != nil {

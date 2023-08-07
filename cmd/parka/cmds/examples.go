@@ -13,7 +13,7 @@ import (
 )
 
 type ExampleCommand struct {
-	description *cmds.CommandDescription
+	*cmds.CommandDescription
 }
 
 func NewExampleCommand() *ExampleCommand {
@@ -110,7 +110,7 @@ func NewExampleCommand() *ExampleCommand {
 		},
 	}
 	return &ExampleCommand{
-		description: description,
+		CommandDescription: description,
 	}
 }
 
@@ -152,10 +152,6 @@ func (e *ExampleCommand) Run(
 		return err
 	}
 	return nil
-}
-
-func (e *ExampleCommand) Description() *cmds.CommandDescription {
-	return e.description
 }
 
 func (e *ExampleCommand) RunFromParka(

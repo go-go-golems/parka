@@ -75,11 +75,6 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 
 	c.Header("Content-Type", "application/json")
 
-	_, err = writer.Write([]byte("[\n"))
-	if err != nil {
-		return err
-	}
-
 	ctx := c.Request.Context()
 	err = h.cmd.Run(ctx, pc.ParsedLayers, pc.ParsedParameters, gp)
 	if err != nil {
@@ -87,11 +82,6 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 	}
 
 	err = gp.Close(ctx)
-	if err != nil {
-		return err
-	}
-
-	_, err = writer.Write([]byte("\n]"))
 	if err != nil {
 		return err
 	}

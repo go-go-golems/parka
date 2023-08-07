@@ -87,7 +87,7 @@ func ComputeLayout(
 
 	values := pc.GetAllParameterValues()
 
-	if layout == nil || len(layout.Sections) == 0 {
+	if len(layout) == 0 {
 		pds := pc.GetFlagsAndArgumentsParameterDefinitions()
 		flagSection := NewSectionFromParameterDefinitions(
 			pds, values,
@@ -117,7 +117,7 @@ func ComputeLayout(
 			allParameterDefinitionsByName[pd.Name] = pd
 		}
 
-		for _, section_ := range layout.Sections {
+		for _, section_ := range layout {
 			section := &Section{
 				Title:            section_.Title,
 				ShortDescription: section_.Description,

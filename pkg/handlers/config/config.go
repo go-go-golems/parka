@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 	"os"
 	"strings"
@@ -111,6 +112,7 @@ func expandPaths(paths []string) ([]string, error) {
 		path = expandPath(path_.(string))
 
 		if _, err := os.Stat(path); os.IsNotExist(err) {
+			log.Warn().Str("path", path).Msg("path does not exist")
 			continue
 		}
 
@@ -172,9 +174,13 @@ type Command struct {
 	File         string `yaml:"file"`
 	TemplateName string `yaml:"templateName"`
 
+	TemplateLookup *TemplateLookupConfig `yaml:"templateLookup,omitempty"`
+
 	AdditionalData map[string]interface{} `yaml:"additionalData,omitempty"`
 	Defaults       *LayerParams           `yaml:"defaults,omitempty"`
 	Overrides      *LayerParams           `yaml:"overrides,omitempty"`
+
+	Stream *bool `yaml:"stream,omitempty"`
 }
 
 func (c *Command) ExpandPaths() error {
@@ -200,6 +206,14 @@ func (c *Command) ExpandPaths() error {
 		}
 		c.Overrides = evaluatedOverrides
 	}
+
+	if c.TemplateLookup != nil {
+		c.TemplateLookup.Directories, err = expandPaths(c.TemplateLookup.Directories)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

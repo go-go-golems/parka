@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/clay/pkg/repositories"
+	"github.com/go-go-golems/clay/pkg/repositories/fs"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/json"
 	output_file "github.com/go-go-golems/parka/pkg/glazed/handlers/output-file"
-	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
 	parka "github.com/go-go-golems/parka/pkg/server"
@@ -17,64 +16,6 @@ import (
 	"os"
 	"strings"
 )
-
-type HandlerParameters struct {
-	Layers    map[string]map[string]interface{}
-	Flags     map[string]interface{}
-	Arguments map[string]interface{}
-}
-
-func NewHandlerParameters() *HandlerParameters {
-	return &HandlerParameters{
-		Layers:    map[string]map[string]interface{}{},
-		Flags:     map[string]interface{}{},
-		Arguments: map[string]interface{}{},
-	}
-}
-
-// NewHandlerParametersFromLayerParams creates a new HandlerParameters from the config file.
-// It currently requires a list of layerDefinitions in order to lookup the correct
-// layers to stored as ParsedParameterLayer. It doesn't fail if configured layers don't exist.
-//
-// TODO(manuel, 2023-05-31) Add a way to validate the fact that overrides in a config file might
-// have a typo and don't correspond to existing layer definitions in the application.
-func NewHandlerParametersFromLayerParams(p *config.LayerParams) {
-	ret := NewHandlerParameters()
-	for name, l := range p.Layers {
-		ret.Layers[name] = map[string]interface{}{}
-		for k, v := range l {
-			ret.Layers[name][k] = v
-		}
-	}
-
-	for name, v := range p.Flags {
-		ret.Flags[name] = v
-	}
-
-	for name, v := range p.Arguments {
-		ret.Arguments[name] = v
-	}
-}
-
-// Merge merges the given overrides into this one.
-// If a layer is already present, it is merged with the given one.
-// Flags and arguments are merged, overrides taking precedence.
-func (ho *HandlerParameters) Merge(other *HandlerParameters) {
-	for k, v := range other.Layers {
-		if _, ok := ho.Layers[k]; !ok {
-			ho.Layers[k] = map[string]interface{}{}
-		}
-		for k2, v2 := range v {
-			ho.Layers[k][k2] = v2
-		}
-	}
-	for k, v := range other.Flags {
-		ho.Flags[k] = v
-	}
-	for k, v := range other.Arguments {
-		ho.Arguments[k] = v
-	}
-}
 
 type CommandDirHandler struct {
 	DevMode bool
@@ -89,13 +30,12 @@ type CommandDirHandler struct {
 	TemplateLookup render.TemplateLookup
 
 	// Repository is the command repository that is exposed over HTTP through this handler.
-	Repository *repositories.Repository
+	Repository *fs.Repository
 
 	// AdditionalData is passed to the template being rendered.
 	AdditionalData map[string]interface{}
 
-	Overrides *HandlerParameters
-	Defaults  *HandlerParameters
+	OverridesAndDefaults *config.OverridesAndDefaults
 
 	// If true, all glazed outputs will try to use a row output if possible.
 	// This means that "ragged" objects (where columns might not all be present)
@@ -112,6 +52,20 @@ type CommandDirHandlerOption func(handler *CommandDirHandler)
 func WithTemplateName(name string) CommandDirHandlerOption {
 	return func(handler *CommandDirHandler) {
 		handler.TemplateName = name
+	}
+}
+
+func WithOverridesAndDefaults(overridesAndDefaults *config.OverridesAndDefaults) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		handler.OverridesAndDefaults = overridesAndDefaults
+	}
+}
+
+func WithOverridesAndDefaultsOptions(opts ...config.OverridesAndDefaultsOption) CommandDirHandlerOption {
+	return func(handler *CommandDirHandler) {
+		for _, opt := range opts {
+			opt(handler.OverridesAndDefaults)
+		}
 	}
 }
 
@@ -160,185 +114,62 @@ func WithTemplateLookup(lookup render.TemplateLookup) CommandDirHandlerOption {
 }
 
 // handling all the ways to configure overrides
-
-func WithReplaceOverrides(overrides *HandlerParameters) CommandDirHandlerOption {
-	return func(handler *CommandDirHandler) {
-		handler.Overrides = overrides
-	}
-}
-
-func WithMergeOverrides(overrides *HandlerParameters) CommandDirHandlerOption {
-	return func(handler *CommandDirHandler) {
-		if handler.Overrides == nil {
-			handler.Overrides = overrides
-		} else {
-			handler.Overrides.Merge(overrides)
-		}
-	}
-}
-
-func WithOverrideFlag(name string, value string) CommandDirHandlerOption {
-	return func(handler *CommandDirHandler) {
-		if handler.Overrides == nil {
-			handler.Overrides = NewHandlerParameters()
-		}
-		handler.Overrides.Flags[name] = value
-	}
-}
-
-func WithOverrideArgument(name string, value string) CommandDirHandlerOption {
-	return func(handler *CommandDirHandler) {
-		if handler.Overrides == nil {
-			handler.Overrides = NewHandlerParameters()
-		}
-		handler.Overrides.Arguments[name] = value
-	}
-}
-
-func WithMergeOverrideLayer(name string, layer map[string]interface{}) CommandDirHandlerOption {
-	return func(handler *CommandDirHandler) {
-		if handler.Overrides == nil {
-			handler.Overrides = NewHandlerParameters()
-		}
-		for k, v := range layer {
-			if _, ok := handler.Overrides.Layers[name]; !ok {
-				handler.Overrides.Layers[name] = map[string]interface{}{}
-			}
-			handler.Overrides.Layers[name][k] = v
-		}
-	}
-}
-
-// WithLayerDefaults populates the defaults for the given layer. If a value is already set, the value is skipped.
-func WithLayerDefaults(name string, layer map[string]interface{}) CommandDirHandlerOption {
-	return func(handler *CommandDirHandler) {
-		if handler.Overrides == nil {
-			handler.Overrides = NewHandlerParameters()
-		}
-		for k, v := range layer {
-			if _, ok := handler.Overrides.Layers[name]; !ok {
-				handler.Overrides.Layers[name] = map[string]interface{}{}
-			}
-			if _, ok := handler.Overrides.Layers[name][k]; !ok {
-				handler.Overrides.Layers[name][k] = v
-			}
-		}
-	}
-}
-
-func WithReplaceOverrideLayer(name string, layer map[string]interface{}) CommandDirHandlerOption {
-	return func(handler *CommandDirHandler) {
-		if handler.Overrides == nil {
-			handler.Overrides = NewHandlerParameters()
-		}
-		handler.Overrides.Layers[name] = layer
-	}
-}
-
-// TODO(manuel, 2023-05-25) We can't currently override defaults, since they are parsed up front.
-// For that we would need https://github.com/go-go-golems/glazed/issues/239
-// So for now, we only deal with overrides.
-//
-// Handling all the way to configure defaults.
-
-func WithReplaceDefaults(defaults *HandlerParameters) CommandDirHandlerOption {
-	return func(handler *CommandDirHandler) {
-		handler.Defaults = defaults
-	}
-}
-
-func WithMergeDefaults(defaults *HandlerParameters) CommandDirHandlerOption {
-	return func(handler *CommandDirHandler) {
-		if handler.Defaults == nil {
-			handler.Defaults = defaults
-		} else {
-			handler.Defaults.Merge(defaults)
-		}
-	}
-}
-
-func WithDefaultFlag(name string, value string) CommandDirHandlerOption {
-	return func(handler *CommandDirHandler) {
-		if handler.Defaults == nil {
-			handler.Defaults = NewHandlerParameters()
-		}
-		handler.Defaults.Flags[name] = value
-	}
-}
-
-func WithDefaultArgument(name string, value string) CommandDirHandlerOption {
-	return func(handler *CommandDirHandler) {
-		if handler.Defaults == nil {
-			handler.Defaults = NewHandlerParameters()
-		}
-		handler.Defaults.Arguments[name] = value
-	}
-}
-
-func WithMergeDefaultLayer(name string, layer *layers.ParsedParameterLayer) CommandDirHandlerOption {
-	return func(handler *CommandDirHandler) {
-		if handler.Defaults == nil {
-			handler.Defaults = NewHandlerParameters()
-		}
-		for k, v := range layer.Parameters {
-			if _, ok := handler.Defaults.Layers[name]; !ok {
-				handler.Defaults.Layers[name] = map[string]interface{}{}
-			}
-			handler.Defaults.Layers[name][k] = v
-		}
-	}
-}
-
-func WithReplaceDefaultLayer(name string, layer map[string]interface{}) CommandDirHandlerOption {
-	return func(handler *CommandDirHandler) {
-		if handler.Defaults == nil {
-			handler.Defaults = NewHandlerParameters()
-		}
-		handler.Defaults.Layers[name] = layer
-	}
-}
-
 func WithDevMode(devMode bool) CommandDirHandlerOption {
 	return func(handler *CommandDirHandler) {
 		handler.DevMode = devMode
 	}
 }
 
-func WithRepository(r *repositories.Repository) CommandDirHandlerOption {
+func WithRepository(r *fs.Repository) CommandDirHandlerOption {
 	return func(handler *CommandDirHandler) {
 		handler.Repository = r
 	}
 }
 
 func NewCommandDirHandlerFromConfig(
-	config *config.CommandDir,
+	config_ *config.CommandDir,
 	options ...CommandDirHandlerOption,
 ) (*CommandDirHandler, error) {
 	cd := &CommandDirHandler{
-		TemplateName:      config.TemplateName,
-		IndexTemplateName: config.IndexTemplateName,
-		AdditionalData:    config.AdditionalData,
+		TemplateName:         config_.TemplateName,
+		IndexTemplateName:    config_.IndexTemplateName,
+		AdditionalData:       config_.AdditionalData,
+		OverridesAndDefaults: &config.OverridesAndDefaults{},
 	}
 
-	if config.Overrides != nil {
-		cd.Overrides = &HandlerParameters{
-			Flags:     config.Overrides.Flags,
-			Arguments: config.Overrides.Arguments,
-			Layers:    config.Overrides.Layers,
+	// NOTE(manuel, 2023-08-03) most of this matches CommandDirHandler, maybe at some point we could unify them both
+	// Let's see when this starts causing trouble again
+	if config_.Overrides != nil {
+		cd.OverridesAndDefaults.Overrides = &config.HandlerParameters{
+			Flags:     config_.Overrides.Flags,
+			Arguments: config_.Overrides.Arguments,
+			Layers:    config_.Overrides.Layers,
+		}
+	} else {
+		cd.OverridesAndDefaults.Overrides = &config.HandlerParameters{
+			Flags:     map[string]interface{}{},
+			Arguments: map[string]interface{}{},
+			Layers:    map[string]map[string]interface{}{},
 		}
 	}
 
-	if config.Defaults != nil {
-		cd.Defaults = &HandlerParameters{
-			Flags:     config.Defaults.Flags,
-			Arguments: config.Defaults.Arguments,
-			Layers:    config.Defaults.Layers,
+	if config_.Defaults != nil {
+		cd.OverridesAndDefaults.Defaults = &config.HandlerParameters{
+			Flags:     config_.Defaults.Flags,
+			Arguments: config_.Defaults.Arguments,
+			Layers:    config_.Defaults.Layers,
+		}
+	} else {
+		cd.OverridesAndDefaults.Defaults = &config.HandlerParameters{
+			Flags:     map[string]interface{}{},
+			Arguments: map[string]interface{}{},
+			Layers:    map[string]map[string]interface{}{},
 		}
 	}
 
 	// by default, we stream
-	if config.Stream != nil {
-		cd.Stream = *config.Stream
+	if config_.Stream != nil {
+		cd.Stream = *config_.Stream
 	} else {
 		cd.Stream = true
 	}
@@ -348,19 +179,18 @@ func NewCommandDirHandlerFromConfig(
 	}
 
 	// we run this after the options in order to get the DevMode value
-
 	if cd.TemplateLookup == nil {
-		if config.TemplateLookup != nil {
-			patterns := config.TemplateLookup.Patterns
+		if config_.TemplateLookup != nil {
+			patterns := config_.TemplateLookup.Patterns
 			if len(patterns) == 0 {
 				patterns = []string{"**/*.tmpl.md", "**/*.tmpl.html"}
 			}
 			// we currently only support a single directory
-			if len(config.TemplateLookup.Directories) != 1 {
+			if len(config_.TemplateLookup.Directories) != 1 {
 				return nil, errors.New("template lookup directories must be exactly one")
 			}
 			cd.TemplateLookup = render.NewLookupTemplateFromFS(
-				render.WithFS(os.DirFS(config.TemplateLookup.Directories[0])),
+				render.WithFS(os.DirFS(config_.TemplateLookup.Directories[0])),
 				render.WithBaseDir(""),
 				render.WithPatterns(patterns...),
 				render.WithAlwaysReload(cd.DevMode),
@@ -368,7 +198,6 @@ func NewCommandDirHandlerFromConfig(
 		} else {
 			cd.TemplateLookup = datatables.NewDataTablesLookupTemplate()
 		}
-
 	}
 
 	err := cd.TemplateLookup.Reload()
@@ -377,56 +206,6 @@ func NewCommandDirHandlerFromConfig(
 	}
 
 	return cd, nil
-}
-
-func (cd *CommandDirHandler) computeParserOptions() []parser.ParserOption {
-	parserOptions := []parser.ParserOption{}
-
-	if cd.Stream {
-		// if the config file says to use stream (which is the default), override the stream glazed flag,
-		// which will make it prefer the row output when possible
-		parserOptions = append(parserOptions,
-			parser.WithAppendOverrides("glazed", map[string]interface{}{
-				"stream": true,
-			}))
-	}
-
-	// TODO(manuel, 2023-06-21) This needs to be handled for each backend, not just the HTML one
-	if cd.Overrides != nil {
-		if cd.Overrides.Flags != nil && len(cd.Overrides.Flags) > 0 {
-			parserOptions = append(parserOptions,
-				parser.WithAppendOverrides(parser.DefaultSlug, cd.Overrides.Flags),
-			)
-		}
-		if cd.Overrides.Arguments != nil && len(cd.Overrides.Arguments) > 0 {
-			parserOptions = append(parserOptions,
-				parser.WithAppendOverrides(parser.DefaultSlug, cd.Overrides.Arguments),
-			)
-		}
-		for slug, layer := range cd.Overrides.Layers {
-			parserOptions = append(parserOptions, parser.WithAppendOverrides(slug, layer))
-		}
-	}
-
-	if cd.Defaults != nil {
-		if cd.Defaults.Flags != nil && len(cd.Defaults.Flags) > 0 {
-			parserOptions = append(parserOptions,
-				parser.WithPrependDefaults(parser.DefaultSlug, cd.Defaults.Flags),
-			)
-		}
-		if cd.Defaults.Arguments != nil && len(cd.Defaults.Arguments) > 0 {
-			parserOptions = append(parserOptions,
-				parser.WithPrependDefaults(parser.DefaultSlug, cd.Defaults.Arguments),
-			)
-		}
-		for slug, layer := range cd.Defaults.Layers {
-			// we use prepend because that way, later options will actually override earlier flag values,
-			// since they will be applied earlier.
-			parserOptions = append(parserOptions, parser.WithPrependDefaults(slug, layer))
-		}
-	}
-
-	return parserOptions
 }
 
 func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
@@ -461,7 +240,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			}
 
 			options := []datatables.QueryHandlerOption{
-				datatables.WithParserOptions(cd.computeParserOptions()...),
+				datatables.WithParserOptions(cd.OverridesAndDefaults.ComputeParserOptions(cd.Stream)...),
 				datatables.WithTemplateLookup(cd.TemplateLookup),
 				datatables.WithTemplateName(cd.TemplateName),
 				datatables.WithAdditionalData(cd.AdditionalData),
@@ -491,7 +270,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			// JSON output and error code already handled by getRepositoryCommand
 			return
 		}
-		parserOptions := cd.computeParserOptions()
+		parserOptions := cd.OverridesAndDefaults.ComputeParserOptions(cd.Stream)
 
 		output_file.CreateGlazedFileHandler(
 			sqlCommand,
@@ -507,9 +286,9 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 // or sends an error code over HTTP using the gin.Context.
 //
 // TODO(manuel, 2023-05-31) This is an odd API, is it necessary?
-func getRepositoryCommand(c *gin.Context, r *repositories.Repository, commandPath string) (cmds.GlazeCommand, bool) {
+func getRepositoryCommand(c *gin.Context, r repositories.Repository, commandPath string) (cmds.GlazeCommand, bool) {
 	path := strings.Split(commandPath, "/")
-	commands := r.Root.CollectCommands(path, false)
+	commands := r.CollectCommands(path, false)
 	if len(commands) == 0 {
 		return nil, false
 	}

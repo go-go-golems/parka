@@ -24,6 +24,10 @@ func (t *TestCommand) Description() *cmds.CommandDescription {
 	return cmds.NewCommandDescription("test")
 }
 
+func (t *TestCommand) ToYAML(w io.Writer) error {
+	return t.Description().ToYAML(w)
+}
+
 func (t *TestCommand) Run(
 	ctx context.Context,
 	parsedLayers map[string]*layers.ParsedParameterLayer,

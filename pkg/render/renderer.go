@@ -183,7 +183,7 @@ func (r *Renderer) Render(
 
 	// TODO(manuel, 2023-05-26) Don't render plain files as templates
 	// See https://github.com/go-go-golems/parka/issues/47
-	t, err := r.LookupTemplate(page+".tmpl.md", page+".md")
+	t, err := r.LookupTemplate(page+".tmpl.md", page+".md", page)
 	if err != nil {
 		return errors.Wrap(err, "error looking up template")
 	}
@@ -267,6 +267,7 @@ func (r *Renderer) Handle(data map[string]interface{}) gin.HandlerFunc {
 }
 
 func (r *Renderer) HandleWithTrimPrefix(prefix string, data map[string]interface{}) gin.HandlerFunc {
+	prefix = strings.TrimPrefix(prefix, "/")
 	return func(c *gin.Context) {
 		if c.Writer.Written() {
 			c.Next()

@@ -85,19 +85,8 @@ func NewDataTablesLookupTemplate() *render.LookupTemplateFromFS {
 }
 
 func (dt *DataTables) Clone() *DataTables {
-	return &DataTables{
-		Command:         dt.Command,
-		LongDescription: dt.LongDescription,
-		Layout:          dt.Layout,
-		Links:           dt.Links,
-		BasePath:        dt.BasePath,
-		JSStream:        dt.JSStream,
-		HTMLStream:      dt.HTMLStream,
-		JSRendering:     dt.JSRendering,
-		Columns:         dt.Columns,
-		UseDataTables:   dt.UseDataTables,
-		AdditionalData:  dt.AdditionalData,
-	}
+	ret := *dt
+	return &ret
 }
 
 type QueryHandler struct {
@@ -207,7 +196,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	// buffered so that we don't hang on it when exciting
 	dt_.ErrorStream = make(chan string, 1)
 	if dt_.JSRendering {
-		of = json.NewOutputFormatter()
+		of = json.NewOutputFormatter(json.WithOutputIndividualRows(true))
 		dt_.JSStream = make(chan template.JS, 100)
 	} else {
 		of = table_formatter.NewOutputFormatter("html")
@@ -249,7 +238,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 			case row_, ok := <-rowC:
 				// check if channel is closed
 				if !ok {
-					continue
+					return nil
 				}
 
 				if dt_.JSRendering {
@@ -267,7 +256,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 			close(rowC)
 			close(columnsC)
 			close(dt_.ErrorStream)
-			cancel()
+			_ = cancel
 		}()
 
 		err = qh.cmd.Run(ctx3, pc.ParsedLayers, pc.ParsedParameters, gp)

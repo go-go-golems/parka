@@ -230,7 +230,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 	server.Router.GET(path+"/sqleton/*path",
 		func(c *gin.Context) {
 			commandPath := c.Param("path")
-			commandPath = strings.TrimPrefix(commandPath, path+"/")
+			commandPath = strings.TrimPrefix(commandPath, "/")
 
 			// Get repository command
 			sqlCommand, ok := getRepositoryCommand(c, cd.Repository, commandPath)

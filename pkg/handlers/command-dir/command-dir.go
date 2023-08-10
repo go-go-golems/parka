@@ -217,7 +217,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 
 	server.Router.GET(path+"/data/*path", func(c *gin.Context) {
 		commandPath := c.Param("path")
-		commandPath = strings.TrimPrefix(commandPath, path+"/")
+		commandPath = strings.TrimPrefix(commandPath, "/")
 		sqlCommand, ok := getRepositoryCommand(c, cd.Repository, commandPath)
 		if !ok {
 			c.JSON(404, gin.H{"error": "command not found"})
@@ -264,7 +264,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		}
 		fileName := path_[index+1:]
 
-		commandPath := strings.TrimPrefix(path_[:index], path+"/")
+		commandPath := strings.TrimPrefix(path_[:index], "/")
 		sqlCommand, ok := getRepositoryCommand(c, cd.Repository, commandPath)
 		if !ok {
 			// JSON output and error code already handled by getRepositoryCommand

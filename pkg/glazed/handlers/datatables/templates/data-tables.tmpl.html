@@ -73,7 +73,12 @@
 {{ end }}
 
 <div class="container" id="formContainer">
-    <p><a href="{{.BasePath}}/sqleton">Top</a></p>
+    <p class="header">
+        {{ range $link := .AdditionalData.HeaderLinks}}
+        <a href="{{$link.Url}}">{{$link.Label}}</a>
+        {{ end }}
+<!--    <a href="{{.BasePath}}/sqleton">Top</a>-->
+    </p>
     <h1>{{.Command.Name}}</h1>
     <p>{{.Command.Short}}</p>
 

@@ -7,7 +7,7 @@ require (
 	github.com/gin-gonic/contrib v0.0.0-20221130124618-7e01895a63f2
 	github.com/gin-gonic/gin v1.9.0
 	github.com/go-go-golems/clay v0.0.20
-	github.com/go-go-golems/glazed v0.4.2
+	github.com/go-go-golems/glazed v0.4.4
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.29.0
 	github.com/spf13/cobra v1.6.1

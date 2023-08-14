@@ -98,6 +98,8 @@ type CommandDir struct {
 	AdditionalData map[string]interface{} `yaml:"additionalData,omitempty"`
 	Defaults       *LayerParams           `yaml:"defaults,omitempty"`
 	Overrides      *LayerParams           `yaml:"overrides,omitempty"`
+	BlackList      *LayerFlagNames        `yaml:"blackList,omitempty"`
+	WhiteList      *LayerFlagNames        `yaml:"whiteList,omitempty"`
 
 	Stream *bool `yaml:"stream,omitempty"`
 }
@@ -273,6 +275,13 @@ func (t *Template) ExpandPaths() error {
 	t.AdditionalData = evaluatedData.(map[string]interface{})
 
 	return nil
+}
+
+type LayerFlagNames struct {
+	Layers      []string            `yaml:"layers,omitempty"`
+	LayerParams map[string][]string `yaml:"layerParams,omitempty"`
+	Flags       []string            `yaml:"flags,omitempty"`
+	Arguments   []string            `yaml:"arguments,omitempty"`
 }
 
 type LayerParams struct {

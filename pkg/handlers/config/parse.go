@@ -49,24 +49,37 @@ func evaluateEnv(node interface{}) (interface{}, error) {
 
 // evaluateLayerParams goes over the layer params and evaluates the environment variables.
 func evaluateLayerParams(params *LayerParams) (*LayerParams, error) {
-	ret := &LayerParams{}
-	evaluatedLayers, err := evaluateEnv(params.Layers)
-	if err != nil {
-		return nil, err
+	ret := &LayerParams{
+		Flags:     map[string]interface{}{},
+		Arguments: map[string]interface{}{},
+		Layers:    map[string]map[string]interface{}{},
 	}
-	ret.Layers = evaluatedLayers.(map[string]map[string]interface{})
+	for slug, layer := range params.Layers {
+		ret.Layers[slug] = map[string]interface{}{}
+		for k, v := range layer {
+			v_, err := evaluateEnv(v)
+			if err != nil {
+				return nil, err
+			}
+			ret.Layers[slug][k] = v_
+		}
+	}
 
-	evaluatedFlags, err := evaluateEnv(params.Flags)
-	if err != nil {
-		return nil, err
+	for name, v := range params.Flags {
+		v_, err := evaluateEnv(v)
+		if err != nil {
+			return nil, err
+		}
+		ret.Flags[name] = v_
 	}
-	ret.Flags = evaluatedFlags.(map[string]interface{})
 
-	evaluatedArguments, err := evaluateEnv(params.Arguments)
-	if err != nil {
-		return nil, err
+	for name, v := range params.Arguments {
+		v_, err := evaluateEnv(v)
+		if err != nil {
+			return nil, err
+		}
+		ret.Arguments[name] = v_
 	}
-	ret.Arguments = evaluatedArguments.(map[string]interface{})
 
 	return ret, nil
 }

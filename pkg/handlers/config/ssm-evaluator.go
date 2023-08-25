@@ -32,7 +32,11 @@ func (s *SsmEvaluator) Evaluate(node interface{}) (interface{}, bool, error) {
 	case map[string]interface{}:
 		if len(value) == 1 && value["_aws_ssm"] != nil {
 			if ssmKey, ok := value["_aws_ssm"]; ok {
-				k, ok := ssmKey.(string)
+				v, err := EvaluateConfigEntry(ssmKey)
+				if err != nil {
+					return nil, false, fmt.Errorf("failed to evaluate SSM key: %v", err)
+				}
+				k, ok := v.(string)
 				if !ok {
 					return nil, false, fmt.Errorf("'_aws_ssm' key must have a string value")
 				}

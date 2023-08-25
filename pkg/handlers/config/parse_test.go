@@ -9,7 +9,7 @@ import (
 
 func TestEvaluateEnvSimpleString(t *testing.T) {
 	node := "test"
-	evaluated, err := evaluateEnv(node)
+	evaluated, err := EvaluateConfigEntry(node)
 	require.Nil(t, err)
 	assert.Equal(t, "test", evaluated)
 }
@@ -19,7 +19,7 @@ func TestEvaluateEnvSimpleMap(t *testing.T) {
 		"test": "test",
 		"foo":  "bar",
 	}
-	evaluated, err := evaluateEnv(node)
+	evaluated, err := EvaluateConfigEntry(node)
 	require.Nil(t, err)
 	assert.Equal(t, map[string]interface{}{
 		"test": "test",
@@ -34,7 +34,7 @@ func TestEvaluateEnvNestedMap(t *testing.T) {
 			"bar": "baz",
 		},
 	}
-	evaluated, err := evaluateEnv(node)
+	evaluated, err := EvaluateConfigEntry(node)
 	require.Nil(t, err)
 	assert.Equal(t, map[string]interface{}{
 		"test": "test",
@@ -49,7 +49,7 @@ func TestEvaluateEnvSimpleStringList(t *testing.T) {
 		"test",
 		"foo",
 	}
-	evaluated, err := evaluateEnv(node)
+	evaluated, err := EvaluateConfigEntry(node)
 	require.Nil(t, err)
 	assert.Equal(t, []interface{}{
 		"test",
@@ -64,7 +64,7 @@ func TestEvaluateEnvString(t *testing.T) {
 	err := os.Setenv("VARIABLE", "test")
 	require.Nil(t, err)
 
-	evaluated, err := evaluateEnv(node)
+	evaluated, err := EvaluateConfigEntry(node)
 	require.Nil(t, err)
 	assert.Equal(t, "test", evaluated)
 }
@@ -84,7 +84,7 @@ func TestEvaluateEnvMap(t *testing.T) {
 	err = os.Setenv("VARIABLE2", "test2")
 	require.Nil(t, err)
 
-	evaluated, err := evaluateEnv(node)
+	evaluated, err := EvaluateConfigEntry(node)
 	require.Nil(t, err)
 	assert.Equal(t, map[string]interface{}{
 		"test": "test",
@@ -108,7 +108,7 @@ func TestEvaluateEnvStringList(t *testing.T) {
 	err = os.Setenv("VARIABLE2", "test2")
 	require.Nil(t, err)
 
-	evaluated, err := evaluateEnv(node)
+	evaluated, err := EvaluateConfigEntry(node)
 	require.Nil(t, err)
 	assert.Equal(t, []interface{}{
 		"test",

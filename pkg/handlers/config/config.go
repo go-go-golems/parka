@@ -107,7 +107,7 @@ type CommandDir struct {
 func expandPaths(paths []string) ([]string, error) {
 	expandedPaths := []string{}
 	for _, path := range paths {
-		path_, err := evaluateEnv(path)
+		path_, err := EvaluateConfigEntry(path)
 		if err != nil {
 			return nil, err
 		}
@@ -148,7 +148,7 @@ func (c *CommandDir) ExpandPaths() error {
 	}
 	c.Repositories = repositories
 
-	evaluatedData, err := evaluateEnv(c.AdditionalData)
+	evaluatedData, err := EvaluateConfigEntry(c.AdditionalData)
 	if err != nil {
 		return err
 	}
@@ -188,7 +188,7 @@ type Command struct {
 func (c *Command) ExpandPaths() error {
 	c.File = expandPath(c.File)
 
-	evaluatedData, err := evaluateEnv(c.AdditionalData)
+	evaluatedData, err := EvaluateConfigEntry(c.AdditionalData)
 	if err != nil {
 		return err
 	}
@@ -249,7 +249,7 @@ type TemplateDir struct {
 func (t *TemplateDir) ExpandPaths() error {
 	t.LocalDirectory = expandPath(t.LocalDirectory)
 
-	evaluatedData, err := evaluateEnv(t.AdditionalData)
+	evaluatedData, err := EvaluateConfigEntry(t.AdditionalData)
 	if err != nil {
 		return err
 	}
@@ -268,7 +268,7 @@ type Template struct {
 func (t *Template) ExpandPaths() error {
 	t.TemplateFile = expandPath(t.TemplateFile)
 
-	evaluatedData, err := evaluateEnv(t.AdditionalData)
+	evaluatedData, err := EvaluateConfigEntry(t.AdditionalData)
 	if err != nil {
 		return err
 	}

@@ -229,9 +229,11 @@ func (s *Server) Run(ctx context.Context) error {
 	eg := errgroup.Group{}
 	eg.Go(func() error {
 		<-ctx.Done()
+		fmt.Println("Shutting down server")
 		return srv.Shutdown(ctx)
 	})
 	eg.Go(func() error {
+		fmt.Printf("Starting server on %s\n", addr)
 		return srv.ListenAndServe()
 	})
 

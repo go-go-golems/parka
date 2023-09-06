@@ -66,6 +66,8 @@ type Input struct {
 	Template string
 	Type     string
 
+	ParameterDefinition *parameters.ParameterDefinition
+
 	Value interface{}
 }
 
@@ -173,17 +175,18 @@ func ComputeLayout(
 					}
 
 					row.Inputs = append(row.Inputs, Input{
-						Name:     input_.Name,
-						Label:    label_,
-						Value:    value,
-						Type:     type_,
-						Options:  options,
-						Default:  default_,
-						Help:     help_,
-						CSS:      input_.CSS,
-						Id:       input_.Id,
-						Classes:  input_.Classes,
-						Template: input_.Template,
+						Name:                input_.Name,
+						Label:               label_,
+						Value:               value,
+						Type:                type_,
+						ParameterDefinition: pd,
+						Options:             options,
+						Default:             default_,
+						Help:                help_,
+						CSS:                 input_.CSS,
+						Id:                  input_.Id,
+						Classes:             input_.Classes,
+						Template:            input_.Template,
 					})
 				}
 

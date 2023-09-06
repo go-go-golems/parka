@@ -39,6 +39,12 @@
         {{ else if eq .Type "stringList" }}
         <label for="{{.Name}}">{{.Help}}</label>
         <input type="text" name="{{.Name}}" value='{{.Value | join "," }}'>
+        {{ else if eq .Type "intList" }}
+        <label for="{{.Name}}">{{.Help}}</label>
+        <input type="text" name="{{.Name}}" value='{{.Value | join "," }}'>
+        {{ else if eq .Type "floatList" }}
+        <label for="{{.Name}}">{{.Help}}</label>
+        <input type="text" name="{{.Name}}" value='{{.Value | join "," }}'>
         {{ else if eq .Type "int" }}
         <label for="{{.Name}}">{{.Help}}</label>
         <input type="number" name="{{.Name}}" value="{{.Value}}">

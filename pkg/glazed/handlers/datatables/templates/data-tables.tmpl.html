@@ -70,6 +70,16 @@
             </option>
             {{end}}
         </select>
+        {{ else if eq .Type "choiceList" }}
+        <label for="{{.Name}}">{{.Help}}</label>
+        <select multiple name="{{.Name}}[]">
+            {{ $parent := . }}
+            {{range $choice := .Options}}
+            <option value="{{$choice.Value}}" label="{{$choice.Label}}"
+                    {{if has $choice.Value $parent.Value }}selected{{end}}>{{$choice.Label}}
+            </option>
+            {{end}}
+        </select>
         {{ else }}
         <label for="{{.Name}}">{{.Help}}</label>
         <input type="text" name="{{.Name}}" value="{{.Value}}">

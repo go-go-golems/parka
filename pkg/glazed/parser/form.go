@@ -14,6 +14,18 @@ type FormParseStep struct {
 
 func (f *FormParseStep) ParseLayerState(c *gin.Context, state *LayerParseState) error {
 	for _, p := range state.ParameterDefinitions {
+		if parameters.IsListParameter(p.Type) {
+			// check p.Name[] parameter
+			values, ok := c.GetPostFormArray(fmt.Sprintf("%s[]", p.Name))
+			if ok {
+				pValue, err := p.ParseParameter(values)
+				if err != nil {
+					return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, values, err.Error())
+				}
+				state.Parameters[p.Name] = pValue
+				continue
+			}
+		}
 		value := c.DefaultPostForm(p.Name, state.Defaults[p.Name])
 		// TODO(manuel, 2023-02-28) is this enough to check if a file is missing?
 		if value == "" {

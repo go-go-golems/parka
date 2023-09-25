@@ -16,6 +16,18 @@ type QueryParseStep struct {
 
 func (q *QueryParseStep) ParseLayerState(c *gin.Context, state *LayerParseState) error {
 	for _, p := range state.ParameterDefinitions {
+		if parameters.IsListParameter(p.Type) {
+			// check p.Name[] parameter
+			values, ok := c.GetQueryArray(fmt.Sprintf("%s[]", p.Name))
+			if ok {
+				pValue, err := p.ParseParameter(values)
+				if err != nil {
+					return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, values, err.Error())
+				}
+				state.Parameters[p.Name] = pValue
+				continue
+			}
+		}
 		value := c.DefaultQuery(p.Name, state.Defaults[p.Name])
 		if parameters.IsFileLoadingParameter(p.Type, value) {
 			// if the parameter is supposed to be read from a file, we will just pass in the query parameters

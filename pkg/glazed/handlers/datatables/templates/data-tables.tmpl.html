@@ -102,6 +102,15 @@
     <div>{{.LongDescription }}</div>
     {{ end }}
 
+    {{ if .CommandMetadata }}
+    <details>
+        <summary>Command Metadata</summary>
+        {{ range $key, $value := .CommandMetadata }}
+        <p><strong>{{$key}}:</strong> <pre>{{$value}}</pre></p>
+        {{ end }}
+    </details>
+    {{ end }}
+
     <form id="form" action="{{.Command.Name}}" method="get">
         <fieldset>
             {{range $section := .Layout.Sections}}

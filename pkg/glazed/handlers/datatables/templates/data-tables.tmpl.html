@@ -157,11 +157,20 @@
     const jsData = [{{ range $b := .JSStream}}{{$b}},{{end}}];
     {{else }}const jsData = null;
     {{ end }}
+
     function getQueryString() {
         const form = document.getElementById('form');
         const formData = new FormData(form);
 
         const queryString = new URLSearchParams();
+
+        // Iterate over form elements
+        for (let element of form.elements) {
+            // Check if the element is an unchecked checkbox
+            if (element.type === 'checkbox' && !element.checked) {
+                queryString.append(element.name, 'false');
+            }
+        }
 
         formData.forEach((value, key) => {
             if (value) {

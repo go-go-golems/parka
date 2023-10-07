@@ -66,7 +66,15 @@ type DataTables struct {
 	// If set to false, a TableMiddleware used (which collects all rows, but thus also all column names)
 	// into memory before passing them to the template.
 	// This is useful when the rows are "ragged" (i.e. not all rows have the same number of columns).
-	StreamRows bool
+	StreamRows      bool
+	CommandMetadata map[string]interface{}
+}
+
+func NewDataTables() *DataTables {
+	return &DataTables{
+		AdditionalData:  make(map[string]interface{}),
+		CommandMetadata: make(map[string]interface{}),
+	}
 }
 
 //go:embed templates/*
@@ -108,7 +116,7 @@ func NewQueryHandler(
 ) *QueryHandler {
 	qh := &QueryHandler{
 		cmd:          cmd,
-		dt:           &DataTables{},
+		dt:           NewDataTables(),
 		lookup:       NewDataTablesLookupTemplate(),
 		templateName: "data-tables.tmpl.html",
 	}
@@ -274,6 +282,10 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	})
 
 	eg.Go(func() error {
+		// if qh.Cmd implements cmds.CommandWithMetadata, get Metadata
+		if cm_, ok := qh.cmd.(cmds.CommandWithMetadata); ok {
+			dt_.CommandMetadata, err = cm_.Metadata(c, pc.ParsedLayers, pc.ParsedParameters)
+		}
 		err := qh.renderTemplate(c, pc, w, dt_, columnsC)
 		if err != nil {
 			return err
@@ -375,13 +387,12 @@ func CreateDataTablesHandler(
 			},
 		}
 
-		dt := &DataTables{
-			Command:       cmd.Description(),
-			Links:         links,
-			BasePath:      path,
-			JSRendering:   true,
-			UseDataTables: false,
-		}
+		dt := NewDataTables()
+		dt.Command = cmd.Description()
+		dt.Links = links
+		dt.BasePath = path
+		dt.JSRendering = true
+		dt.UseDataTables = false
 
 		options_ := []QueryHandlerOption{
 			WithDataTables(dt),

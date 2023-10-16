@@ -1,12 +1,10 @@
-package json
+package text
 
 import (
-	"bytes"
-	"encoding/json"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	json2 "github.com/go-go-golems/glazed/pkg/formatters/json"
-	"github.com/go-go-golems/glazed/pkg/middlewares/row"
+	"github.com/go-go-golems/glazed/pkg/middlewares/table"
+	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
 	"github.com/go-go-golems/parka/pkg/glazed/parser"
@@ -66,43 +64,33 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 		}
 	}
 
-	c.Header("Content-Type", "application/json")
+	c.Header("Content-Type", "text/plain")
 
 	ctx := c.Request.Context()
 	allParameters := pc.GetAllParameterValues()
 	switch cmd := h.cmd.(type) {
 	case cmds.WriterCommand:
-		buf := bytes.Buffer{}
-		err := cmd.RunIntoWriter(ctx, pc.ParsedLayers, allParameters, &buf)
-		if err != nil {
-			return err
-		}
-
-		foo := struct {
-			Data string `json:"data"`
-		}{
-			Data: buf.String(),
-		}
-		encoder := json.NewEncoder(writer)
-		encoder.SetIndent("", "  ")
-		err = encoder.Encode(foo)
+		err := cmd.RunIntoWriter(ctx, pc.ParsedLayers, allParameters, writer)
 		if err != nil {
 			return err
 		}
 
 	case cmds.GlazeCommand:
-		gp, err := handlers.CreateTableProcessorWithOutput(pc, "json", "")
+		gp, err := handlers.CreateTableProcessorWithOutput(pc, "table", "ascii")
 		if err != nil {
 			return err
 		}
 
-		// remove table middlewares because we are a streaming handler
-		gp.ReplaceTableMiddleware()
-		gp.AddRowMiddleware(row.NewOutputMiddleware(json2.NewOutputFormatter(), writer))
-
+		of, err := settings.SetupTableOutputFormatter(allParameters)
 		if err != nil {
 			return err
 		}
+		err = of.RegisterTableMiddlewares(gp)
+		if err != nil {
+			return err
+		}
+
+		gp.AddTableMiddleware(table.NewOutputMiddleware(of, writer))
 
 		err = cmd.Run(ctx, pc.ParsedLayers, allParameters, gp)
 		if err != nil {
@@ -123,11 +111,10 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 	default:
 		return &handlers.UnsupportedCommandError{Command: h.cmd}
 	}
-
 	return nil
 }
 
-func CreateJSONQueryHandler(
+func CreateQueryHandler(
 	cmd cmds.Command,
 	parserOptions ...parser.ParserOption,
 ) gin.HandlerFunc {

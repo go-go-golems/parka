@@ -128,7 +128,6 @@ func CreateGlazedFileHandler(
 				return
 			}
 		} else {
-
 			err = handler.Handle(c, c.Writer)
 			if err != nil {
 				c.JSON(500, gin.H{"error": err.Error()})

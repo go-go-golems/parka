@@ -212,7 +212,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	}
 
 	// manually create a streaming output TableProcessor
-	gp, err := handlers.CreateTableProcessorWithOutput(pc, "table", "")
+	gp, err := handlers.CreateTableProcessorWithOutput(pc, "table", "ascii")
 	if err != nil {
 		return err
 	}
@@ -259,6 +259,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	})
 
 	// actually run the command
+	allParameters := pc.GetAllParameterValues()
 	eg.Go(func() error {
 		defer func() {
 			close(rowC)
@@ -267,7 +268,8 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 			_ = cancel
 		}()
 
-		err = qh.cmd.Run(ctx3, pc.ParsedLayers, pc.ParsedParameters, gp)
+		// NOTE(manuel, 2023-10-16) The GetAllParameterValues is a bit of a hack because really what we want is to only get those flags through the layers
+		err = qh.cmd.Run(ctx3, pc.ParsedLayers, allParameters, gp)
 		if err != nil {
 			dt_.ErrorStream <- err.Error()
 			return err
@@ -284,7 +286,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	eg.Go(func() error {
 		// if qh.Cmd implements cmds.CommandWithMetadata, get Metadata
 		if cm_, ok := qh.cmd.(cmds.CommandWithMetadata); ok {
-			dt_.CommandMetadata, err = cm_.Metadata(c, pc.ParsedLayers, pc.ParsedParameters)
+			dt_.CommandMetadata, err = cm_.Metadata(c, pc.ParsedLayers, allParameters)
 		}
 		err := qh.renderTemplate(c, pc, w, dt_, columnsC)
 		if err != nil {

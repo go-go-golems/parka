@@ -233,6 +233,17 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		}
 	})
 
+	// Redirect Route
+	server.Router.GET(path+"/sqleton/*path", func(c *gin.Context) {
+		commandPath := c.Param("path")
+		rawQuery := c.Request.URL.RawQuery
+		newURL := path + "/datatables" + commandPath
+		if rawQuery != "" {
+			newURL += "?" + rawQuery
+		}
+		c.Redirect(301, newURL)
+	})
+
 	server.Router.GET(path+"/text/*path", func(c *gin.Context) {
 		commandPath := c.Param("path")
 		commandPath = strings.TrimPrefix(commandPath, "/")

@@ -258,7 +258,7 @@ func (ch *CommandHandler) Serve(server *parka.Server, path string) error {
 	server.Router.GET(path+"/data", func(c *gin.Context) {
 		json.CreateJSONQueryHandler(ch.Command)(c)
 	})
-	server.Router.GET(path+"/sqleton", func(c *gin.Context) {
+	server.Router.GET(path+"/glazed", func(c *gin.Context) {
 		options := []datatables.QueryHandlerOption{
 			datatables.WithParserOptions(ch.OverridesAndDefaults.ComputeParserOptions(ch.Stream)...),
 			datatables.WithTemplateLookup(ch.TemplateLookup),

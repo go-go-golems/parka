@@ -9,11 +9,14 @@ import (
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/json"
 	output_file "github.com/go-go-golems/parka/pkg/glazed/handlers/output-file"
+	"github.com/go-go-golems/parka/pkg/glazed/handlers/sse"
+	"github.com/go-go-golems/parka/pkg/glazed/handlers/text"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
 	parka "github.com/go-go-golems/parka/pkg/server"
 	"github.com/pkg/errors"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -137,8 +140,6 @@ func NewCommandDirHandlerFromConfig(
 		OverridesAndDefaults: &config.OverridesAndDefaults{},
 	}
 
-	// NOTE(manuel, 2023-08-03) most of this matches CommandDirHandler, maybe at some point we could unify them both
-	// Let's see when this starts causing trouble again
 	if config_.Overrides != nil {
 		cd.OverridesAndDefaults.Overrides = &config.HandlerParameters{
 			Flags:     config_.Overrides.Flags,
@@ -167,7 +168,7 @@ func NewCommandDirHandlerFromConfig(
 		}
 	}
 
-	// by default, we stream
+	// by default, we stream when outputting to datatables too
 	if config_.Stream != nil {
 		cd.Stream = *config_.Stream
 	} else {
@@ -218,36 +219,71 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 	server.Router.GET(path+"/data/*path", func(c *gin.Context) {
 		commandPath := c.Param("path")
 		commandPath = strings.TrimPrefix(commandPath, "/")
-		sqlCommand, ok := getRepositoryCommand(c, cd.Repository, commandPath)
+		command, ok := getRepositoryCommand(c, cd.Repository, commandPath)
 		if !ok {
-			c.JSON(404, gin.H{"error": "command not found"})
+			c.JSON(404, gin.H{"error": fmt.Sprintf("command %s not found", commandPath)})
 			return
 		}
 
-		json.CreateJSONQueryHandler(sqlCommand)(c)
+		switch v := command.(type) {
+		case cmds.GlazeCommand:
+			json.CreateJSONQueryHandler(v)(c)
+		default:
+			text.CreateQueryHandler(v)(c)
+		}
 	})
 
-	server.Router.GET(path+"/sqleton/*path",
+	server.Router.GET(path+"/text/*path", func(c *gin.Context) {
+		commandPath := c.Param("path")
+		commandPath = strings.TrimPrefix(commandPath, "/")
+		command, ok := getRepositoryCommand(c, cd.Repository, commandPath)
+		if !ok {
+			c.JSON(404, gin.H{"error": fmt.Sprintf("command %s not found", commandPath)})
+			return
+		}
+
+		parserOptions := cd.OverridesAndDefaults.ComputeParserOptions(cd.Stream)
+		text.CreateQueryHandler(command, parserOptions...)(c)
+	})
+
+	server.Router.GET(path+"/streaming/*path", func(c *gin.Context) {
+		commandPath := c.Param("path")
+		commandPath = strings.TrimPrefix(commandPath, "/")
+		command, ok := getRepositoryCommand(c, cd.Repository, commandPath)
+		if !ok {
+			c.JSON(404, gin.H{"error": fmt.Sprintf("command %s not found", commandPath)})
+			return
+		}
+
+		parserOptions := cd.OverridesAndDefaults.ComputeParserOptions(cd.Stream)
+		sse.CreateQueryHandler(command, parserOptions...)(c)
+	})
+
+	server.Router.GET(path+"/datatables/*path",
 		func(c *gin.Context) {
 			commandPath := c.Param("path")
 			commandPath = strings.TrimPrefix(commandPath, "/")
 
 			// Get repository command
-			sqlCommand, ok := getRepositoryCommand(c, cd.Repository, commandPath)
+			command, ok := getRepositoryCommand(c, cd.Repository, commandPath)
 			if !ok {
-				c.JSON(404, gin.H{"error": "command not found"})
+				c.JSON(404, gin.H{"error": fmt.Sprintf("command %s not found", commandPath)})
 				return
 			}
+			switch v := command.(type) {
+			case cmds.GlazeCommand:
+				options := []datatables.QueryHandlerOption{
+					datatables.WithParserOptions(cd.OverridesAndDefaults.ComputeParserOptions(cd.Stream)...),
+					datatables.WithTemplateLookup(cd.TemplateLookup),
+					datatables.WithTemplateName(cd.TemplateName),
+					datatables.WithAdditionalData(cd.AdditionalData),
+					datatables.WithStreamRows(cd.Stream),
+				}
 
-			options := []datatables.QueryHandlerOption{
-				datatables.WithParserOptions(cd.OverridesAndDefaults.ComputeParserOptions(cd.Stream)...),
-				datatables.WithTemplateLookup(cd.TemplateLookup),
-				datatables.WithTemplateName(cd.TemplateName),
-				datatables.WithAdditionalData(cd.AdditionalData),
-				datatables.WithStreamRows(cd.Stream),
+				datatables.CreateDataTablesHandler(v, path, commandPath, options...)(c)
+			default:
+				c.JSON(500, gin.H{"error": fmt.Sprintf("command %s is not a glazed command", commandPath)})
 			}
-
-			datatables.CreateDataTablesHandler(sqlCommand, path, commandPath, options...)(c)
 		})
 
 	server.Router.GET(path+"/download/*path", func(c *gin.Context) {
@@ -265,18 +301,36 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		fileName := path_[index+1:]
 
 		commandPath := strings.TrimPrefix(path_[:index], "/")
-		sqlCommand, ok := getRepositoryCommand(c, cd.Repository, commandPath)
+		command, ok := getRepositoryCommand(c, cd.Repository, commandPath)
 		if !ok {
 			// JSON output and error code already handled by getRepositoryCommand
 			return
 		}
 		parserOptions := cd.OverridesAndDefaults.ComputeParserOptions(cd.Stream)
 
-		output_file.CreateGlazedFileHandler(
-			sqlCommand,
-			fileName,
-			parserOptions...,
-		)(c)
+		switch v := command.(type) {
+		case cmds.GlazeCommand:
+			output_file.CreateGlazedFileHandler(
+				v,
+				fileName,
+				parserOptions...,
+			)(c)
+
+		case cmds.WriterCommand:
+			handler := text.NewQueryHandler(command)
+
+			baseName := filepath.Base(fileName)
+			c.Writer.Header().Set("Content-Disposition", "attachment; filename="+baseName)
+
+			err := handler.Handle(c, c.Writer)
+			if err != nil {
+				c.JSON(500, gin.H{"error": err.Error()})
+				return
+			}
+
+		default:
+			c.JSON(500, gin.H{"error": fmt.Sprintf("command %s is not a glazed/writer command", commandPath)})
+		}
 	})
 
 	return nil
@@ -284,26 +338,24 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 
 // getRepositoryCommand lookups a command in the given repository and return success as bool and the given command,
 // or sends an error code over HTTP using the gin.Context.
-//
-// TODO(manuel, 2023-05-31) This is an odd API, is it necessary?
-func getRepositoryCommand(c *gin.Context, r repositories.Repository, commandPath string) (cmds.GlazeCommand, bool) {
+func getRepositoryCommand(c *gin.Context, r repositories.Repository, commandPath string) (
+	cmds.Command,
+	bool,
+) {
 	path := strings.Split(commandPath, "/")
 	commands := r.CollectCommands(path, false)
 	if len(commands) == 0 {
+		c.JSON(404, gin.H{"error": fmt.Sprintf("command %s not found", commandPath)})
 		return nil, false
 	}
 
 	if len(commands) > 1 {
-		c.JSON(404, gin.H{"error": "ambiguous command"})
+		c.JSON(404, gin.H{"error": fmt.Sprintf("ambiguous command %s", commandPath)})
 		return nil, false
 	}
 
 	// NOTE(manuel, 2023-05-15) Check if this is actually an alias, and populate the defaults from the alias flags
 	// This could potentially be moved to the repository code itself
 
-	glazedCommand, ok := commands[0].(cmds.GlazeCommand)
-	if !ok || glazedCommand == nil {
-		c.JSON(500, gin.H{"error": "command is not a glazed command"})
-	}
-	return glazedCommand, true
+	return commands[0], true
 }

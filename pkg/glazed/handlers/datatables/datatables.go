@@ -212,7 +212,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	}
 
 	// manually create a streaming output TableProcessor
-	gp, err := handlers.CreateTableProcessorWithOutput(pc, "table", "")
+	gp, err := handlers.CreateTableProcessorWithOutput(pc, "table", "ascii")
 	if err != nil {
 		return err
 	}

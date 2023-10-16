@@ -15,7 +15,7 @@ import (
 // ParkaHandlerFuncs. These handler functions are registered to a specific route.
 type CommandContext struct {
 	// Cmd is the command that will be executed
-	Cmd cmds.GlazeCommand
+	Cmd cmds.Command
 	// ParsedLayers contains the map of parsed layers parsed so far
 	ParsedLayers map[string]*layers.ParsedParameterLayer
 	// ParsedParameters contains the map of parsed parameters parsed so far
@@ -23,7 +23,7 @@ type CommandContext struct {
 }
 
 // NewCommandContext creates a new CommandContext for the given command.
-func NewCommandContext(cmd cmds.GlazeCommand) *CommandContext {
+func NewCommandContext(cmd cmds.Command) *CommandContext {
 	return &CommandContext{
 		Cmd:              cmd,
 		ParsedLayers:     map[string]*layers.ParsedParameterLayer{},
@@ -135,7 +135,7 @@ func NewPrepopulatedParsedLayersContextMiddleware(
 	}
 }
 
-func NewCommandQueryParser(cmd cmds.GlazeCommand, options ...parser.ParserOption) *parser.Parser {
+func NewCommandQueryParser(cmd cmds.Command, options ...parser.ParserOption) *parser.Parser {
 	d := cmd.Description()
 
 	// NOTE(manuel, 2023-06-21) We could pass the parser options here, but then we wouldn't be able to
@@ -160,7 +160,7 @@ func NewCommandQueryParser(cmd cmds.GlazeCommand, options ...parser.ParserOption
 	return ph
 }
 
-func NewCommandFormParser(cmd cmds.GlazeCommand, options ...parser.ParserOption) *parser.Parser {
+func NewCommandFormParser(cmd cmds.Command, options ...parser.ParserOption) *parser.Parser {
 	d := cmd.Description()
 
 	ph := parser.NewParser()
@@ -184,7 +184,7 @@ func NewCommandFormParser(cmd cmds.GlazeCommand, options ...parser.ParserOption)
 }
 
 type ContextParserMiddleware struct {
-	command cmds.GlazeCommand
+	command cmds.Command
 	parser  *parser.Parser
 }
 
@@ -213,7 +213,7 @@ func (cpm *ContextParserMiddleware) Handle(c *gin.Context, pc *CommandContext) e
 	return nil
 }
 
-func NewContextParserMiddleware(cmd cmds.GlazeCommand, parser *parser.Parser) *ContextParserMiddleware {
+func NewContextParserMiddleware(cmd cmds.Command, parser *parser.Parser) *ContextParserMiddleware {
 	return &ContextParserMiddleware{
 		command: cmd,
 		parser:  parser,

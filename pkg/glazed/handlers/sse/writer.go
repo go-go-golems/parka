@@ -17,7 +17,7 @@ func NewSSEWriter() *SSEWriter {
 	}
 }
 
-func (w *SSEWriter) Write(p []byte) (n int, err error) {
+func (w *SSEWriter) Write(p []byte) (int, error) {
 	w.ch <- p
 	return len(p), nil
 }

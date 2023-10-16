@@ -79,9 +79,9 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 		}
 
 		foo := struct {
-			data string `json:"data"`
+			Data string `json:"data"`
 		}{
-			data: buf.String(),
+			Data: buf.String(),
 		}
 		encoder := json.NewEncoder(writer)
 		encoder.SetIndent("", "  ")

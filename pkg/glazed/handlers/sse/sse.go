@@ -112,6 +112,9 @@ func (h *QueryHandler) Handle(c *gin.Context, writer gin.ResponseWriter) error {
 
 	case cmds.GlazeCommand:
 		gp, err := handlers.CreateTableProcessorWithOutput(pc, "json", "")
+		if err != nil {
+			return err
+		}
 
 		gp.ReplaceTableMiddleware()
 		c := make(chan string, 100)

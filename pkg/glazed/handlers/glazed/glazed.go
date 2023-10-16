@@ -82,7 +82,7 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 	c.Header("Content-Type", of.ContentType())
 
 	ctx := c.Request.Context()
-	err = h.cmd.Run(ctx, pc.ParsedLayers, pc.ParsedParameters, gp)
+	err = h.cmd.Run(ctx, pc.ParsedLayers, pc.GetAllParameterValues(), gp)
 	if err != nil {
 		return err
 	}

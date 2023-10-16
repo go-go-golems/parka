@@ -244,6 +244,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		c.Redirect(301, newURL)
 	})
 
+	parserOptions := cd.OverridesAndDefaults.ComputeParserOptions(cd.Stream)
 	server.Router.GET(path+"/text/*path", func(c *gin.Context) {
 		commandPath := c.Param("path")
 		commandPath = strings.TrimPrefix(commandPath, "/")
@@ -253,7 +254,6 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			return
 		}
 
-		parserOptions := cd.OverridesAndDefaults.ComputeParserOptions(cd.Stream)
 		text.CreateQueryHandler(command, parserOptions...)(c)
 	})
 
@@ -266,7 +266,6 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			return
 		}
 
-		parserOptions := cd.OverridesAndDefaults.ComputeParserOptions(cd.Stream)
 		sse.CreateQueryHandler(command, parserOptions...)(c)
 	})
 
@@ -284,7 +283,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			switch v := command.(type) {
 			case cmds.GlazeCommand:
 				options := []datatables.QueryHandlerOption{
-					datatables.WithParserOptions(cd.OverridesAndDefaults.ComputeParserOptions(cd.Stream)...),
+					datatables.WithParserOptions(parserOptions...),
 					datatables.WithTemplateLookup(cd.TemplateLookup),
 					datatables.WithTemplateName(cd.TemplateName),
 					datatables.WithAdditionalData(cd.AdditionalData),
@@ -317,7 +316,6 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			// JSON output and error code already handled by getRepositoryCommand
 			return
 		}
-		parserOptions := cd.OverridesAndDefaults.ComputeParserOptions(cd.Stream)
 
 		switch v := command.(type) {
 		case cmds.GlazeCommand:

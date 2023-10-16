@@ -70,6 +70,7 @@ func (h *QueryHandler) Handle(c *gin.Context, writer gin.ResponseWriter) error {
 	c.Header("Content-Type", "text/event-stream")
 
 	ctx := c.Request.Context()
+	allParameters := pc.GetAllParameterValues()
 	switch cmd := h.cmd.(type) {
 	case cmds.WriterCommand:
 		// Create a writer that on every read amount of bytes sends an sse message
@@ -119,7 +120,7 @@ func (h *QueryHandler) Handle(c *gin.Context, writer gin.ResponseWriter) error {
 
 		eg := errgroup.Group{}
 		eg.Go(func() error {
-			err := cmd.Run(ctx, pc.ParsedLayers, pc.ParsedParameters, gp)
+			err := cmd.Run(ctx, pc.ParsedLayers, allParameters, gp)
 			if err != nil {
 				return err
 			}
@@ -150,7 +151,7 @@ func (h *QueryHandler) Handle(c *gin.Context, writer gin.ResponseWriter) error {
 		}
 
 	case cmds.BareCommand:
-		err := cmd.Run(ctx, pc.ParsedLayers, pc.ParsedParameters)
+		err := cmd.Run(ctx, pc.ParsedLayers, allParameters)
 		if err != nil {
 			return err
 		}

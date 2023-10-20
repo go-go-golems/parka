@@ -271,7 +271,7 @@ func (ch *CommandHandler) Serve(server *parka.Server, path string) error {
 	})
 	server.Router.GET(path+"/download/*path", func(c *gin.Context) {
 		path_ := c.Param("path")
-		path_ = strings.TrimPrefix(path_, path+"/")
+		path_ = strings.TrimPrefix(path_, "/")
 		index := strings.LastIndex(path_, "/")
 		if index == -1 {
 			c.JSON(500, gin.H{"error": "could not find file name"})

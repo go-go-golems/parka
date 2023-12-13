@@ -30,7 +30,10 @@ import (
 // This is used to provision the CommandDir handlers.
 type RepositoryFactory func(dirs []string) (*fs.Repository, error)
 
-func NewRepositoryFactoryFromLoaders(
+// TODO(manuel, 2023-12-13) This currently uses a ReaderCommandLoader which assumes that there is a command in a single file
+// THat's however not the case when loading fat commands (like in escuse-me)
+
+func NewRepositoryFactoryFromReaderLoaders(
 	commandLoader loaders.ReaderCommandLoader,
 	fsLoader loaders.FSCommandLoader,
 ) RepositoryFactory {
@@ -55,7 +58,7 @@ func NewRepositoryFactoryFromLoaders(
 				// We don't need to recompute the func, since it fetches the command at runtime.
 				return nil
 			}),
-			fs.WithCommandLoader(commandLoader),
+			fs.WithReaderCommandLoader(commandLoader),
 			fs.WithFSLoader(fsLoader),
 		)
 
@@ -66,9 +69,7 @@ func NewRepositoryFactoryFromLoaders(
 		}
 
 		return r, nil
-
 	}
-
 }
 
 // ConfigFileHandler contains everything needed to serve a config file

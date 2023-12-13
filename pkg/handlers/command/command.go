@@ -142,27 +142,26 @@ func NewCommandHandlerFromConfig(
 		filePath = absPath + config_.File
 	}
 
-	cmds_, aliases, err := loader.LoadCommandsFromFS(os.DirFS("/"), filePath, []cmds.CommandDescriptionOption{}, []alias.Option{})
+	cmds_, err := loader.LoadCommandsFromFS(os.DirFS("/"), filePath, []cmds.CommandDescriptionOption{}, []alias.Option{})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load commands from file")
 	}
 
 	allCmds := []cmds.GlazeCommand{}
 	for _, cmd := range cmds_ {
-		glazeCommand, ok := cmd.(cmds.GlazeCommand)
-		if !ok {
+		switch v := cmd.(type) {
+		case cmds.GlazeCommand:
+			allCmds = append(allCmds, v)
+		case *alias.CommandAlias:
+			allCmds = append(allCmds, v)
+		default:
 			return nil, errors.Errorf(
 				"command %s loaded from %s is not a GlazeCommand",
 				cmd.Description().Name,
 				filePath,
 			)
 		}
-		allCmds = append(allCmds, glazeCommand)
 	}
-	for _, alias := range aliases {
-		allCmds = append(allCmds, alias)
-	}
-
 	if len(allCmds) == 0 {
 		return nil, errors.Errorf(
 			"no commands found in %s",

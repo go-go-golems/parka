@@ -3,9 +3,7 @@ package cmds
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/go-go-golems/glazed/pkg/cli"
-	"github.com/go-go-golems/glazed/pkg/helpers"
 	"github.com/go-go-golems/glazed/pkg/types"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
 	json2 "github.com/go-go-golems/parka/pkg/glazed/handlers/json"
@@ -18,6 +16,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 )
 
 var ServeCmd = &cobra.Command{
@@ -78,13 +77,9 @@ var ServeCmd = &cobra.Command{
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
+		ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
+		defer stop()
 
-		go func() {
-			err := helpers.CancelOnSignal(ctx, os.Interrupt, cancel)
-			if err != nil && err != context.Canceled {
-				fmt.Println(err)
-			}
-		}()
 		err = s.Run(ctx)
 
 		cobra.CheckErr(err)

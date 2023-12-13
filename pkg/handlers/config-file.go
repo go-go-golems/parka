@@ -31,7 +31,8 @@ import (
 type RepositoryFactory func(dirs []string) (*fs.Repository, error)
 
 // TODO(manuel, 2023-12-13) This currently uses a ReaderCommandLoader which assumes that there is a command in a single file
-// THat's however not the case when loading fat commands (like in escuse-me)
+// THat's however not the case when loading fat commands (like in escuse-me), so we might need something
+// like a reader loader that is able to get other loaders for side files too, maybe, or a map of strings or a map of readers
 
 func NewRepositoryFactoryFromReaderLoaders(
 	commandLoader loaders.ReaderCommandLoader,

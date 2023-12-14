@@ -150,9 +150,9 @@ func NewCommandHandlerFromConfig(
 	allCmds := []cmds.GlazeCommand{}
 	for _, cmd := range cmds_ {
 		switch v := cmd.(type) {
-		case cmds.GlazeCommand:
-			allCmds = append(allCmds, v)
 		case *alias.CommandAlias:
+			allCmds = append(allCmds, v)
+		case cmds.GlazeCommand:
 			allCmds = append(allCmds, v)
 		default:
 			return nil, errors.Errorf(

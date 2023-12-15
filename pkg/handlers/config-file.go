@@ -35,8 +35,7 @@ type RepositoryFactory func(dirs []string) (*fs.Repository, error)
 // like a reader loader that is able to get other loaders for side files too, maybe, or a map of strings or a map of readers
 
 func NewRepositoryFactoryFromReaderLoaders(
-	commandLoader loaders.ReaderCommandLoader,
-	fsLoader loaders.FSCommandLoader,
+	fsLoader loaders.CommandLoader,
 ) RepositoryFactory {
 	return func(dirs []string) (*fs.Repository, error) {
 		r := fs.NewRepository(
@@ -59,7 +58,6 @@ func NewRepositoryFactoryFromReaderLoaders(
 				// We don't need to recompute the func, since it fetches the command at runtime.
 				return nil
 			}),
-			fs.WithReaderCommandLoader(commandLoader),
 			fs.WithFSLoader(fsLoader),
 		)
 

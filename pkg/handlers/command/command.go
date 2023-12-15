@@ -121,7 +121,7 @@ func NewCommandHandler(
 
 func NewCommandHandlerFromConfig(
 	config_ *config.Command,
-	loader loaders.FSCommandLoader,
+	loader loaders.CommandLoader,
 	options ...CommandHandlerOption,
 ) (*CommandHandler, error) {
 	c := &CommandHandler{
@@ -142,7 +142,9 @@ func NewCommandHandlerFromConfig(
 		filePath = absPath + config_.File
 	}
 
-	cmds_, err := loader.LoadCommandsFromFS(os.DirFS("/"), filePath, []cmds.CommandDescriptionOption{}, []alias.Option{})
+	cmds_, err := loaders.LoadCommandsFromFS(
+		os.DirFS("/"), filePath,
+		loader, []cmds.CommandDescriptionOption{}, []alias.Option{})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load commands from file")
 	}

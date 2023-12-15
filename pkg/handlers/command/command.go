@@ -130,20 +130,13 @@ func NewCommandHandlerFromConfig(
 		OverridesAndDefaults: &config.OverridesAndDefaults{},
 	}
 
-	// get absolute path from config_.File
-	absPath, err := os.Getwd()
+	fs_, filePath, err := loaders.FileNameToFsFilePath(config_.File)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get current working directory")
-	}
-	var filePath string
-	if strings.HasPrefix(config_.File, "/") {
-		filePath = config_.File
-	} else {
-		filePath = absPath + config_.File
+		return nil, errors.Wrap(err, "failed to get absolute path")
 	}
 
 	cmds_, err := loaders.LoadCommandsFromFS(
-		os.DirFS("/"), filePath,
+		fs_, filePath,
 		loader, []cmds.CommandDescriptionOption{}, []alias.Option{})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load commands from file")

@@ -2,13 +2,12 @@ package template_dir
 
 import (
 	"fmt"
+	"github.com/go-go-golems/glazed/pkg/cmds/loaders"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/server"
 	"io/fs"
-	"os"
 	"path/filepath"
-	"strings"
 )
 
 // TODO(manuel, 2023-05-28) Add a proper Handler interface that also
@@ -62,16 +61,10 @@ func WithLocalDirectory(localPath string) TemplateDirHandlerOption {
 			if len(p) == 0 {
 				return fmt.Errorf("invalid local path: %s", localPath)
 			}
-			if p[0] == '/' {
-				handler.fs = os.DirFS("/")
-			} else {
-				handler.fs = os.DirFS(".")
+			handler.fs, handler.LocalDirectory, err = loaders.FileNameToFsFilePath(p)
+			if err != nil {
+				return err
 			}
-			// We strip the / prefix because once the FS is /, we need to match for "relative" paths within the FS.
-			// We can't just simplify the whole thing to be os.DirFS(localPath) because we also need to support
-			// embed.FS where we can't do the same path shenanigans, since the embed.FS files reflect the directory
-			// from which they were included, which we need to strip at runtime.
-			handler.LocalDirectory = strings.TrimPrefix(p, "/")
 		}
 
 		return nil

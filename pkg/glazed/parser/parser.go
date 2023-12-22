@@ -10,29 +10,79 @@ import (
 // TODO(manuel, 2023-06-21) This part of the API is a complete mess, I'm not even sure what it is supposed to do overall
 // Well worth refactoring
 
-// DefaultSlug is used as a drop-in to signal that we actually want to parse the
-// top-level flags and arguments.
-//
-// # TODO(manuel, 2023-06-22) This should be removed once we actually turn default flags and arguments into an actual layer
-//
-// See https://github.com/go-go-golems/glazed/issues/303
-const DefaultSlug = "default"
-
 type LayerParseState struct {
 	Slug string
+
 	// Defaults contains the default values for the parameters, as strings to be parsed
 	// NOTE(manuel, 2023-06-21) Why are these strings?
 	// See also https://github.com/go-go-golems/glazed/issues/239
 	Defaults map[string]string
+
 	// Parameters contains the parsed parameters so far
-	Parameters map[string]interface{}
+	ParsedParameters *parameters.ParsedParameters
+
 	// ParameterDefinitions contains the parameter definitions that can still be parsed
-	ParameterDefinitions map[string]*parameters.ParameterDefinition
+	ParameterDefinitions parameters.ParameterDefinitions
+}
+
+type LayerParseStateOption func(*LayerParseState)
+
+func WithParameterDefinitions(pd parameters.ParameterDefinitions) LayerParseStateOption {
+	return func(l *LayerParseState) {
+		l.ParameterDefinitions = pd
+	}
+}
+
+func WithMergeParameterDefinitions(pd parameters.ParameterDefinitions) LayerParseStateOption {
+	return func(l *LayerParseState) {
+		l.ParameterDefinitions = l.ParameterDefinitions.Merge(pd)
+	}
+}
+
+func WithDefaults(defaults map[string]string) LayerParseStateOption {
+	return func(l *LayerParseState) {
+		l.Defaults = defaults
+	}
+}
+
+func WithMergeDefaults(defaults map[string]string) LayerParseStateOption {
+	return func(l *LayerParseState) {
+		for k, v := range defaults {
+			if _, ok := l.Defaults[k]; !ok {
+				l.Defaults[k] = v
+			}
+		}
+	}
+}
+
+func WithParsedParameters(pp *parameters.ParsedParameters) LayerParseStateOption {
+	return func(l *LayerParseState) {
+		l.ParsedParameters = pp
+	}
+}
+
+func WithMergeParsedParameters(pp *parameters.ParsedParameters) LayerParseStateOption {
+	return func(l *LayerParseState) {
+		l.ParsedParameters = l.ParsedParameters.Merge(pp)
+	}
+}
+
+func NewLayerParseState(options ...LayerParseStateOption) *LayerParseState {
+	ret := &LayerParseState{
+		Defaults:             map[string]string{},
+		ParsedParameters:     parameters.NewParsedParameters(),
+		ParameterDefinitions: parameters.NewParameterDefinitions(),
+	}
+
+	for _, option := range options {
+		option(ret)
+	}
+
+	return ret
 }
 
 type ParseState struct {
-	FlagsAndArguments *LayerParseState
-	Layers            map[string]*LayerParseState
+	Layers map[string]*LayerParseState
 }
 
 func NewParseStateFromCommandDescription(cmd cmds.Command) *ParseState {
@@ -40,7 +90,6 @@ func NewParseStateFromCommandDescription(cmd cmds.Command) *ParseState {
 
 	// TODO(manuel, 2023-06-22) If the command is an alias, set the defaults properly
 	// See https://github.com/go-go-golems/parka/issues/62
-
 	defaults := map[string]string{}
 
 	// check if we are an alias
@@ -48,26 +97,19 @@ func NewParseStateFromCommandDescription(cmd cmds.Command) *ParseState {
 	if ok {
 		defaults = alias_.Flags
 		for idx, v := range alias_.Arguments {
-			if len(d.Arguments) <= idx {
-				defaults[d.Arguments[idx].Name] = v
+			arguments := []*parameters.ParameterDefinition{}
+			d.GetDefaultArguments().ForEach(func(value *parameters.ParameterDefinition) {
+				arguments = append(arguments, value)
+			})
+
+			if len(arguments) <= idx {
+				defaults[arguments[idx].Name] = v
 			}
 		}
 	}
 
 	ret := &ParseState{
-		FlagsAndArguments: &LayerParseState{
-			Defaults:             defaults,
-			Parameters:           map[string]interface{}{},
-			ParameterDefinitions: map[string]*parameters.ParameterDefinition{},
-		},
 		Layers: map[string]*LayerParseState{},
-	}
-
-	for _, p := range d.Flags {
-		ret.FlagsAndArguments.ParameterDefinitions[p.Name] = p
-	}
-	for _, p := range d.Arguments {
-		ret.FlagsAndArguments.ParameterDefinitions[p.Name] = p
 	}
 
 	for _, l := range d.Layers {
@@ -78,12 +120,8 @@ func NewParseStateFromCommandDescription(cmd cmds.Command) *ParseState {
 			// in the FormParseStep and QueryParseStep, when it should probably be set up front
 			// in this function here, before we run all our ParseStep.
 			Defaults:             defaults,
-			Parameters:           map[string]interface{}{},
-			ParameterDefinitions: map[string]*parameters.ParameterDefinition{},
-		}
-
-		for _, p := range l.GetParameterDefinitions() {
-			ret.Layers[l.GetSlug()].ParameterDefinitions[p.Name] = p
+			ParsedParameters:     parameters.NewParsedParameters(),
+			ParameterDefinitions: l.GetParameterDefinitions().Clone(),
 		}
 	}
 
@@ -98,13 +136,12 @@ type ParseStep interface {
 }
 
 // Parser is contains a list of ParseStep that are used to parse an incoming
-// request into a proper CommandContext, and ultimately be used to Run a glazed Command.
+// request into a proper CommandContext, and ultimately be used to RunIntoGlazeProcessor a glazed Command.
 //
 // These ParseStep can be operating on the general parameters as well as per layer.
 // The flexibility is there so that more complicated commands can ultimately be built that leverage
 // different validations and rewrite rules.
 type Parser struct {
-	Parsers            []ParseStep
 	LayerParsersBySlug map[string][]ParseStep
 }
 
@@ -112,7 +149,6 @@ type ParserOption func(*Parser)
 
 func NewParser(options ...ParserOption) *Parser {
 	ph := &Parser{
-		Parsers:            []ParseStep{},
 		LayerParsersBySlug: map[string][]ParseStep{},
 	}
 
@@ -124,12 +160,6 @@ func NewParser(options ...ParserOption) *Parser {
 }
 
 func (p *Parser) Parse(c *gin.Context, state *ParseState) error {
-	for _, parser := range p.Parsers {
-		if err := parser.Parse(c, state.FlagsAndArguments); err != nil {
-			return err
-		}
-	}
-
 	for _, layer := range state.Layers {
 		for _, parser := range p.LayerParsersBySlug[layer.Slug] {
 			if err := parser.Parse(c, layer); err != nil {
@@ -149,11 +179,6 @@ func (p *Parser) Parse(c *gin.Context, state *ParseState) error {
 // Be mindful that this can later on be overwritten by a WithReplaceParser.
 func WithPrependParser(slug string, ps ...ParseStep) ParserOption {
 	return func(ph *Parser) {
-		if slug == DefaultSlug {
-			ph.Parsers = append(ps, ph.Parsers...)
-			return
-		}
-
 		if _, ok := ph.LayerParsersBySlug[slug]; !ok {
 			ph.LayerParsersBySlug[slug] = []ParseStep{}
 		}
@@ -165,11 +190,6 @@ func WithPrependParser(slug string, ps ...ParseStep) ParserOption {
 // Be mindful that this can later on be overwritten by a WithReplaceParser.
 func WithAppendParser(slug string, ps ...ParseStep) ParserOption {
 	return func(ph *Parser) {
-		if slug == DefaultSlug {
-			ph.Parsers = append(ph.Parsers, ps...)
-			return
-		}
-
 		if _, ok := ph.LayerParsersBySlug[slug]; !ok {
 			ph.LayerParsersBySlug[slug] = []ParseStep{}
 		}
@@ -180,11 +200,6 @@ func WithAppendParser(slug string, ps ...ParseStep) ParserOption {
 // WithReplaceParser replaces the list of layer parsers with the given ParserFunc.
 func WithReplaceParser(slug string, ps ...ParseStep) ParserOption {
 	return func(ph *Parser) {
-		if slug == DefaultSlug {
-			ph.Parsers = ps
-			return
-		}
-
 		ph.LayerParsersBySlug[slug] = ps
 	}
 }

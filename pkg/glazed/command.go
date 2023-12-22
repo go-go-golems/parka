@@ -17,58 +17,25 @@ type CommandContext struct {
 	// Cmd is the command that will be executed
 	Cmd cmds.Command
 	// ParsedLayers contains the map of parsed layers parsed so far
-	ParsedLayers map[string]*layers.ParsedParameterLayer
-	// ParsedParameters contains the map of parsed parameters parsed so far
-	ParsedParameters map[string]interface{}
+	ParsedLayers *layers.ParsedParameterLayers
 }
 
 // NewCommandContext creates a new CommandContext for the given command.
 func NewCommandContext(cmd cmds.Command) *CommandContext {
 	return &CommandContext{
-		Cmd:              cmd,
-		ParsedLayers:     map[string]*layers.ParsedParameterLayer{},
-		ParsedParameters: map[string]interface{}{},
+		Cmd:          cmd,
+		ParsedLayers: layers.NewParsedParameterLayers(),
 	}
 }
 
 // GetAllParameterDefinitions returns a map of all parameter definitions for the command.
 // This includes flags, arguments and all layers.
-func (pc *CommandContext) GetAllParameterDefinitions() []*parameters.ParameterDefinition {
+func (pc *CommandContext) GetAllParameterDefinitions() parameters.ParameterDefinitions {
 	description := pc.Cmd.Description()
-
-	ret := pc.GetFlagsAndArgumentsParameterDefinitions()
+	ret := parameters.NewParameterDefinitions()
 
 	for _, l := range description.Layers {
-		for _, p := range l.GetParameterDefinitions() {
-			ret = append(ret, p)
-		}
-	}
-
-	return ret
-}
-
-func (pc *CommandContext) GetFlagsAndArgumentsParameterDefinitions() []*parameters.ParameterDefinition {
-	ret := []*parameters.ParameterDefinition{}
-
-	description := pc.Cmd.Description()
-
-	ret = append(ret, description.Flags...)
-	ret = append(ret, description.Arguments...)
-
-	return ret
-}
-
-func (pc *CommandContext) GetAllParameterValues() map[string]interface{} {
-	ret := map[string]interface{}{}
-
-	for k, v := range pc.ParsedParameters {
-		ret[k] = v
-	}
-
-	for _, l := range pc.ParsedLayers {
-		for k, v := range l.Parameters {
-			ret[k] = v
-		}
+		ret.Merge(l.GetParameterDefinitions())
 	}
 
 	return ret
@@ -83,20 +50,20 @@ type ContextMiddleware interface {
 // PrepopulatedContextMiddleware is a ContextMiddleware that prepopulates the CommandContext with
 // the given map of parameters. It overwrites existing parameters in pc.ParsedParameters,
 // and overwrites parameters in individual parser layers if they have already been set.
+//
+// TODO(manuel, 2023-12-22) This will become a more standard Parameters middleware
 type PrepopulatedContextMiddleware struct {
 	ps map[string]interface{}
 }
 
 func (p *PrepopulatedContextMiddleware) Handle(c *gin.Context, pc *CommandContext) error {
 	for k, v := range p.ps {
-		pc.ParsedParameters[k] = v
-
-		// Now check if the parameter is in any of the layers, and if so, set it there as well
-		for _, layer := range pc.ParsedLayers {
-			if _, ok := layer.Parameters[k]; ok {
-				layer.Parameters[k] = v
+		pc.ParsedLayers.ForEach(func(_ string, v_ *layers.ParsedParameterLayer) {
+			p, ok := v_.Parameters.Get(k)
+			if ok {
+				p.Set("prepopulated-context", v)
 			}
-		}
+		})
 	}
 	return nil
 }
@@ -115,13 +82,13 @@ type PrepopulatedParsedLayersContextMiddleware struct {
 
 func (p *PrepopulatedParsedLayersContextMiddleware) Handle(c *gin.Context, pc *CommandContext) error {
 	for k, v := range p.layers {
-		parsedLayer, ok := pc.ParsedLayers[k]
+		parsedLayer, ok := pc.ParsedLayers.Get(k)
 		if ok {
-			for k2, v2 := range v.Parameters {
-				parsedLayer.Parameters[k2] = v2
-			}
+			v.Parameters.ForEach(func(k2 string, v2 *parameters.ParsedParameter) {
+				parsedLayer.Parameters.Set(k2, v2.Clone())
+			})
 		} else {
-			pc.ParsedLayers[k] = v
+			pc.ParsedLayers.Set(k, v.Clone())
 		}
 	}
 	return nil
@@ -141,9 +108,6 @@ func NewCommandQueryParser(cmd cmds.Command, options ...parser.ParserOption) *pa
 	// NOTE(manuel, 2023-06-21) We could pass the parser options here, but then we wouldn't be able to
 	// override the layer parser. Or we could pass the QueryParsers right here.
 	ph := parser.NewParser()
-	ph.Parsers = []parser.ParseStep{
-		parser.NewQueryParseStep(false),
-	}
 
 	// NOTE(manuel, 2023-04-16) API design: we would probably like to hide layers right here in the handler constructor
 	for _, l := range d.Layers {
@@ -164,9 +128,6 @@ func NewCommandFormParser(cmd cmds.Command, options ...parser.ParserOption) *par
 	d := cmd.Description()
 
 	ph := parser.NewParser()
-	ph.Parsers = []parser.ParseStep{
-		parser.NewFormParseStep(false),
-	}
 
 	// TODO(manuel, 2023-06-21) This is probably not necessary if the FormParseStep handles layers by itself
 	for _, l := range d.Layers {
@@ -195,19 +156,15 @@ func (cpm *ContextParserMiddleware) Handle(c *gin.Context, pc *CommandContext) e
 		return err
 	}
 
-	pc.ParsedParameters = parseState.FlagsAndArguments.Parameters
-	pc.ParsedLayers = map[string]*layers.ParsedParameterLayer{}
+	pc.ParsedLayers = layers.NewParsedParameterLayers()
 	commandLayers := pc.Cmd.Description().Layers
 	for _, v := range commandLayers {
-		parsedParameterLayer := &layers.ParsedParameterLayer{
-			Layer:      v,
-			Parameters: map[string]interface{}{},
-		}
-		parsedLayers, ok := parseState.Layers[v.GetSlug()]
+		parsedParameterLayer := layers.NewParsedParameterLayer(v)
+		parsedLayer, ok := parseState.Layers[v.GetSlug()]
 		if ok {
-			parsedParameterLayer.Parameters = parsedLayers.Parameters
+			parsedParameterLayer.Parameters = parsedLayer.ParsedParameters
 		}
-		pc.ParsedLayers[v.GetSlug()] = parsedParameterLayer
+		pc.ParsedLayers.Set(v.GetSlug(), parsedParameterLayer)
 	}
 
 	return nil

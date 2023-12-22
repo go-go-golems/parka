@@ -69,11 +69,10 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 	c.Header("Content-Type", "application/json")
 
 	ctx := c.Request.Context()
-	allParameters := pc.GetAllParameterValues()
 	switch cmd := h.cmd.(type) {
 	case cmds.WriterCommand:
 		buf := bytes.Buffer{}
-		err := cmd.RunIntoWriter(ctx, pc.ParsedLayers, allParameters, &buf)
+		err := cmd.RunIntoWriter(ctx, pc.ParsedLayers, &buf)
 		if err != nil {
 			return err
 		}
@@ -104,7 +103,7 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 			return err
 		}
 
-		err = cmd.Run(ctx, pc.ParsedLayers, allParameters, gp)
+		err = cmd.RunIntoGlazeProcessor(ctx, pc.ParsedLayers, gp)
 		if err != nil {
 			return err
 		}
@@ -115,7 +114,7 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 		}
 
 	case cmds.BareCommand:
-		err := cmd.Run(ctx, pc.ParsedLayers, allParameters)
+		err := cmd.Run(ctx, pc.ParsedLayers)
 		if err != nil {
 			return err
 		}

@@ -8,6 +8,7 @@ import (
 	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
 	"github.com/go-go-golems/parka/pkg/glazed/parser"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
@@ -67,10 +68,9 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 	c.Header("Content-Type", "text/plain")
 
 	ctx := c.Request.Context()
-	allParameters := pc.GetAllParameterValues()
 	switch cmd := h.cmd.(type) {
 	case cmds.WriterCommand:
-		err := cmd.RunIntoWriter(ctx, pc.ParsedLayers, allParameters, writer)
+		err := cmd.RunIntoWriter(ctx, pc.ParsedLayers, writer)
 		if err != nil {
 			return err
 		}
@@ -81,7 +81,12 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 			return err
 		}
 
-		of, err := settings.SetupTableOutputFormatter(allParameters)
+		glazedLayer, ok := pc.ParsedLayers.Get("glazed")
+		if !ok {
+			return errors.New("glazed layer not found")
+		}
+
+		of, err := settings.SetupTableOutputFormatter(glazedLayer)
 		if err != nil {
 			return err
 		}
@@ -92,7 +97,7 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 
 		gp.AddTableMiddleware(table.NewOutputMiddleware(of, writer))
 
-		err = cmd.Run(ctx, pc.ParsedLayers, allParameters, gp)
+		err = cmd.RunIntoGlazeProcessor(ctx, pc.ParsedLayers, gp)
 		if err != nil {
 			return err
 		}
@@ -103,7 +108,7 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 		}
 
 	case cmds.BareCommand:
-		err := cmd.Run(ctx, pc.ParsedLayers, allParameters)
+		err := cmd.Run(ctx, pc.ParsedLayers)
 		if err != nil {
 			return err
 		}

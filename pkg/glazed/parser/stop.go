@@ -15,7 +15,7 @@ func NewStopParseStep() *StopParseStep {
 
 func (s *StopParseStep) Parse(_ *gin.Context, state *LayerParseState) error {
 	// no more parsing after this
-	state.ParameterDefinitions = map[string]*parameters.ParameterDefinition{}
+	state.ParameterDefinitions = parameters.NewParameterDefinitions()
 
 	return nil
 }

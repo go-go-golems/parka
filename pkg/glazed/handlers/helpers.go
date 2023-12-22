@@ -7,42 +7,17 @@ import (
 )
 
 func CreateTableProcessorWithOutput(pc *glazed.CommandContext, outputType string, tableFormat string) (*middlewares.TableProcessor, error) {
-	var gp *middlewares.TableProcessor
-	var err error
-
-	glazedLayer := pc.ParsedLayers["glazed"]
-
-	if glazedLayer != nil {
-		glazedLayer.Parameters["output"] = outputType
-		glazedLayer.Parameters["table"] = tableFormat
-		gp, err = settings.SetupTableProcessor(glazedLayer.Parameters)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		gp, err = settings.SetupTableProcessor(map[string]interface{}{
-			"output":       outputType,
-			"table-format": tableFormat,
-		})
+	glazedLayer, ok := pc.ParsedLayers.Get("glazed")
+	if !ok {
+		return middlewares.NewTableProcessor(), nil
 	}
 
-	return gp, err
-}
-
-func CreateTableProcessor(pc *glazed.CommandContext) (*middlewares.TableProcessor, error) {
-	var gp *middlewares.TableProcessor
-	var err error
-
-	glazedLayer := pc.ParsedLayers["glazed"]
-
-	if glazedLayer != nil {
-		gp, err = settings.SetupTableProcessor(glazedLayer.Parameters)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		gp, err = settings.SetupTableProcessor(map[string]interface{}{})
+	glazedLayer.Parameters.UpdateExistingValue("output", "parka-handlers", outputType)
+	glazedLayer.Parameters.UpdateExistingValue("table-format", "parka-handlers", tableFormat)
+	gp, err := settings.SetupTableProcessor(glazedLayer)
+	if err != nil {
+		return nil, err
 	}
 
-	return gp, err
+	return gp, nil
 }

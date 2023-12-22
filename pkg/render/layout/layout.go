@@ -87,12 +87,12 @@ func ComputeLayout(
 		Sections: []*Section{},
 	}
 
-	values := pc.GetAllParameterValues()
+	defaultLayer := pc.ParsedLayers.GetDefaultParameterLayer()
 
 	if len(layout) == 0 {
-		pds := pc.GetFlagsAndArgumentsParameterDefinitions()
+		pds := defaultLayer.Layer.GetParameterDefinitions()
 		flagSection := NewSectionFromParameterDefinitions(
-			pds, values,
+			pds, defaultLayer.Parameters.ToMap(),
 			WithSectionTitle("All flags and arguments"),
 		)
 		ret.Sections = append(ret.Sections, flagSection)
@@ -100,7 +100,6 @@ func ComputeLayout(
 		// This code would add a section for all layers, in the form.
 		// I don't think this is super useful in the context of Parka,
 		// and can be overriden with layouts if you really want.
-		//
 		//
 		//for _, l := range description.Layers {
 		//	pds = l.GetParameterDefinitions()
@@ -113,11 +112,7 @@ func ComputeLayout(
 		//}
 	} else {
 		allParameterDefinitions := pc.GetAllParameterDefinitions()
-		allParameterDefinitionsByName := map[string]*parameters.ParameterDefinition{}
-
-		for _, pd := range allParameterDefinitions {
-			allParameterDefinitionsByName[pd.Name] = pd
-		}
+		values := pc.ParsedLayers.GetDataMap()
 
 		for _, section_ := range layout {
 			section := &Section{
@@ -134,7 +129,7 @@ func ComputeLayout(
 				}
 
 				for _, input_ := range row_.Inputs {
-					pd, ok := allParameterDefinitionsByName[input_.Name]
+					pd, ok := allParameterDefinitions.Get(input_.Name)
 					if !ok {
 						return nil, fmt.Errorf("parameter %s not found", input_.Name)
 					}
@@ -212,7 +207,7 @@ func choicesToOptions(choices []string) []Option {
 }
 
 func NewSectionFromParameterDefinitions(
-	pds []*parameters.ParameterDefinition,
+	pds parameters.ParameterDefinitions,
 	values map[string]interface{},
 	options ...SectionOption) *Section {
 	section := &Section{
@@ -225,7 +220,7 @@ func NewSectionFromParameterDefinitions(
 
 	// if there is no layout, go through all flags and put 3 per row
 	currentRow := Row{}
-	for _, pd := range pds {
+	pds.ForEach(func(pd *parameters.ParameterDefinition) {
 		name := pd.Name
 		value, ok := values[name]
 		if !ok {
@@ -247,7 +242,8 @@ func NewSectionFromParameterDefinitions(
 			section.Rows = append(section.Rows, currentRow)
 			currentRow = Row{}
 		}
-	}
+	})
+
 	if len(currentRow.Inputs) > 0 {
 		section.Rows = append(section.Rows, currentRow)
 	}

@@ -12,6 +12,8 @@ import (
 //go:embed tests/query.yaml
 var queryYAML []byte
 
+// TODO(manuel, 2023-12-22) I need to write many many more tests here
+
 func createHTTPRequestWithQueryValues(value map[string]string) *http.Request {
 	req, _ := http.NewRequest("GET", "/test", nil)
 	q := req.URL.Query()
@@ -32,12 +34,12 @@ func createGinContextWithQueryValues(value map[string]string) *gin.Context {
 func TestEmptyQueryOnlyDefined(t *testing.T) {
 	ps := NewQueryParseStep(true)
 
-	parameterDefinitions, _ := parameters.LoadParameterDefinitionsFromYAML(queryYAML)
+	parameterDefinitions := parameters.LoadParameterDefinitionsFromYAML(queryYAML)
 	state := &LayerParseState{
 		// can we parse that from yaml
 		ParameterDefinitions: parameterDefinitions,
 		Defaults:             map[string]string{},
-		Parameters:           map[string]interface{}{},
+		ParsedParameters:     parameters.NewParsedParameters(),
 	}
 
 	c := createGinContextWithQueryValues(map[string]string{})
@@ -45,26 +47,21 @@ func TestEmptyQueryOnlyDefined(t *testing.T) {
 	err := ps.Parse(c, state)
 	require.Nil(t, err)
 
-	require.Equal(t, 0, len(state.Parameters))
+	require.Equal(t, 0, state.ParsedParameters.Len())
 }
 
 func TestEmptyQuery(t *testing.T) {
 	ps := NewQueryParseStep(false)
 
-	parameterDefinitions, _ := parameters.LoadParameterDefinitionsFromYAML(queryYAML)
-	state := &LayerParseState{
-		// can we parse that from yaml
-		ParameterDefinitions: parameterDefinitions,
-		Defaults:             map[string]string{},
-		Parameters:           map[string]interface{}{},
-	}
+	parameterDefinitions := parameters.LoadParameterDefinitionsFromYAML(queryYAML)
+	state := NewLayerParseState(WithParameterDefinitions(parameterDefinitions))
 
 	c := createGinContextWithQueryValues(map[string]string{})
 
 	err := ps.Parse(c, state)
 	require.Nil(t, err)
 
-	require.Equal(t, 2, len(state.Parameters))
-	require.Equal(t, "default", state.Parameters["testDefault"])
-	require.Nil(t, state.Parameters["test"])
+	require.Equal(t, 2, state.ParsedParameters.Len())
+	require.Equal(t, "default", state.ParsedParameters.GetValue("testDefault"))
+	require.Nil(t, state.ParsedParameters.GetValue("test"))
 }

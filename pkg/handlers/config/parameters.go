@@ -184,12 +184,12 @@ func WithDefaultArgument(name string, value string) OverridesAndDefaultsOption {
 	}
 }
 
-func WithMergeDefaultLayer(name string, layer *layers.ParsedParameterLayer) OverridesAndDefaultsOption {
+func WithMergeDefaultLayer(name string, layer map[string]interface{}) OverridesAndDefaultsOption {
 	return func(handler *OverridesAndDefaults) {
 		if handler.Defaults == nil {
 			handler.Defaults = NewHandlerParameters()
 		}
-		for k, v := range layer.Parameters {
+		for k, v := range layer {
 			if _, ok := handler.Defaults.Layers[name]; !ok {
 				handler.Defaults.Layers[name] = map[string]interface{}{}
 			}
@@ -222,10 +222,10 @@ func (od *OverridesAndDefaults) ComputeParserOptions(stream bool) []parser.Parse
 	// TODO(manuel, 2023-06-21) This needs to be handled for each backend, not just the HTML one
 	if od.Overrides != nil {
 		parserOptions = append(parserOptions,
-			parser.WithAppendOverrides(parser.DefaultSlug, od.Overrides.Flags),
+			parser.WithAppendOverrides(layers.DefaultSlug, od.Overrides.Flags),
 		)
 		parserOptions = append(parserOptions,
-			parser.WithAppendOverrides(parser.DefaultSlug, od.Overrides.Arguments),
+			parser.WithAppendOverrides(layers.DefaultSlug, od.Overrides.Arguments),
 		)
 		for slug, layer := range od.Overrides.Layers {
 			parserOptions = append(parserOptions, parser.WithAppendOverrides(slug, layer))
@@ -234,10 +234,10 @@ func (od *OverridesAndDefaults) ComputeParserOptions(stream bool) []parser.Parse
 
 	if od.Defaults != nil {
 		parserOptions = append(parserOptions,
-			parser.WithPrependDefaults(parser.DefaultSlug, od.Defaults.Flags),
+			parser.WithPrependDefaults(layers.DefaultSlug, od.Defaults.Flags),
 		)
 		parserOptions = append(parserOptions,
-			parser.WithPrependDefaults(parser.DefaultSlug, od.Defaults.Arguments),
+			parser.WithPrependDefaults(layers.DefaultSlug, od.Defaults.Arguments),
 		)
 		for slug, layer := range od.Defaults.Layers {
 			// we use prepend because that way, later options will actually override earlier flag values,

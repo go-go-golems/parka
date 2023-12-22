@@ -6,6 +6,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/glazed/parser"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
@@ -62,19 +63,17 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 		}
 	}
 
-	glazedLayer := pc.ParsedLayers["glazed"]
-
-	ps := make(map[string]interface{})
-	if glazedLayer != nil {
-		ps = glazedLayer.Parameters
+	glazedLayer, ok := pc.ParsedLayers.Get("glazed")
+	if !ok {
+		return errors.New("glazed layer not found")
 	}
 
-	gp, err := settings.SetupTableProcessor(ps)
+	gp, err := settings.SetupTableProcessor(glazedLayer)
 	if err != nil {
 		return err
 	}
 
-	of, err := settings.SetupProcessorOutput(gp, ps, writer)
+	of, err := settings.SetupProcessorOutput(gp, glazedLayer, writer)
 	if err != nil {
 		return err
 	}
@@ -82,7 +81,7 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 	c.Header("Content-Type", of.ContentType())
 
 	ctx := c.Request.Context()
-	err = h.cmd.Run(ctx, pc.ParsedLayers, pc.GetAllParameterValues(), gp)
+	err = h.cmd.RunIntoGlazeProcessor(ctx, pc.ParsedLayers, gp)
 	if err != nil {
 		return err
 	}

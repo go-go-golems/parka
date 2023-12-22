@@ -259,7 +259,6 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	})
 
 	// actually run the command
-	allParameters := pc.GetAllParameterValues()
 	eg.Go(func() error {
 		defer func() {
 			close(rowC)
@@ -269,7 +268,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 		}()
 
 		// NOTE(manuel, 2023-10-16) The GetAllParameterValues is a bit of a hack because really what we want is to only get those flags through the layers
-		err = qh.cmd.Run(ctx3, pc.ParsedLayers, allParameters, gp)
+		err = qh.cmd.RunIntoGlazeProcessor(ctx3, pc.ParsedLayers, gp)
 		if err != nil {
 			dt_.ErrorStream <- err.Error()
 			return err
@@ -286,7 +285,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	eg.Go(func() error {
 		// if qh.Cmd implements cmds.CommandWithMetadata, get Metadata
 		if cm_, ok := qh.cmd.(cmds.CommandWithMetadata); ok {
-			dt_.CommandMetadata, err = cm_.Metadata(c, pc.ParsedLayers, allParameters)
+			dt_.CommandMetadata, err = cm_.Metadata(c, pc.ParsedLayers)
 		}
 		err := qh.renderTemplate(c, pc, w, dt_, columnsC)
 		if err != nil {

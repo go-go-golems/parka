@@ -106,6 +106,10 @@ func NewExampleCommand() *ExampleCommand {
 					Default:   "choice1",
 				},
 			}...))
+	if err != nil {
+		panic(err)
+	}
+
 	description := &cmds.CommandDescription{
 		Name:  "example",
 		Short: "Short parka example command",

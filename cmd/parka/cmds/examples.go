@@ -126,7 +126,7 @@ func NewExampleCommand() *ExampleCommand {
 
 func (e *ExampleCommand) RunIntoGlazeProcessor(
 	ctx context.Context,
-	parsedLayers *layers.ParsedParameterLayers,
+	parsedLayers *layers.ParsedLayers,
 	gp middlewares.Processor,
 ) error {
 	d := parsedLayers.GetDefaultParameterLayer()

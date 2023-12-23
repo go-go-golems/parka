@@ -22,18 +22,18 @@ type LayerParseState struct {
 	ParsedParameters *parameters.ParsedParameters
 
 	// ParameterDefinitions contains the parameter definitions that can still be parsed
-	ParameterDefinitions parameters.ParameterDefinitions
+	ParameterDefinitions *parameters.ParameterDefinitions
 }
 
 type LayerParseStateOption func(*LayerParseState)
 
-func WithParameterDefinitions(pd parameters.ParameterDefinitions) LayerParseStateOption {
+func WithParameterDefinitions(pd *parameters.ParameterDefinitions) LayerParseStateOption {
 	return func(l *LayerParseState) {
 		l.ParameterDefinitions = pd
 	}
 }
 
-func WithMergeParameterDefinitions(pd parameters.ParameterDefinitions) LayerParseStateOption {
+func WithMergeParameterDefinitions(pd *parameters.ParameterDefinitions) LayerParseStateOption {
 	return func(l *LayerParseState) {
 		l.ParameterDefinitions = l.ParameterDefinitions.Merge(pd)
 	}

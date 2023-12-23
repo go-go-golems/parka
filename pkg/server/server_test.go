@@ -30,7 +30,7 @@ func (t *TestCommand) ToYAML(w io.Writer) error {
 
 func (t *TestCommand) Run(
 	ctx context.Context,
-	parsedLayers map[string]*layers.ParsedParameterLayer,
+	parsedLayers map[string]*layers.ParsedLayer,
 	ps map[string]interface{},
 	gp middlewares.Processor,
 ) error {

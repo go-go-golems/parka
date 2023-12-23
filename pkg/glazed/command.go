@@ -17,20 +17,20 @@ type CommandContext struct {
 	// Cmd is the command that will be executed
 	Cmd cmds.Command
 	// ParsedLayers contains the map of parsed layers parsed so far
-	ParsedLayers *layers.ParsedParameterLayers
+	ParsedLayers *layers.ParsedLayers
 }
 
 // NewCommandContext creates a new CommandContext for the given command.
 func NewCommandContext(cmd cmds.Command) *CommandContext {
 	return &CommandContext{
 		Cmd:          cmd,
-		ParsedLayers: layers.NewParsedParameterLayers(),
+		ParsedLayers: layers.NewParsedLayers(),
 	}
 }
 
 // GetAllParameterDefinitions returns a map of all parameter definitions for the command.
 // This includes flags, arguments and all layers.
-func (pc *CommandContext) GetAllParameterDefinitions() parameters.ParameterDefinitions {
+func (pc *CommandContext) GetAllParameterDefinitions() *parameters.ParameterDefinitions {
 	description := pc.Cmd.Description()
 	ret := parameters.NewParameterDefinitions()
 
@@ -58,10 +58,10 @@ type PrepopulatedContextMiddleware struct {
 
 func (p *PrepopulatedContextMiddleware) Handle(c *gin.Context, pc *CommandContext) error {
 	for k, v := range p.ps {
-		pc.ParsedLayers.ForEach(func(_ string, v_ *layers.ParsedParameterLayer) {
+		pc.ParsedLayers.ForEach(func(_ string, v_ *layers.ParsedLayer) {
 			p, ok := v_.Parameters.Get(k)
 			if ok {
-				p.Set("prepopulated-context", v)
+				p.SetWithSource("prepopulated-context", v)
 			}
 		})
 	}
@@ -77,7 +77,7 @@ func NewPrepopulatedContextMiddleware(ps map[string]interface{}) *PrepopulatedCo
 // PrepopulatedParsedLayersContextMiddleware is a ContextMiddleware that prepopulates the CommandContext with
 // the given map of layers. If a layer already exists, it overwrites its parameters.
 type PrepopulatedParsedLayersContextMiddleware struct {
-	layers map[string]*layers.ParsedParameterLayer
+	layers map[string]*layers.ParsedLayer
 }
 
 func (p *PrepopulatedParsedLayersContextMiddleware) Handle(c *gin.Context, pc *CommandContext) error {
@@ -95,7 +95,7 @@ func (p *PrepopulatedParsedLayersContextMiddleware) Handle(c *gin.Context, pc *C
 }
 
 func NewPrepopulatedParsedLayersContextMiddleware(
-	layers map[string]*layers.ParsedParameterLayer,
+	layers map[string]*layers.ParsedLayer,
 ) *PrepopulatedParsedLayersContextMiddleware {
 	return &PrepopulatedParsedLayersContextMiddleware{
 		layers: layers,
@@ -156,10 +156,13 @@ func (cpm *ContextParserMiddleware) Handle(c *gin.Context, pc *CommandContext) e
 		return err
 	}
 
-	pc.ParsedLayers = layers.NewParsedParameterLayers()
+	pc.ParsedLayers = layers.NewParsedLayers()
 	commandLayers := pc.Cmd.Description().Layers
 	for _, v := range commandLayers {
-		parsedParameterLayer := layers.NewParsedParameterLayer(v)
+		parsedParameterLayer, err := layers.NewParsedLayer(v)
+		if err != nil {
+			return err
+		}
 		parsedLayer, ok := parseState.Layers[v.GetSlug()]
 		if ok {
 			parsedParameterLayer.Parameters = parsedLayer.ParsedParameters

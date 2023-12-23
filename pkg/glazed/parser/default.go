@@ -24,7 +24,7 @@ func (s *DefaultParseStep) Parse(_ *gin.Context, state *LayerParseState) error {
 				parsedParameter := &parameters.ParsedParameter{
 					ParameterDefinition: pd,
 				}
-				parsedParameter.Set("default-parse", v)
+				parsedParameter.SetWithSource("default-parse", v)
 			}
 
 		}

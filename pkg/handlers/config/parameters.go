@@ -21,7 +21,7 @@ func NewHandlerParameters() *HandlerParameters {
 
 // NewHandlerParametersFromLayerParams creates a new HandlerParameters from the config file.
 // It currently requires a list of layerDefinitions in order to lookup the correct
-// layers to stored as ParsedParameterLayer. It doesn't fail if configured layers don't exist.
+// layers to stored as ParsedLayer. It doesn't fail if configured layers don't exist.
 //
 // TODO(manuel, 2023-05-31) Add a way to validate the fact that overrides in a config file might
 // have a typo and don't correspond to existing layer definitions in the application.

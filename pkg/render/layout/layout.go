@@ -207,7 +207,7 @@ func choicesToOptions(choices []string) []Option {
 }
 
 func NewSectionFromParameterDefinitions(
-	pds parameters.ParameterDefinitions,
+	pds *parameters.ParameterDefinitions,
 	values map[string]interface{},
 	options ...SectionOption) *Section {
 	section := &Section{

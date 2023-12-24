@@ -4,11 +4,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/alias"
+	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 )
 
 // TODO(manuel, 2023-06-21) This part of the API is a complete mess, I'm not even sure what it is supposed to do overall
 // Well worth refactoring
+
+// TODO(manuel, 2023-12-23) This is ParsedLayer, isn't it? With an custom set of Defaults?
 
 type LayerParseState struct {
 	Slug string
@@ -112,7 +115,7 @@ func NewParseStateFromCommandDescription(cmd cmds.Command) *ParseState {
 		Layers: map[string]*LayerParseState{},
 	}
 
-	for _, l := range d.Layers {
+	d.Layers.ForEach(func(_ string, l layers.ParameterLayer) {
 		ret.Layers[l.GetSlug()] = &LayerParseState{
 			Slug: l.GetSlug(),
 			// TODO(manuel, 2023-06-22) This is not the most elegant way to pass defaults down the road
@@ -123,7 +126,7 @@ func NewParseStateFromCommandDescription(cmd cmds.Command) *ParseState {
 			ParsedParameters:     parameters.NewParsedParameters(),
 			ParameterDefinitions: l.GetParameterDefinitions().Clone(),
 		}
-	}
+	})
 
 	return ret
 }

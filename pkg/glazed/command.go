@@ -34,9 +34,9 @@ func (pc *CommandContext) GetAllParameterDefinitions() *parameters.ParameterDefi
 	description := pc.Cmd.Description()
 	ret := parameters.NewParameterDefinitions()
 
-	for _, l := range description.Layers {
+	description.Layers.ForEach(func(_ string, l layers.ParameterLayer) {
 		ret.Merge(l.GetParameterDefinitions())
-	}
+	})
 
 	return ret
 }
@@ -110,12 +110,12 @@ func NewCommandQueryParser(cmd cmds.Command, options ...parser.ParserOption) *pa
 	ph := parser.NewParser()
 
 	// NOTE(manuel, 2023-04-16) API design: we would probably like to hide layers right here in the handler constructor
-	for _, l := range d.Layers {
+	d.Layers.ForEach(func(_ string, l layers.ParameterLayer) {
 		slug := l.GetSlug()
 		ph.LayerParsersBySlug[slug] = []parser.ParseStep{
 			parser.NewQueryParseStep(false),
 		}
-	}
+	})
 
 	for _, option := range options {
 		option(ph)
@@ -130,12 +130,12 @@ func NewCommandFormParser(cmd cmds.Command, options ...parser.ParserOption) *par
 	ph := parser.NewParser()
 
 	// TODO(manuel, 2023-06-21) This is probably not necessary if the FormParseStep handles layers by itself
-	for _, l := range d.Layers {
+	d.Layers.ForEach(func(_ string, l layers.ParameterLayer) {
 		slug := l.GetSlug()
 		ph.LayerParsersBySlug[slug] = []parser.ParseStep{
 			parser.NewFormParseStep(false),
 		}
-	}
+	})
 
 	for _, option := range options {
 		option(ph)
@@ -158,7 +158,7 @@ func (cpm *ContextParserMiddleware) Handle(c *gin.Context, pc *CommandContext) e
 
 	pc.ParsedLayers = layers.NewParsedLayers()
 	commandLayers := pc.Cmd.Description().Layers
-	for _, v := range commandLayers {
+	err = commandLayers.ForEachE(func(_ string, v layers.ParameterLayer) error {
 		parsedParameterLayer, err := layers.NewParsedLayer(v)
 		if err != nil {
 			return err
@@ -168,6 +168,10 @@ func (cpm *ContextParserMiddleware) Handle(c *gin.Context, pc *CommandContext) e
 			parsedParameterLayer.Parameters = parsedLayer.ParsedParameters
 		}
 		pc.ParsedLayers.Set(v.GetSlug(), parsedParameterLayer)
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil

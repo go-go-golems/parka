@@ -114,10 +114,10 @@ func NewExampleCommand() *ExampleCommand {
 		Name:  "example",
 		Short: "Short parka example command",
 		Long:  "",
-		Layers: []layers.ParameterLayer{
+		Layers: layers.NewParameterLayers(layers.WithLayers(
 			defaultLayer,
 			glazedParameterLayer,
-		},
+		)),
 	}
 	return &ExampleCommand{
 		CommandDescription: description,

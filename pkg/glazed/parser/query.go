@@ -20,6 +20,7 @@ func (q *QueryParseStep) ParseLayerState(c *gin.Context, state *LayerParseState)
 			// check p.Name[] parameter
 			values, ok := c.GetQueryArray(fmt.Sprintf("%s[]", p.Name))
 			if ok {
+				// TODO(manuel, 2023-12-25) Need to pass in options to ParseParameter
 				pValue, err := p.ParseParameter(values)
 				if err != nil {
 					return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, values, err.Error())
@@ -78,6 +79,7 @@ func (q *QueryParseStep) ParseLayerState(c *gin.Context, state *LayerParseState)
 				} else {
 					values = []string{value}
 				}
+				// TODO(manuel, 2023-12-25) Need to pass in options to ParseParameter
 				pValue, err := p.ParseParameter(values)
 				if err != nil {
 					return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())

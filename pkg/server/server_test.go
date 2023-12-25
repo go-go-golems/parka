@@ -20,6 +20,8 @@ import (
 
 type TestCommand struct{}
 
+var _ cmds.GlazeCommand = &TestCommand{}
+
 func (t *TestCommand) Description() *cmds.CommandDescription {
 	return cmds.NewCommandDescription("test")
 }
@@ -28,10 +30,9 @@ func (t *TestCommand) ToYAML(w io.Writer) error {
 	return t.Description().ToYAML(w)
 }
 
-func (t *TestCommand) Run(
+func (t *TestCommand) RunIntoGlazeProcessor(
 	ctx context.Context,
-	parsedLayers map[string]*layers.ParsedLayer,
-	ps map[string]interface{},
+	parsedLayers *layers.ParsedLayers,
 	gp middlewares.Processor,
 ) error {
 	err := gp.AddRow(ctx, types.NewRow(

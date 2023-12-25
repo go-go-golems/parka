@@ -13,6 +13,7 @@ type FormParseStep struct {
 }
 
 func (f *FormParseStep) ParseLayerState(c *gin.Context, state *LayerParseState) error {
+	// TODO(manuel, 2023-12-25) Need to pass in options to ParseParameter
 	err := state.ParameterDefinitions.ForEachE(func(p *parameters.ParameterDefinition) error {
 		if parameters.IsListParameter(p.Type) {
 			// check p.Name[] parameter
@@ -62,6 +63,7 @@ func (f *FormParseStep) ParseLayerState(c *gin.Context, state *LayerParseState) 
 				p.Type == parameters.ParameterTypeFloatList {
 				v = strings.Split(value, ",")
 			}
+			// TODO(manuel, 2023-12-25) Need to pass in options to ParseParameter
 			pValue, err := p.ParseParameter(v)
 			if err != nil {
 				return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())

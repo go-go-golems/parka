@@ -154,7 +154,10 @@ func ComputeLayout(
 					if input_.InputType != "" {
 						type_ = input_.InputType
 					}
-					default_ := pd.Default
+					default_ := interface{}(nil)
+					if pd.Default != nil {
+						default_ = *pd.Default
+					}
 					if input_.DefaultValue != nil {
 						default_ = input_.DefaultValue
 					}
@@ -230,14 +233,17 @@ func NewSectionFromParameterDefinitions(
 		if help == "" {
 			help = pd.Name
 		}
-		currentRow.Inputs = append(currentRow.Inputs, Input{
+		input := Input{
 			Name:    name,
 			Value:   value,
 			Type:    string(pd.Type),
-			Default: pd.Default,
 			Help:    help,
 			Options: choicesToOptions(pd.Choices),
-		})
+		}
+		if pd.Default != nil {
+			input.Default = *pd.Default
+		}
+		currentRow.Inputs = append(currentRow.Inputs, input)
 		if len(currentRow.Inputs) == 3 {
 			section.Rows = append(section.Rows, currentRow)
 			currentRow = Row{}

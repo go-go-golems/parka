@@ -21,7 +21,7 @@ func (s *StaticParseStep) Parse(_ *gin.Context, state *LayerParseState) error {
 		if !ok {
 			return errors.Errorf("parameter '%s' is not defined", k)
 		}
-		state.ParsedParameters.UpdateValue(k, p, "static-parse", v)
+		state.ParsedParameters.UpdateValue(k, p, v)
 	}
 
 	return nil

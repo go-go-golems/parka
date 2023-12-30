@@ -23,7 +23,7 @@ func (f *FormParseStep) ParseLayerState(c *gin.Context, state *LayerParseState) 
 				if err != nil {
 					return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, values, err.Error())
 				}
-				state.ParsedParameters.UpdateValue(p.Name, p, "form-parse", pValue)
+				state.ParsedParameters.UpdateValue(p.Name, p, pValue)
 				return nil
 			}
 		}
@@ -34,24 +34,24 @@ func (f *FormParseStep) ParseLayerState(c *gin.Context, state *LayerParseState) 
 			if p.Required {
 				return fmt.Errorf("required parameter '%s' is missing", p.Name)
 			}
-			if !f.onlyDefined {
+			if !f.onlyDefined && p.Default != nil {
 				// NOTE(manuel, 2023-12-22) It's odd that we have some mechanism here to set defaults, can't we use the standard layer filling?
 				if _, ok := state.ParsedParameters.Get(p.Name); !ok {
 					if p.Type == parameters.ParameterTypeDate {
-						switch v := p.Default.(type) {
+						switch v := (*p.Default).(type) {
 						case string:
 							parsedDate, err := parameters.ParseDate(v)
 							if err != nil {
 								return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
 							}
 
-							state.ParsedParameters.SetAsDefault(p.Name, p, "form-parse-default", parsedDate)
+							state.ParsedParameters.SetAsDefault(p.Name, p, parsedDate)
 						case time.Time:
-							state.ParsedParameters.SetAsDefault(p.Name, p, "form-parse-default", v)
+							state.ParsedParameters.SetAsDefault(p.Name, p, v)
 
 						}
 					} else {
-						state.ParsedParameters.SetAsDefault(p.Name, p, "form-parse-default", p.Default)
+						state.ParsedParameters.SetAsDefault(p.Name, p, *p.Default)
 					}
 				}
 			}
@@ -68,19 +68,19 @@ func (f *FormParseStep) ParseLayerState(c *gin.Context, state *LayerParseState) 
 			if err != nil {
 				return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
 			}
-			state.ParsedParameters.UpdateValue(p.Name, p, "form-parse-list", pValue)
+			state.ParsedParameters.UpdateValue(p.Name, p, pValue)
 		} else if p.Type == parameters.ParameterTypeStringFromFile {
 			s, err := ParseStringFromFile(c, p.Name)
 			if err != nil {
 				return err
 			}
-			state.ParsedParameters.UpdateValue(p.Name, p, "form-parse-file", s)
+			state.ParsedParameters.UpdateValue(p.Name, p, s)
 		} else if p.Type == parameters.ParameterTypeObjectFromFile {
 			obj, err := ParseObjectFromFile(c, p.Name)
 			if err != nil {
 				return err
 			}
-			state.ParsedParameters.UpdateValue(p.Name, p, "form-parse-file", obj)
+			state.ParsedParameters.UpdateValue(p.Name, p, obj)
 		} else if p.Type == parameters.ParameterTypeStringListFromFile {
 			// TODO(manuel, 2023-04-16) Add support for StringListFromFile and ObjectListFromFile
 			// See: https://github.com/go-go-golems/parka/issues/23

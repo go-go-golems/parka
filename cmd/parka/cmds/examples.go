@@ -5,6 +5,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/helpers/cast"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
@@ -32,14 +33,14 @@ func NewExampleCommand() *ExampleCommand {
 					ShortFlag: "t",
 					Type:      parameters.ParameterTypeString,
 					Help:      "Test string argument",
-					Default:   "test",
+					Default:   cast.InterfaceAddr("test"),
 				},
 				{
 					Name:      "string",
 					ShortFlag: "s",
 					Type:      parameters.ParameterTypeString,
 					Help:      "Test string flag",
-					Default:   "default",
+					Default:   cast.InterfaceAddr("default"),
 					Required:  false,
 				},
 				{
@@ -57,14 +58,14 @@ func NewExampleCommand() *ExampleCommand {
 					ShortFlag: "i",
 					Type:      parameters.ParameterTypeInteger,
 					Help:      "Test integer flag",
-					Default:   1,
+					Default:   cast.InterfaceAddr(1),
 				},
 				{
 					Name:      "float",
 					ShortFlag: "f",
 					Type:      parameters.ParameterTypeFloat,
 					Help:      "Test float flag",
-					Default:   1.0,
+					Default:   cast.InterfaceAddr(1.0),
 				},
 				{
 					Name:      "bool",
@@ -83,19 +84,19 @@ func NewExampleCommand() *ExampleCommand {
 					ShortFlag: "l",
 					Type:      parameters.ParameterTypeStringList,
 					Help:      "Test string list flag",
-					Default:   []string{"default", "default2"},
+					Default:   cast.InterfaceAddr([]string{"default", "default2"}),
 				},
 				{
 					Name:    "integer_list",
 					Type:    parameters.ParameterTypeIntegerList,
 					Help:    "Test integer list flag",
-					Default: []int{1, 2},
+					Default: cast.InterfaceAddr([]int{1, 2}),
 				},
 				{
 					Name:    "float_list",
 					Type:    parameters.ParameterTypeFloatList,
 					Help:    "Test float list flag",
-					Default: []float64{1.0, 2.0},
+					Default: cast.InterfaceAddr([]float64{1.0, 2.0}),
 				},
 				{
 					Name:      "choice",
@@ -103,7 +104,7 @@ func NewExampleCommand() *ExampleCommand {
 					Type:      parameters.ParameterTypeChoice,
 					Help:      "Test choice flag",
 					Choices:   []string{"choice1", "choice2"},
-					Default:   "choice1",
+					Default:   cast.InterfaceAddr("choice1"),
 				},
 			}...))
 	if err != nil {

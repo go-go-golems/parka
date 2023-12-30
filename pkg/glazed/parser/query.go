@@ -25,7 +25,7 @@ func (q *QueryParseStep) ParseLayerState(c *gin.Context, state *LayerParseState)
 				if err != nil {
 					return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, values, err.Error())
 				}
-				state.ParsedParameters.UpdateValue(p.Name, p, "query-parse", pValue)
+				state.ParsedParameters.UpdateValue(p.Name, p, pValue)
 				return nil
 			}
 		}
@@ -38,8 +38,8 @@ func (q *QueryParseStep) ParseLayerState(c *gin.Context, state *LayerParseState)
 				if p.Required {
 					return errors.Errorf("required parameter '%s' is missing", p.Name)
 				}
-				if !q.onlyDefined {
-					state.ParsedParameters.SetAsDefault(p.Name, p, "query-parse-default", p.Default)
+				if !q.onlyDefined && p.Default != nil {
+					state.ParsedParameters.SetAsDefault(p.Name, p, *p.Default)
 				}
 			} else {
 				f := strings.NewReader(value)
@@ -47,29 +47,29 @@ func (q *QueryParseStep) ParseLayerState(c *gin.Context, state *LayerParseState)
 				if err != nil {
 					return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
 				}
-				state.ParsedParameters.UpdateValue(p.Name, p, "query-parse", pValue)
+				state.ParsedParameters.UpdateValue(p.Name, p, pValue)
 			}
 		} else {
 			if value == "" {
 				if p.Required {
 					return fmt.Errorf("required parameter '%s' is missing", p.Name)
 				}
-				if !q.onlyDefined {
+				if !q.onlyDefined && p.Default != nil {
 					if p.Type == parameters.ParameterTypeDate {
-						switch v := p.Default.(type) {
+						switch v := (*p.Default).(type) {
 						case string:
 							parsedDate, err := parameters.ParseDate(v)
 							if err != nil {
 								return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
 							}
 
-							state.ParsedParameters.SetAsDefault(p.Name, p, "query-parse-default", parsedDate)
+							state.ParsedParameters.SetAsDefault(p.Name, p, parsedDate)
 						case time.Time:
-							state.ParsedParameters.SetAsDefault(p.Name, p, "query-parse-default", v)
+							state.ParsedParameters.SetAsDefault(p.Name, p, v)
 
 						}
 					} else {
-						state.ParsedParameters.SetAsDefault(p.Name, p, "query-parse-default", p.Default)
+						state.ParsedParameters.SetAsDefault(p.Name, p, *p.Default)
 					}
 				}
 			} else {
@@ -84,7 +84,7 @@ func (q *QueryParseStep) ParseLayerState(c *gin.Context, state *LayerParseState)
 				if err != nil {
 					return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
 				}
-				state.ParsedParameters.UpdateValue(p.Name, p, "query-parse", pValue)
+				state.ParsedParameters.UpdateValue(p.Name, p, pValue)
 			}
 		}
 

@@ -61,7 +61,7 @@ func (p *PrepopulatedContextMiddleware) Handle(c *gin.Context, pc *CommandContex
 		pc.ParsedLayers.ForEach(func(_ string, v_ *layers.ParsedLayer) {
 			p, ok := v_.Parameters.Get(k)
 			if ok {
-				p.SetWithSource("prepopulated-context", v)
+				p.Set(v, parameters.WithParseStepSource("prepopulated-context"))
 			}
 		})
 	}

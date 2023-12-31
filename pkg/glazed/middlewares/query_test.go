@@ -1,13 +1,13 @@
 package middlewares
 
 import (
-	"bytes"
 	_ "embed"
 	"github.com/go-go-golems/glazed/pkg/cmds/helpers"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/helpers/yaml"
-	"mime/multipart"
+	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -15,92 +15,63 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// UpdateFromFormQueryTest represents a single test case for UpdateFromFormQuery.
-type UpdateFromFormQueryTest struct {
+type UpdateFromQueryParametersTest struct {
 	Name            string                       `yaml:"name"`
 	Description     string                       `yaml:"description"`
 	ParameterLayers []helpers.TestParameterLayer `yaml:"parameterLayers"`
 	ParsedLayers    []helpers.TestParsedLayer    `yaml:"parsedLayers"`
-	Form            MultipartForm                `yaml:"form"`
+	QueryParameters []QueryParameter             `yaml:"queryParameters"`
 	ExpectedLayers  []helpers.TestExpectedLayer  `yaml:"expectedLayers"`
 	ExpectedError   bool                         `yaml:"expectedError"`
 }
 
-type Field struct {
+type QueryParameter struct {
 	Name  string `yaml:"name"`
 	Value string `yaml:"value"`
 }
 
-type File struct {
-	Name    string `yaml:"name"`
-	Content string `yaml:"content"`
-}
+func mockGinContextWithQueryParameters(parameters []QueryParameter) (*gin.Context, error) {
+	// Create a new HTTP request
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
 
-type MultipartForm struct {
-	Fields []Field           `yaml:"fields"` // Regular form fields
-	Files  map[string][]File `yaml:"files"`  // File fields with file content
-}
+	// Create a Values map to hold the query parameters
+	values := url.Values{}
 
-// mockGinContextWithMultipartForm creates a mock gin.Context with multipart form data.
-func mockGinContextWithMultipartForm(form MultipartForm) (*gin.Context, error) {
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	// Add form fields
-	for _, kv := range form.Fields {
-		err := writer.WriteField(kv.Name, kv.Value)
-		if err != nil {
-			return nil, err
-		}
+	// Add each parameter to the Values map
+	for _, param := range parameters {
+		values.Add(param.Name, param.Value)
 	}
 
-	// Add file fields with content
-	for key, fileContents := range form.Files {
-		for _, file := range fileContents {
-			part, err := writer.CreateFormFile(key, file.Name) // Use a dummy filename
-			if err != nil {
-				return nil, err
-			}
-			_, err = part.Write([]byte(file.Content)) // Write the actual content provided in the test case
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
+	// Set the RawQuery field of the request URL
+	req.URL.RawQuery = values.Encode()
 
-	err := writer.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	req := httptest.NewRequest("POST", "/", body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-
+	// Create a new gin context with the request
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = req
+
 	return c, nil
 }
 
-//go:embed test-data/update-from-form-query.yaml
-var updateFromFormQueryTestsYAML string
+//go:embed test-data/update-from-query-parameters.yaml
+var updateFromQueryParametersTestsYAML string
 
 // TestUpdateFromFormQuery runs the table-driven tests for UpdateFromFormQuery.
-func TestUpdateFromFormQuery(t *testing.T) {
-	tests, err := yaml.LoadTestFromYAML[[]UpdateFromFormQueryTest](updateFromFormQueryTestsYAML)
+func TestUpdateFromQueryParameters(t *testing.T) {
+	tests, err := yaml.LoadTestFromYAML[[]UpdateFromQueryParametersTest](updateFromQueryParametersTestsYAML)
 	require.NoError(t, err)
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			// Create a mock gin.Context with the multipart form data
 			gin.SetMode(gin.TestMode)
-			c, _ := mockGinContextWithMultipartForm(tt.Form)
+			c, _ := mockGinContextWithQueryParameters(tt.QueryParameters)
 
 			// Create ParameterLayers and ParsedLayers from test definitions
 			layers_ := helpers.NewTestParameterLayers(tt.ParameterLayers)
 			parsedLayers := helpers.NewTestParsedLayers(layers_, tt.ParsedLayers)
 
 			// Create the middleware and execute it
-			middleware := UpdateFromFormQuery(c)
+			middleware := UpdateFromQueryParameters(c)
 			err := middleware(func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
 				return nil
 			})(layers_, parsedLayers)

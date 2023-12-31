@@ -1,4 +1,4 @@
-package parser
+package middlewares
 
 import (
 	"encoding/json"

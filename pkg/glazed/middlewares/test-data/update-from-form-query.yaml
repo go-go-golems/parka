@@ -1,0 +1,56 @@
+- name: "Valid List Parameter Parsing"
+  description: "Test that a valid list parameter is correctly parsed from the form query."
+  parameterLayers:
+    - name: "testLayer"
+      definitions:
+        - name: "colors"
+          type: "stringList"
+          required: true
+  parsedLayers: []
+  form:
+    fields:
+      - name: "colors[]"
+        value: "red"
+      - name: "colors[]"
+        value: "green"
+      - name: "colors[]"
+        value: "blue"
+  expectedLayers:
+    - name: "testLayer"
+      values:
+        colors: ["red", "green", "blue"]
+  expectedError: false
+
+- name: "Invalid List Parameter Parsing"
+  description: "Test that an invalid list parameter value results in an appropriate error."
+  parameterLayers:
+    - name: "testLayer"
+      definitions:
+        - name: "numbers"
+          type: "intList"
+          required: true
+  parsedLayers: []
+  form:
+    fields:
+      - name: "numbers[]"
+        value: "one"
+      - name: "numbers[]"
+        value: "two"
+      - name: "numbers[]"
+        value: "three"
+  expectedLayers: []
+  expectedError: true
+
+- name: "Missing Required List Parameter"
+  description: "Test that a missing required list parameter results in an error."
+  parameterLayers:
+    - name: "testLayer"
+      definitions:
+        - name: "ids"
+          type: "intList"
+          required: true
+  parsedLayers: []
+  form:
+    fields: []
+  expectedLayers: []
+  expectedError: true

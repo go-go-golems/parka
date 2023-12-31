@@ -276,3 +276,116 @@
           content: "not a valid JSON object"
   expectedLayers: []
   expectedError: true
+
+- name: "Test with unsupported parameter type"
+  description: "Confirm that an error is returned when an unsupported parameter type is encountered."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "unsupportedParam"
+          type: "unsupportedType"
+          required: true
+  parsedLayers: []
+  form:
+    fields:
+      - name: "unsupportedParam"
+        value: "someValue"
+  expectedLayers: []
+  expectedError: true
+
+- name: "Test with multiple parameter layers"
+  description: "Ensure that multiple parameter layers are handled correctly and that the parameters from each layer are parsed as expected."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "param1"
+          type: "string"
+          required: true
+    - name: "layer2"
+      definitions:
+        - name: "param2"
+          type: "int"
+          required: false
+  parsedLayers: []
+  form:
+    fields:
+      - name: "param1"
+        value: "value1"
+      - name: "param2"
+        value: "42"
+  expectedLayers:
+    - name: "layer1"
+      values:
+        param1: "value1"
+    - name: "layer2"
+      values:
+        param2: 42
+  expectedError: false
+
+- name: "Test with conflicting parameter definitions across layers"
+  description: "Verify how the system behaves when there are conflicting parameter definitions in different layers."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "conflictParam"
+          type: "string"
+          required: true
+    - name: "layer2"
+      definitions:
+        - name: "conflictParam"
+          type: "int"
+          required: true
+  parsedLayers: []
+  form:
+    fields:
+      - name: "conflictParam"
+        value: "shouldBeStringButIntProvided"
+  expectedLayers: []
+  expectedError: true
+
+- name: "Test with empty form data"
+  description: "Check the behavior when the form data is empty and how it handles optional and required parameters."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "optionalParam"
+          type: "string"
+          required: false
+        - name: "requiredParam"
+          type: "string"
+          required: true
+  parsedLayers: []
+  form:
+    fields: []
+  expectedLayers: []
+  expectedError: true
+
+
+- name: "Test with file and normal fields"
+  description: "Ensure that a valid file parameter is parsed correctly from the form."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "fileParam"
+          type: "stringFromFile"
+          required: true
+        - name: "normalParam"
+          type: "string"
+          required: true
+  parsedLayers: []
+  form:
+    fields:
+      - name: "normalParam"
+        value: "normalValue"
+    files:
+      fileParam:
+        - name: test.txt
+          content: "content of the file"
+  expectedLayers:
+    - name: "layer1"
+      values:
+        fileParam: "content of the file"
+        normalParam: "normalValue"
+  expectedError: false
+
+# TODO(manuel, 2023-12-31) We still need to test the File and FileList types

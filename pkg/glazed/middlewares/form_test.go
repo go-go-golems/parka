@@ -34,9 +34,14 @@ type Field struct {
 	Value string `yaml:"value"`
 }
 
+type File struct {
+	Name    string `yaml:"name"`
+	Content string `yaml:"content"`
+}
+
 type MultipartForm struct {
-	Fields []Field             `yaml:"fields"` // Regular form fields
-	Files  map[string][]string `yaml:"files"`  // File fields with file content
+	Fields []Field           `yaml:"fields"` // Regular form fields
+	Files  map[string][]File `yaml:"files"`  // File fields with file content
 }
 
 // mockGinContextWithMultipartForm creates a mock gin.Context with multipart form data.
@@ -54,12 +59,12 @@ func mockGinContextWithMultipartForm(form MultipartForm) (*gin.Context, error) {
 
 	// Add file fields with content
 	for key, fileContents := range form.Files {
-		for _, content := range fileContents {
-			part, err := writer.CreateFormFile(key, "filename") // Use a dummy filename
+		for _, file := range fileContents {
+			part, err := writer.CreateFormFile(key, file.Name) // Use a dummy filename
 			if err != nil {
 				return nil, err
 			}
-			_, err = part.Write([]byte(content)) // Write the actual content provided in the test case
+			_, err = part.Write([]byte(file.Content)) // Write the actual content provided in the test case
 			if err != nil {
 				return nil, err
 			}

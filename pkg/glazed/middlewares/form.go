@@ -6,8 +6,8 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/helpers/cast"
 	"github.com/pkg/errors"
-	"strings"
 )
 
 func getListParameterFromForm(c *gin.Context, p *parameters.ParameterDefinition, options ...parameters.ParseStepOption) (*parameters.ParsedParameter, error) {
@@ -28,6 +28,83 @@ func getListParameterFromForm(c *gin.Context, p *parameters.ParameterDefinition,
 	}
 }
 
+func getFileParameterFromForm(c *gin.Context, p *parameters.ParameterDefinition) (interface{}, error) {
+	form, err := c.MultipartForm()
+	if err != nil {
+		return nil, err
+	}
+	headers := form.File[p.Name]
+	if len(headers) == 0 {
+		if p.Required {
+			return nil, fmt.Errorf("required parameter '%s' is missing", p.Name)
+		}
+
+		return nil, nil
+	}
+
+	values := []interface{}{}
+	for _, h := range headers {
+		err = func() error {
+			f, err := h.Open()
+			if err != nil {
+				return err
+			}
+			defer func() {
+				_ = f.Close()
+			}()
+
+			v, err := p.ParseFromReader(f, h.Filename)
+			if err != nil {
+				return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, h.Filename, err.Error())
+			}
+
+			values = append(values, v.Value)
+			return nil
+		}()
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var v interface{}
+
+	//exhaustive:ignore
+	switch {
+	case p.Type.IsList():
+		vs := []interface{}{}
+		for _, v_ := range values {
+			vss, err := cast.CastListToInterfaceList(v_)
+			if err != nil {
+				return nil, err
+			}
+			vs = append(vs, vss...)
+		}
+		v = vs
+
+	case p.Type == parameters.ParameterTypeStringFromFile,
+		p.Type == parameters.ParameterTypeStringFromFiles:
+		s := ""
+		for _, v_ := range values {
+			ss, ok := v_.(string)
+			if !ok {
+				return nil, errors.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, v_, "expected string")
+			}
+			s += ss
+		}
+
+		v = s
+
+	case p.Type == parameters.ParameterTypeObjectFromFile:
+		v = values[0]
+
+	default:
+		return nil, errors.Errorf("invalid type for parameter '%s': (%v) %s", p.Name, p.Type, "expected string or list")
+	}
+
+	return v, nil
+}
+
 func UpdateFromFormQuery(c *gin.Context, options ...parameters.ParseStepOption) middlewares.Middleware {
 	return func(next middlewares.HandlerFunc) middlewares.HandlerFunc {
 		return func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
@@ -36,6 +113,19 @@ func UpdateFromFormQuery(c *gin.Context, options ...parameters.ParseStepOption) 
 
 				pds := l.GetParameterDefinitions()
 				err := pds.ForEachE(func(p *parameters.ParameterDefinition) error {
+					if p.Type.NeedsFileContent("") {
+						v, err := getFileParameterFromForm(c, p)
+						if err != nil {
+							return err
+						}
+
+						if v != nil {
+							parsedLayer.Parameters.UpdateValue(p.Name, p, v, options...)
+						}
+
+						return nil
+					}
+
 					// parse arrays
 					if p.Type.IsList() {
 						v, err := getListParameterFromForm(c, p, options...)
@@ -60,41 +150,12 @@ func UpdateFromFormQuery(c *gin.Context, options ...parameters.ParseStepOption) 
 						return nil
 					}
 
-					switch {
-					case !p.Type.IsFileLoading(value):
-						v := []string{value}
-						// TODO(manuel, 2023-12-22) There should be a more robust way to send these values as form values
-						if p.Type == parameters.ParameterTypeStringList ||
-							p.Type == parameters.ParameterTypeIntegerList ||
-							p.Type == parameters.ParameterTypeFloatList {
-							v = strings.Split(value, ",")
-						}
-
-						parsedParameter, err := p.ParseParameter(v, options...)
-						if err != nil {
-							return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
-						}
-						parsedLayer.Parameters.Update(p.Name, parsedParameter)
-					case p.Type == parameters.ParameterTypeStringFromFile:
-						s, err := ParseStringFromFile(c, p.Name)
-						if err != nil {
-							return err
-						}
-						parsedLayer.Parameters.UpdateValue(p.Name, p, s, options...)
-					case p.Type == parameters.ParameterTypeObjectFromFile:
-						obj, err := ParseObjectFromFile(c, p.Name)
-						if err != nil {
-							return err
-						}
-						parsedLayer.Parameters.UpdateValue(p.Name, p, obj, options...)
-					case p.Type == parameters.ParameterTypeStringListFromFile,
-						p.Type == parameters.ParameterTypeObjectListFromFile:
-						fallthrough
-					default:
-						// TODO(manuel, 2023-04-16) Add support for StringListFromFile and ObjectListFromFile
-						// See: https://github.com/go-go-golems/parka/issues/23
-						return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, "invalid file type")
+					v := []string{value}
+					parsedParameter, err := p.ParseParameter(v, options...)
+					if err != nil {
+						return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
 					}
+					parsedLayer.Parameters.Update(p.Name, parsedParameter)
 
 					return nil
 				})

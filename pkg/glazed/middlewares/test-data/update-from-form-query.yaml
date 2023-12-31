@@ -54,3 +54,225 @@
     fields: []
   expectedLayers: []
   expectedError: true
+
+- name: "Test with non-list parameter marked as list"
+  description: "Confirm that an error is returned when a non-list parameter is incorrectly marked as a list."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "nonListParam"
+          type: "string"
+          required: true
+  parsedLayers: []
+  form:
+    fields:
+      - name: "nonListParam[]"
+        value: "incorrectListFormat"
+  expectedLayers: []
+  expectedError: true
+
+- name: "Test with valid non-list parameter in form"
+  description: "Ensure that a valid non-list parameter (e.g., 'param=value') is parsed correctly."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "validParam"
+          type: "string"
+          required: true
+  parsedLayers: []
+  form:
+    fields:
+      - name: "validParam"
+        value: "validValue"
+  expectedLayers:
+    - name: "layer1"
+      values:
+        validParam: "validValue"
+  expectedError: false
+
+- name: "Test with valid unicode non-list parameter with special characters"
+  description: "Ensure that a valid non-list parameter with unicode characters is parsed correctly."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "validParam"
+          type: "string"
+          required: true
+  parsedLayers: []
+  form:
+    fields:
+      - name: "validParam"
+        value: "validValue-👍"
+  expectedLayers:
+    - name: "layer1"
+      values:
+        validParam: "validValue-👍"
+  expectedError: false
+
+- name: "Test with missing required non-list parameter"
+  description: "Verify that an error is returned when a required non-list parameter is missing from the form."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "requiredParam"
+          type: "string"
+          required: true
+  parsedLayers: []
+  form:
+    fields: []
+  expectedLayers: []
+  expectedError: true
+
+- name: "Test with invalid non-list parameter value"
+  description: "Check that an error is returned when the non-list parameter value is invalid (e.g., wrong data type)."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "intParam"
+          type: "int"
+          required: true
+  parsedLayers: []
+  form:
+    fields:
+      - name: "intParam"
+        value: "notAnInteger"
+  expectedLayers: []
+  expectedError: true
+
+- name: "Test with valid file parameter in form"
+  description: "Ensure that a valid file parameter is parsed correctly from the form."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "fileParam"
+          type: "stringFromFile"
+          required: true
+  parsedLayers: []
+  form:
+    fields: []
+    files:
+      fileParam:
+        - name: test.txt
+          content: "content of the file"
+  expectedLayers:
+    - name: "layer1"
+      values:
+        fileParam: "content of the file"
+  expectedError: false
+
+- name: "Test with missing required file parameter"
+  description: "Verify that an error is returned when a required file parameter is missing from the form."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "requiredFileParam"
+          type: "stringFromFile"
+          required: true
+  parsedLayers: []
+  form:
+    fields: []
+    files: {}
+  expectedLayers: []
+  expectedError: true
+
+- name: "Test with stringList from file (newline separated file content)"
+  description: "Ensure that a valid stringList parameter is parsed correctly from a file in the form."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "stringListParam"
+          type: "stringListFromFile"
+          required: true
+  parsedLayers: []
+  form:
+    fields: []
+    files:
+      stringListParam:
+        - name: "test.txt"
+          content: |
+            value1
+            value2
+            value3
+  expectedLayers:
+    - name: "layer1"
+      values:
+        stringListParam: ["value1", "value2", "value3"]
+  expectedError: false
+
+- name: "Test with valid object parameter from JSON file"
+  description: "Ensure that a valid object parameter is parsed correctly from a file in the form."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "objectParam"
+          type: "objectFromFile"
+          required: true
+  parsedLayers: []
+  form:
+    fields: []
+    files:
+      objectParam:
+        - name: test.json
+          content: '{"key": "value"}'
+  expectedLayers:
+    - name: "layer1"
+      values:
+        objectParam:
+          key: "value"
+  expectedError: false
+
+- name: "Test with valid object parameter from YAML file"
+  description: "Ensure that a valid object parameter is parsed correctly from a file in the form."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "objectParam"
+          type: "objectFromFile"
+          required: true
+  parsedLayers: []
+  form:
+    fields: []
+    files:
+      objectParam:
+        - name: test.yaml
+          content: |
+            key: value
+  expectedLayers:
+    - name: "layer1"
+      values:
+        objectParam:
+          key: "value"
+  expectedError: false
+
+- name: "Test with missing required object parameter from file"
+  description: "Verify that an error is returned when a required object parameter is missing from the form."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "requiredObjectParam"
+          type: "objectFromFile"
+          required: true
+  parsedLayers: []
+  form:
+    fields: []
+    files: {}
+  expectedLayers: []
+  expectedError: true
+
+- name: "Test with invalid object parameter from file"
+  description: "Check that an error is returned when the object parameter value from a file is invalid."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "objectParam"
+          type: "objectFromFile"
+          required: true
+  parsedLayers: []
+  form:
+    fields: []
+    files:
+      objectParam:
+        - name: "test.json"
+          content: "not a valid JSON object"
+  expectedLayers: []
+  expectedError: true

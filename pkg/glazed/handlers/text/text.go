@@ -3,11 +3,13 @@ package text
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
+	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/middlewares/table"
 	"github.com/go-go-golems/glazed/pkg/settings"
-	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
-	"github.com/go-go-golems/parka/pkg/glazed/parser"
+	middlewares2 "github.com/go-go-golems/parka/pkg/glazed/middlewares"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"io"
@@ -15,9 +17,8 @@ import (
 )
 
 type QueryHandler struct {
-	cmd                cmds.Command
-	contextMiddlewares []glazed.ContextMiddleware
-	parserOptions      []parser.ParserOption
+	cmd         cmds.Command
+	middlewares []middlewares.Middleware
 }
 
 type QueryHandlerOption func(*QueryHandler)
@@ -34,54 +35,42 @@ func NewQueryHandler(cmd cmds.Command, options ...QueryHandlerOption) *QueryHand
 	return h
 }
 
-func WithQueryHandlerContextMiddlewares(middlewares ...glazed.ContextMiddleware) QueryHandlerOption {
-	return func(h *QueryHandler) {
-		h.contextMiddlewares = middlewares
+func WithMiddlewares(middlewares ...middlewares.Middleware) QueryHandlerOption {
+	return func(handler *QueryHandler) {
+		handler.middlewares = middlewares
 	}
 }
 
-// WithQueryHandlerParserOptions sets the parser options for the QueryHandler
-func WithQueryHandlerParserOptions(options ...parser.ParserOption) QueryHandlerOption {
-	return func(h *QueryHandler) {
-		h.parserOptions = options
-	}
-}
+var _ handlers.Handler = (*QueryHandler)(nil)
 
 func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
-	pc := glazed.NewCommandContext(h.cmd)
+	description := h.cmd.Description()
+	parsedLayers := layers.NewParsedLayers()
 
-	h.contextMiddlewares = append(
-		h.contextMiddlewares,
-		glazed.NewContextParserMiddleware(
-			h.cmd,
-			glazed.NewCommandQueryParser(h.cmd, h.parserOptions...),
-		),
-	)
-
-	for _, h := range h.contextMiddlewares {
-		err := h.Handle(c, pc)
-		if err != nil {
-			return err
-		}
+	middlewares_ := append([]middlewares.Middleware{
+		middlewares2.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
+	}, h.middlewares...)
+	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers, middlewares_...)
+	if err != nil {
+		return err
 	}
-
 	c.Header("Content-Type", "text/plain")
 
 	ctx := c.Request.Context()
 	switch cmd := h.cmd.(type) {
 	case cmds.WriterCommand:
-		err := cmd.RunIntoWriter(ctx, pc.ParsedLayers, writer)
+		err := cmd.RunIntoWriter(ctx, parsedLayers, writer)
 		if err != nil {
 			return err
 		}
 
 	case cmds.GlazeCommand:
-		gp, err := handlers.CreateTableProcessorWithOutput(pc, "table", "ascii")
+		gp, err := handlers.CreateTableProcessorWithOutput(parsedLayers, "table", "ascii")
 		if err != nil {
 			return err
 		}
 
-		glazedLayer, ok := pc.ParsedLayers.Get("glazed")
+		glazedLayer, ok := parsedLayers.Get("glazed")
 		if !ok {
 			return errors.New("glazed layer not found")
 		}
@@ -97,7 +86,7 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 
 		gp.AddTableMiddleware(table.NewOutputMiddleware(of, writer))
 
-		err = cmd.RunIntoGlazeProcessor(ctx, pc.ParsedLayers, gp)
+		err = cmd.RunIntoGlazeProcessor(ctx, parsedLayers, gp)
 		if err != nil {
 			return err
 		}
@@ -108,7 +97,7 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 		}
 
 	case cmds.BareCommand:
-		err := cmd.Run(ctx, pc.ParsedLayers)
+		err := cmd.Run(ctx, parsedLayers)
 		if err != nil {
 			return err
 		}
@@ -121,10 +110,10 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 
 func CreateQueryHandler(
 	cmd cmds.Command,
-	parserOptions ...parser.ParserOption,
+	middlewares_ ...middlewares.Middleware,
 ) gin.HandlerFunc {
 	handler := NewQueryHandler(cmd,
-		WithQueryHandlerParserOptions(parserOptions...),
+		WithMiddlewares(middlewares_...),
 	)
 	return func(c *gin.Context) {
 		err := handler.Handle(c, c.Writer)

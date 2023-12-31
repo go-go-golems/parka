@@ -3,22 +3,28 @@ package glazed
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
+	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/settings"
-	"github.com/go-go-golems/parka/pkg/glazed"
-	"github.com/go-go-golems/parka/pkg/glazed/parser"
+	"github.com/go-go-golems/parka/pkg/glazed/handlers"
+	middlewares2 "github.com/go-go-golems/parka/pkg/glazed/middlewares"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	"io"
-	"net/http"
 )
 
 type QueryHandler struct {
-	cmd                cmds.GlazeCommand
-	contextMiddlewares []glazed.ContextMiddleware
-	parserOptions      []parser.ParserOption
+	cmd         cmds.GlazeCommand
+	middlewares []middlewares.Middleware
 }
 
 type QueryHandlerOption func(*QueryHandler)
+
+func WithMiddlewares(middlewares ...middlewares.Middleware) QueryHandlerOption {
+	return func(handler *QueryHandler) {
+		handler.middlewares = middlewares
+	}
+}
 
 func NewQueryHandler(cmd cmds.GlazeCommand, options ...QueryHandlerOption) *QueryHandler {
 	h := &QueryHandler{
@@ -32,38 +38,21 @@ func NewQueryHandler(cmd cmds.GlazeCommand, options ...QueryHandlerOption) *Quer
 	return h
 }
 
-func WithQueryHandlerContextMiddlewares(middlewares ...glazed.ContextMiddleware) QueryHandlerOption {
-	return func(h *QueryHandler) {
-		h.contextMiddlewares = middlewares
-	}
-}
-
-// WithQueryHandlerParserOptions sets the parser options for the QueryHandler
-func WithQueryHandlerParserOptions(options ...parser.ParserOption) QueryHandlerOption {
-	return func(h *QueryHandler) {
-		h.parserOptions = options
-	}
-}
+var _ handlers.Handler = (*QueryHandler)(nil)
 
 func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
-	pc := glazed.NewCommandContext(h.cmd)
+	description := h.cmd.Description()
+	parsedLayers := layers.NewParsedLayers()
 
-	h.contextMiddlewares = append(
-		h.contextMiddlewares,
-		glazed.NewContextParserMiddleware(
-			h.cmd,
-			glazed.NewCommandQueryParser(h.cmd, h.parserOptions...),
-		),
-	)
-
-	for _, h := range h.contextMiddlewares {
-		err := h.Handle(c, pc)
-		if err != nil {
-			return err
-		}
+	middlewares_ := append([]middlewares.Middleware{
+		middlewares2.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
+	}, h.middlewares...)
+	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers, middlewares_...)
+	if err != nil {
+		return err
 	}
 
-	glazedLayer, ok := pc.ParsedLayers.Get("glazed")
+	glazedLayer, ok := parsedLayers.Get("glazed")
 	if !ok {
 		return errors.New("glazed layer not found")
 	}
@@ -81,7 +70,7 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 	c.Header("Content-Type", of.ContentType())
 
 	ctx := c.Request.Context()
-	err = h.cmd.RunIntoGlazeProcessor(ctx, pc.ParsedLayers, gp)
+	err = h.cmd.RunIntoGlazeProcessor(ctx, parsedLayers, gp)
 	if err != nil {
 		return err
 	}
@@ -92,22 +81,4 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 	}
 
 	return nil
-}
-
-func HandleQueryHandler(
-	cmd cmds.GlazeCommand,
-	parserOptions ...parser.ParserOption,
-) gin.HandlerFunc {
-	handler := NewQueryHandler(cmd,
-		WithQueryHandlerParserOptions(parserOptions...),
-	)
-	return func(c *gin.Context) {
-		err := handler.Handle(c, c.Writer)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to handle query")
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-		}
-	}
 }

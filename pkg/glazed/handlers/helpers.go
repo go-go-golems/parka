@@ -1,14 +1,14 @@
 package handlers
 
 import (
+	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
-	"github.com/go-go-golems/parka/pkg/glazed"
 )
 
-func CreateTableProcessorWithOutput(pc *glazed.CommandContext, outputType string, tableFormat string) (*middlewares.TableProcessor, error) {
-	glazedLayer, ok := pc.ParsedLayers.Get("glazed")
+func CreateTableProcessorWithOutput(parsedLayers *layers.ParsedLayers, outputType string, tableFormat string) (*middlewares.TableProcessor, error) {
+	glazedLayer, ok := parsedLayers.Get("glazed")
 	if !ok {
 		return middlewares.NewTableProcessor(), nil
 	}

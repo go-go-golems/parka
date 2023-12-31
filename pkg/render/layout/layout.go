@@ -2,8 +2,9 @@ package layout
 
 import (
 	"fmt"
+	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
-	"github.com/go-go-golems/parka/pkg/glazed"
 )
 
 // This section groups all the functionality related to laying out forms for input parameters
@@ -77,9 +78,10 @@ type Option struct {
 }
 
 func ComputeLayout(
-	pc *glazed.CommandContext,
+	cmd cmds.GlazeCommand,
+	parsedLayers *layers.ParsedLayers,
 ) (*Layout, error) {
-	description := pc.Cmd.Description()
+	description := cmd.Description()
 
 	layout := description.Layout
 
@@ -87,7 +89,7 @@ func ComputeLayout(
 		Sections: []*Section{},
 	}
 
-	defaultLayer := pc.ParsedLayers.GetDefaultParameterLayer()
+	defaultLayer := parsedLayers.GetDefaultParameterLayer()
 
 	if len(layout) == 0 {
 		pds := defaultLayer.Layer.GetParameterDefinitions()
@@ -111,8 +113,8 @@ func ComputeLayout(
 		//	ret.Sections = append(ret.Sections, section)
 		//}
 	} else {
-		allParameterDefinitions := pc.GetAllParameterDefinitions()
-		values := pc.ParsedLayers.GetDataMap()
+		allParameterDefinitions := cmd.Description().Layers.GetAllParameterDefinitions()
+		values := parsedLayers.GetDataMap()
 
 		for _, section_ := range layout {
 			section := &Section{

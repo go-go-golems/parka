@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
+	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/glazed"
-	"github.com/go-go-golems/parka/pkg/glazed/parser"
 	"io"
 	"os"
 	"path/filepath"
@@ -27,6 +28,8 @@ func NewOutputFileHandler(handler handlers.Handler, outputFileName string) *Outp
 
 	return h
 }
+
+var _ handlers.Handler = (*OutputFileHandler)(nil)
 
 func (h *OutputFileHandler) Handle(c *gin.Context, w io.Writer) error {
 	buf := &bytes.Buffer{}
@@ -61,7 +64,7 @@ func (h *OutputFileHandler) Handle(c *gin.Context, w io.Writer) error {
 func CreateGlazedFileHandler(
 	cmd cmds.GlazeCommand,
 	fileName string,
-	parserOptions ...parser.ParserOption,
+	middlewares_ ...middlewares.Middleware,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		glazedOverrides := map[string]interface{}{}
@@ -112,6 +115,10 @@ func CreateGlazedFileHandler(
 			// now check file suffix for content-type
 			glazedOverrides["output-file"] = tmpFile.Name()
 		}
+
+		glazedOverride := middlewares.UpdateFromMap(map[string]map[string]interface{}{
+			settings.GlazedSlug: glazedOverrides,
+		})
 
 		parserOptions = append(parserOptions, parser.WithAppendOverrides("glazed", glazedOverrides))
 		handler := glazed.NewQueryHandler(cmd, glazed.WithQueryHandlerParserOptions(parserOptions...))

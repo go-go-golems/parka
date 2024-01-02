@@ -78,7 +78,7 @@ type Option struct {
 }
 
 func ComputeLayout(
-	cmd cmds.GlazeCommand,
+	cmd cmds.Command,
 	parsedLayers *layers.ParsedLayers,
 ) (*Layout, error) {
 	description := cmd.Description()

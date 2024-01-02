@@ -31,7 +31,7 @@ type CommandHandler struct {
 	// AdditionalData is passed to the template being rendered.
 	AdditionalData map[string]interface{}
 
-	OverridesAndDefaults *config.OverridesAndDefaults
+	ParameterFilter *config.ParameterFilter
 
 	// If true, all glazed outputs will try to use a row output if possible.
 	// This means that "ragged" objects (where columns might not all be present)
@@ -87,16 +87,16 @@ func WithMergeAdditionalData(data map[string]interface{}, override bool) Command
 	}
 }
 
-func WithOverridesAndDefaults(overridesAndDefaults *config.OverridesAndDefaults) CommandHandlerOption {
+func WithParameterFilter(overridesAndDefaults *config.ParameterFilter) CommandHandlerOption {
 	return func(handler *CommandHandler) {
-		handler.OverridesAndDefaults = overridesAndDefaults
+		handler.ParameterFilter = overridesAndDefaults
 	}
 }
 
-func WithOverridesAndDefaultsOptions(opts ...config.OverridesAndDefaultsOption) CommandHandlerOption {
+func WithParameterFilterOptions(opts ...config.ParameterFilterOption) CommandHandlerOption {
 	return func(handler *CommandHandler) {
 		for _, opt := range opts {
-			opt(handler.OverridesAndDefaults)
+			opt(handler.ParameterFilter)
 		}
 	}
 }
@@ -106,10 +106,10 @@ func NewCommandHandler(
 	options ...CommandHandlerOption,
 ) *CommandHandler {
 	c := &CommandHandler{
-		Command:              command,
-		TemplateName:         "",
-		AdditionalData:       map[string]interface{}{},
-		OverridesAndDefaults: &config.OverridesAndDefaults{},
+		Command:         command,
+		TemplateName:    "",
+		AdditionalData:  map[string]interface{}{},
+		ParameterFilter: &config.ParameterFilter{},
 	}
 
 	for _, opt := range options {
@@ -125,9 +125,9 @@ func NewCommandHandlerFromConfig(
 	options ...CommandHandlerOption,
 ) (*CommandHandler, error) {
 	c := &CommandHandler{
-		TemplateName:         config_.TemplateName,
-		AdditionalData:       config_.AdditionalData,
-		OverridesAndDefaults: &config.OverridesAndDefaults{},
+		TemplateName:    config_.TemplateName,
+		AdditionalData:  config_.AdditionalData,
+		ParameterFilter: &config.ParameterFilter{},
 	}
 
 	fs_, filePath, err := loaders.FileNameToFsFilePath(config_.File)
@@ -177,33 +177,10 @@ func NewCommandHandlerFromConfig(
 
 	// NOTE(manuel, 2023-08-03) most of this matches CommandDirHandler, maybe at some point we could unify them both
 	// Let's see when this starts causing trouble again
-	if config_.Overrides != nil {
-		c.OverridesAndDefaults.Overrides = &config.HandlerParameters{
-			Flags:     config_.Overrides.Flags,
-			Arguments: config_.Overrides.Arguments,
-			Layers:    config_.Overrides.Layers,
-		}
-	} else {
-		c.OverridesAndDefaults.Overrides = &config.HandlerParameters{
-			Flags:     map[string]interface{}{},
-			Arguments: map[string]interface{}{},
-			Layers:    map[string]map[string]interface{}{},
-		}
-	}
-
-	if config_.Defaults != nil {
-		c.OverridesAndDefaults.Defaults = &config.HandlerParameters{
-			Flags:     config_.Defaults.Flags,
-			Arguments: config_.Defaults.Arguments,
-			Layers:    config_.Defaults.Layers,
-		}
-	} else {
-		c.OverridesAndDefaults.Defaults = &config.HandlerParameters{
-			Flags:     map[string]interface{}{},
-			Arguments: map[string]interface{}{},
-			Layers:    map[string]map[string]interface{}{},
-		}
-	}
+	c.ParameterFilter.Overrides = config_.Overrides
+	c.ParameterFilter.Defaults = config_.Defaults
+	c.ParameterFilter.Whitelist = config_.Whitelist
+	c.ParameterFilter.Blacklist = config_.Blacklist
 
 	// by default, we stream
 	if config_.Stream != nil {
@@ -252,9 +229,10 @@ func (ch *CommandHandler) Serve(server *parka.Server, path string) error {
 	server.Router.GET(path+"/data", func(c *gin.Context) {
 		json.CreateJSONQueryHandler(ch.Command)(c)
 	})
+	middlewares_ := ch.ParameterFilter.ComputeMiddlewares(ch.Stream)
 	server.Router.GET(path+"/glazed", func(c *gin.Context) {
 		options := []datatables.QueryHandlerOption{
-			datatables.WithParserOptions(ch.OverridesAndDefaults.ComputeParserOptions(ch.Stream)...),
+			datatables.WithMiddlewares(middlewares_...),
 			datatables.WithTemplateLookup(ch.TemplateLookup),
 			datatables.WithTemplateName(ch.TemplateName),
 			datatables.WithAdditionalData(ch.AdditionalData),
@@ -277,12 +255,10 @@ func (ch *CommandHandler) Serve(server *parka.Server, path string) error {
 		}
 		fileName := path_[index+1:]
 
-		parserOptions := ch.OverridesAndDefaults.ComputeParserOptions(ch.Stream)
-
 		output_file.CreateGlazedFileHandler(
 			ch.Command,
 			fileName,
-			parserOptions...,
+			middlewares_...,
 		)(c)
 	})
 

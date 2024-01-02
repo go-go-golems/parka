@@ -92,11 +92,10 @@ func EvaluateConfigEntry(node interface{}) (interface{}, error) {
 }
 
 // evaluateLayerParams goes over the layer params and evaluates the environment variables.
-func evaluateLayerParams(params *LayerParams) (*LayerParams, error) {
-	ret := &LayerParams{
-		Flags:     map[string]interface{}{},
-		Arguments: map[string]interface{}{},
-		Layers:    map[string]map[string]interface{}{},
+func evaluateLayerParams(params *LayerParameters) (*LayerParameters, error) {
+	ret := &LayerParameters{
+		Parameters: map[string]interface{}{},
+		Layers:     map[string]map[string]interface{}{},
 	}
 	for slug, layer := range params.Layers {
 		ret.Layers[slug] = map[string]interface{}{}
@@ -109,20 +108,12 @@ func evaluateLayerParams(params *LayerParams) (*LayerParams, error) {
 		}
 	}
 
-	for name, v := range params.Flags {
+	for name, v := range params.Parameters {
 		v_, err := EvaluateConfigEntry(v)
 		if err != nil {
 			return nil, err
 		}
-		ret.Flags[name] = v_
-	}
-
-	for name, v := range params.Arguments {
-		v_, err := EvaluateConfigEntry(v)
-		if err != nil {
-			return nil, err
-		}
-		ret.Arguments[name] = v_
+		ret.Parameters[name] = v_
 	}
 
 	return ret, nil

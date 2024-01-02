@@ -5,8 +5,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/helpers"
 )
 
-//go:embed text/test-data/text-handler.yaml
-
 // JsonHandlerTest describes a test for the `json` handler. This handler
 // takes a GET HTTP query and parses the url parameters to render the given
 // template rows into a resulting json array.

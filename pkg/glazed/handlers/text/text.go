@@ -47,12 +47,12 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 	description := h.cmd.Description()
 	parsedLayers := layers.NewParsedLayers()
 
-	middlewares_ := append([]middlewares.Middleware{
+	middlewares_ := append(h.middlewares,
 		parka_middlewares.UpdateFromQueryParameters(c,
 			parameters.WithParseStepSource("query"),
 		),
 		middlewares.SetFromDefaults(),
-	}, h.middlewares...)
+	)
 	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers, middlewares_...)
 	if err != nil {
 		return err

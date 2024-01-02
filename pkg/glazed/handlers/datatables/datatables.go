@@ -12,7 +12,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/formatters"
 	"github.com/go-go-golems/glazed/pkg/formatters/json"
 	table_formatter "github.com/go-go-golems/glazed/pkg/formatters/table"
-	"github.com/go-go-golems/glazed/pkg/helpers/list"
 	"github.com/go-go-golems/glazed/pkg/middlewares/row"
 	"github.com/go-go-golems/glazed/pkg/middlewares/table"
 	"github.com/go-go-golems/glazed/pkg/types"
@@ -173,8 +172,11 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	parsedLayers := layers.NewParsedLayers()
 
 	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers,
-		list.Prepend(qh.middlewares,
-			parka_middlewares.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")))...,
+		append(
+			qh.middlewares,
+			parka_middlewares.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
+			middlewares.SetFromDefaults(),
+		)...,
 	)
 
 	if err != nil {

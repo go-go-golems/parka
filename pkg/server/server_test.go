@@ -1,15 +1,11 @@
 package server_test
 
 import (
-	"context"
 	"encoding/json"
 	"github.com/gin-gonic/gin"
-	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/middlewares"
-	"github.com/go-go-golems/glazed/pkg/types"
 	json2 "github.com/go-go-golems/parka/pkg/glazed/handlers/json"
 	"github.com/go-go-golems/parka/pkg/server"
+	"github.com/go-go-golems/parka/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io"
@@ -18,37 +14,9 @@ import (
 	"testing"
 )
 
-type TestCommand struct{}
-
-var _ cmds.GlazeCommand = &TestCommand{}
-
-func (t *TestCommand) Description() *cmds.CommandDescription {
-	return cmds.NewCommandDescription("test")
-}
-
-func (t *TestCommand) ToYAML(w io.Writer) error {
-	return t.Description().ToYAML(w)
-}
-
-func (t *TestCommand) RunIntoGlazeProcessor(
-	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
-	gp middlewares.Processor,
-) error {
-	err := gp.AddRow(ctx, types.NewRow(
-		types.MRP("foo", 1),
-		types.MRP("bar", "baz"),
-	))
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func TestRunGlazedCommand(t *testing.T) {
-	tc := &TestCommand{}
+	tc, err := utils.NewTestGlazedCommand()
+	require.NoError(t, err)
 
 	s, err := server.NewServer()
 	require.NoError(t, err)
@@ -72,16 +40,18 @@ func TestRunGlazedCommand(t *testing.T) {
 		body, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
 		// content type json
 		assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
 		v := []map[string]interface{}{}
 		err = json.Unmarshal(body, &v)
 		require.NoError(t, err)
 
-		require.Len(t, v, 1)
+		require.Len(t, v, 3)
 		v_ := v[0]
-		assert.Equal(t, float64(1), v_["foo"])
-		assert.Equal(t, "baz", v_["bar"])
+		assert.Equal(t, float64(0), v_["test"])
+		assert.Equal(t, "test-0", v_["test2"])
+		assert.Equal(t, "test3-0", v_["test3"])
 	})
 }

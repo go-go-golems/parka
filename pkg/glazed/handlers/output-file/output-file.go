@@ -6,9 +6,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
+	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/helpers/list"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/glazed"
+	parka_middlewares "github.com/go-go-golems/parka/pkg/glazed/middlewares"
 	"io"
 	"os"
 	"path/filepath"
@@ -116,12 +119,19 @@ func CreateGlazedFileHandler(
 			glazedOverrides["output-file"] = tmpFile.Name()
 		}
 
-		glazedOverride := middlewares.UpdateFromMap(map[string]map[string]interface{}{
-			settings.GlazedSlug: glazedOverrides,
-		})
+		glazedOverride := middlewares.UpdateFromMap(
+			map[string]map[string]interface{}{
+				settings.GlazedSlug: glazedOverrides,
+			},
+			parameters.WithParseStepSource("output-file-glazed-override"),
+		)
 
-		parserOptions = append(parserOptions, parser.WithAppendOverrides("glazed", glazedOverrides))
-		handler := glazed.NewQueryHandler(cmd, glazed.WithQueryHandlerParserOptions(parserOptions...))
+		handler := glazed.NewQueryHandler(cmd,
+			glazed.WithMiddlewares(
+				list.Prepend(middlewares_,
+					parka_middlewares.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
+					glazedOverride)...,
+			))
 
 		baseName := filepath.Base(fileName)
 		c.Writer.Header().Set("Content-Disposition", "attachment; filename="+baseName)

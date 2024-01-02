@@ -12,11 +12,12 @@ import (
 	"github.com/go-go-golems/glazed/pkg/formatters"
 	"github.com/go-go-golems/glazed/pkg/formatters/json"
 	table_formatter "github.com/go-go-golems/glazed/pkg/formatters/table"
+	"github.com/go-go-golems/glazed/pkg/helpers/list"
 	"github.com/go-go-golems/glazed/pkg/middlewares/row"
 	"github.com/go-go-golems/glazed/pkg/middlewares/table"
 	"github.com/go-go-golems/glazed/pkg/types"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
-	middlewares2 "github.com/go-go-golems/parka/pkg/glazed/middlewares"
+	parka_middlewares "github.com/go-go-golems/parka/pkg/glazed/middlewares"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/render/layout"
 	"github.com/pkg/errors"
@@ -171,10 +172,11 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	description := qh.cmd.Description()
 	parsedLayers := layers.NewParsedLayers()
 
-	middlewares_ := append([]middlewares.Middleware{
-		middlewares2.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
-	}, qh.middlewares...)
-	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers, middlewares_...)
+	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers,
+		list.Prepend(qh.middlewares,
+			parka_middlewares.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")))...,
+	)
+
 	if err != nil {
 		return err
 	}

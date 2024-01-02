@@ -17,6 +17,10 @@ func UpdateFromQueryParameters(c *gin.Context, options ...parameters.ParseStepOp
 
 				pds := l.GetParameterDefinitions()
 				err := pds.ForEachE(func(p *parameters.ParameterDefinition) error {
+					if p.Type.IsFile() {
+						return fmt.Errorf("file parameters are not supported in query parameters")
+					}
+
 					if p.Type.IsList() {
 						// check p.Name[] parameter
 						values, ok := c.GetQueryArray(fmt.Sprintf("%s[]", p.Name))

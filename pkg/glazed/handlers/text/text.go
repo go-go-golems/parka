@@ -9,7 +9,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/middlewares/table"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
-	middlewares2 "github.com/go-go-golems/parka/pkg/glazed/middlewares"
+	parka_middlewares "github.com/go-go-golems/parka/pkg/glazed/middlewares"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"io"
@@ -48,13 +48,16 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 	parsedLayers := layers.NewParsedLayers()
 
 	middlewares_ := append([]middlewares.Middleware{
-		middlewares2.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
+		parka_middlewares.UpdateFromQueryParameters(c,
+			parameters.WithParseStepSource("query"),
+		),
+		middlewares.SetFromDefaults(),
 	}, h.middlewares...)
 	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers, middlewares_...)
 	if err != nil {
 		return err
 	}
-	c.Header("Content-Type", "text/plain")
+	c.Header("Content-Type", "text/plain; charset=utf-8")
 
 	ctx := c.Request.Context()
 	switch cmd := h.cmd.(type) {

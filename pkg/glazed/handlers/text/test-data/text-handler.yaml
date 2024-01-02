@@ -1,0 +1,164 @@
+# Test Case 1: Basic Functionality Test
+- name: "Basic Functionality"
+  description: "Test with valid parameters and template to ensure the expected output is produced without errors."
+  parameterLayers:
+    - name: "default"
+      definitions:
+        - name: "greeting"
+          type: "string"
+          default: "Hello"
+        - name: "name"
+          type: "string"
+          required: true
+  queryParameters:
+    - name: "greeting"
+      value: "Hi"
+    - name: "name"
+      value: "Alice"
+  template: "{{.greeting}}, {{.name}}!"
+  expectedOutput: "Hi, Alice!"
+  expectedError: false
+
+# Test Case 2: Error Handling Test for Missing Required Parameters
+- name: "Missing Required Parameters"
+  description: "Test with missing required parameters to ensure that an error is triggered."
+  parameterLayers:
+    - name: "default"
+      definitions:
+        - name: "greeting"
+          type: "string"
+          default: "Hello"
+        - name: "name"
+          type: "string"
+          required: true
+  queryParameters:
+    - name: "greeting"
+      value: "Hi"
+  template: "{{.greeting}}, {{.name}}!"
+  expectedOutput: ""
+  expectedError: true
+
+# Test Case: Default Values Test
+- name: "Default Values"
+  description: "Test that default values are used when parameters are not provided."
+  parameterLayers:
+    - name: "default"
+      definitions:
+        - name: "greeting"
+          type: "string"
+          default: "Hello"
+        - name: "target"
+          type: "string"
+          default: "World"
+  queryParameters: []
+  template: "{{.greeting}}, {{.target}}!"
+  expectedOutput: "Hello, World!"
+  expectedError: false
+
+# Test Case: Integer Parameter Type Test
+- name: "Integer Parameter Type"
+  description: "Test that integer parameters are parsed correctly."
+  parameterLayers:
+    - name: "default"
+      definitions:
+        - name: "count"
+          type: "int"
+          default: 1
+  queryParameters:
+    - name: "count"
+      value: "10"
+  template: "Count: {{.count}}"
+  expectedOutput: "Count: 10"
+  expectedError: false
+
+# Test Case: Boolean Parameter Type Test
+- name: "Boolean Parameter Type"
+  description: "Test that boolean parameters are parsed correctly."
+  parameterLayers:
+    - name: "default"
+      definitions:
+        - name: "isConfirmed"
+          type: "bool"
+          default: false
+  queryParameters:
+    - name: "isConfirmed"
+      value: "true"
+  template: "Confirmed: {{.isConfirmed}}"
+  expectedOutput: "Confirmed: true"
+  expectedError: false
+
+# Test Case: File Parameter Type Test
+- name: "File Parameter Type"
+  description: "Test that file parameters are passed as strings."
+  parameterLayers:
+    - name: "default"
+      definitions:
+        - name: "configFile"
+          type: "file"
+          default: "defaultConfig"
+  queryParameters:
+    - name: "configFile"
+      value: "customConfigContent"
+  template: "Config File Content: {{.configFile.Content}}"
+  expectedOutput: "Config File Content: customConfigContent"
+  expectedError: true
+  errorString: file parameters are not supported in query parameters
+
+# Test Case: Special Characters in Parameters
+- name: "Special Characters in Parameters"
+  description: "Test that special characters in parameters are handled correctly."
+  parameterLayers:
+    - name: "default"
+      definitions:
+        - name: "message"
+          type: "string"
+  queryParameters:
+    - name: "message"
+      value: "Hello, @user! Are you #1?"
+  template: "Message: {{.message}}"
+  expectedOutput: "Message: Hello, @user! Are you #1?"
+  expectedError: false
+
+- name: "Unicode Characters in Parameters"
+  description: "Test that unicode characters in parameters are handled correctly."
+  parameterLayers:
+    - name: "default"
+      definitions:
+        - name: "message"
+          type: "string"
+  queryParameters:
+    - name: "message"
+      value: "Hello, 世界!"
+  template: "Message: {{.message}}"
+  expectedOutput: "Message: Hello, 世界!"
+  expectedError: false
+
+# Test Case: Iterating Over Lists in Template
+- name: "Iterating Over Lists in Template"
+  description: "Test that lists can be iterated over in the template."
+  parameterLayers:
+    - name: "default"
+      definitions:
+        - name: "fruits"
+          type: "stringList"
+  queryParameters:
+    - name: "fruits"
+      value: "apple,banana,orange"
+  template: "Fruits: {{ range .fruits}}{{. }} {{end}}"
+  expectedOutput: "Fruits: apple banana orange "
+  expectedError: false
+
+# Test Case: Error in Template Syntax
+- name: "Error in Template Syntax"
+  description: "Test that an error is raised for incorrect template syntax."
+  parameterLayers:
+    - name: "default"
+      definitions:
+        - name: "username"
+          type: "string"
+  queryParameters:
+    - name: "username"
+      value: "Alice"
+  template: "Welcome, {{.username!}"  # Missing closing brace
+  expectedOutput: ""
+  expectedError: true

@@ -1,14 +1,13 @@
 package middlewares
 
 import (
-	"bytes"
 	_ "embed"
+	"github.com/go-go-golems/parka/pkg/utils"
+	"testing"
+
 	"github.com/go-go-golems/glazed/pkg/cmds/helpers"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/helpers/yaml"
-	"mime/multipart"
-	"net/http/httptest"
-	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -21,64 +20,9 @@ type UpdateFromFormQueryTest struct {
 	Description     string                       `yaml:"description"`
 	ParameterLayers []helpers.TestParameterLayer `yaml:"parameterLayers"`
 	ParsedLayers    []helpers.TestParsedLayer    `yaml:"parsedLayers"`
-	Form            MultipartForm                `yaml:"form"`
+	Form            utils.MultipartForm          `yaml:"form"`
 	ExpectedLayers  []helpers.TestExpectedLayer  `yaml:"expectedLayers"`
 	ExpectedError   bool                         `yaml:"expectedError"`
-}
-
-type Field struct {
-	Name  string `yaml:"name"`
-	Value string `yaml:"value"`
-}
-
-type File struct {
-	Name    string `yaml:"name"`
-	Content string `yaml:"content"`
-}
-
-type MultipartForm struct {
-	Fields []Field           `yaml:"fields"` // Regular form fields
-	Files  map[string][]File `yaml:"files"`  // File fields with file content
-}
-
-// mockGinContextWithMultipartForm creates a mock gin.Context with multipart form data.
-func mockGinContextWithMultipartForm(form MultipartForm) (*gin.Context, error) {
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	// Add form fields
-	for _, kv := range form.Fields {
-		err := writer.WriteField(kv.Name, kv.Value)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Add file fields with content
-	for key, fileContents := range form.Files {
-		for _, file := range fileContents {
-			part, err := writer.CreateFormFile(key, file.Name) // Use a dummy filename
-			if err != nil {
-				return nil, err
-			}
-			_, err = part.Write([]byte(file.Content)) // Write the actual content provided in the test case
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	err := writer.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	req := httptest.NewRequest("POST", "/", body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Request = req
-	return c, nil
 }
 
 //go:embed test-data/update-from-form-query.yaml
@@ -93,11 +37,11 @@ func TestUpdateFromFormQuery(t *testing.T) {
 		t.Run(tt.Name, func(t *testing.T) {
 			// Create a mock gin.Context with the multipart form data
 			gin.SetMode(gin.TestMode)
-			c, _ := mockGinContextWithMultipartForm(tt.Form)
+			c, _ := utils.MockGinContextWithMultipartForm(tt.Form)
 
 			// Create ParameterLayers and ParsedLayers from test definitions
 			layers_ := helpers.NewTestParameterLayers(tt.ParameterLayers)
-			parsedLayers := helpers.NewTestParsedLayers(layers_, tt.ParsedLayers)
+			parsedLayers := helpers.NewTestParsedLayers(layers_, tt.ParsedLayers...)
 
 			// Create the middleware and execute it
 			middleware := UpdateFromFormQuery(c)

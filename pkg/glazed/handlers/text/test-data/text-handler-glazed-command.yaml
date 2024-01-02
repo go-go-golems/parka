@@ -1,0 +1,85 @@
+# Test Case 1: Basic Functionality Test
+- name: "Basic Functionality"
+  description: "Test with valid parameters and template to ensure the expected output is produced without errors."
+  parameterLayers:
+    - name: "default"
+      definitions:
+        - name: "v"
+          type: "string"
+          default: "foo"
+        - name: "w"
+          type: "string"
+          required: true
+  queryParameters:
+    - name: "v"
+      value: "v"
+    - name: "w"
+      value: "w"
+  expectedOutput: |
+    +------+--------+---------+---+---+
+    | test | test2  | test3   | v | w |
+    +------+--------+---------+---+---+
+    | 0    | test-0 | test3-0 | v | w |
+    | 1    | test-1 | test3-1 | v | w |
+    | 2    | test-2 | test3-2 | v | w |
+    +------+--------+---------+---+---+
+
+# Test Case 1: Basic Functionality Test
+- name: "Basic Functionality (json format, still outputs a text table)"
+  description: "Test with valid parameters and make sure that despite json output, we still output text"
+  parameterLayers:
+    - name: "default"
+      definitions:
+        - name: "v"
+          type: "string"
+          default: "foo"
+        - name: "w"
+          type: "string"
+          required: true
+  queryParameters:
+    - name: "v"
+      value: "v"
+    - name: "w"
+      value: "w"
+    - name: output
+      value: json
+  expectedOutput: |
+    +------+--------+---------+---+---+
+    | test | test2  | test3   | v | w |
+    +------+--------+---------+---+---+
+    | 0    | test-0 | test3-0 | v | w |
+    | 1    | test-1 | test3-1 | v | w |
+    | 2    | test-2 | test3-2 | v | w |
+    +------+--------+---------+---+---+
+  expectedError: false
+
+# Test Case 2: passing a glazed layer fields: test only returns the test field
+- name: "Basic Functionality (json format, still outputs a text table)"
+  description: "Test with valid parameters and make sure that despite json output, we still output text"
+  parameterLayers:
+    - name: "default"
+      definitions:
+        - name: "v"
+          type: "string"
+          default: "foo"
+        - name: "w"
+          type: "string"
+          required: true
+  queryParameters:
+    - name: "v"
+      value: "v"
+    - name: "w"
+      value: "w"
+    - name: output
+      value: json
+    - name: fields
+      value: test
+  expectedOutput: |
+    +------+
+    | test |
+    +------+
+    | 0    |
+    | 1    |
+    | 2    |
+    +------+
+  expectedError: false

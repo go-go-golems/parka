@@ -147,6 +147,40 @@
         fileParam: "content of the file"
   expectedError: false
 
+- name: "Test that parameter of type 'file' returns an error (not supported)"
+  description: "Ensure that a parameter of type 'file' returns an error (not supported)."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "fileParam"
+          type: "file"
+          required: true
+  parsedLayers: []
+  queryParameters:
+    - name: fileParam
+      value: "content of the file"
+  expectedLayers: []
+  # This is actually sneaky, because we do indeed get an error, but of the wrong type
+  expectedError: true
+  errorString: file parameters are not supported in query parameters
+
+- name: "Test that parameter of type 'fileList' returns an error (not supported)"
+  description: "Ensure that a parameter of type 'fileList' returns an error (not supported)."
+  parameterLayers:
+    - name: "layer1"
+      definitions:
+        - name: "fileListParam"
+          type: "fileList"
+          required: true
+  parsedLayers: []
+  queryParameters:
+    - name: fileListParam
+      value: "content of the file"
+  expectedLayers: []
+  expectedError: true
+  errorString: file parameters are not supported in query parameters
+
+
 - name: "Test with missing required file parameter"
   description: "Verify that an error is returned when a required file parameter is missing from the query."
   parameterLayers:

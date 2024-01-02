@@ -41,6 +41,44 @@
   expectedLayers: []
   expectedError: true
 
+- name: "Query with special characters in value"
+  description: "Test that special characters in the query parameter value are handled correctly."
+  parameterLayers:
+    - name: "testLayer"
+      definitions:
+        - name: "specialParam"
+          type: "string"
+          required: true
+  parsedLayers: []
+  form:
+    fields:
+      - name: "specialParam"
+        value: "value with special characters: !@#$%^&*()_+"
+  expectedLayers:
+    - name: "testLayer"
+      values:
+        specialParam: "value with special characters: !@#$%^&*()_+"
+  expectedError: false
+
+- name: "Query with unicode characters in value"
+  description: "Test that unicode characters in the query parameter value are handled correctly."
+  parameterLayers:
+    - name: "testLayer"
+      definitions:
+        - name: "unicodeParam"
+          type: "string"
+          required: true
+  parsedLayers: []
+  form:
+    fields:
+      - name: "unicodeParam"
+        value: "value with unicode characters: 👍"
+  expectedLayers:
+    - name: "testLayer"
+      values:
+        unicodeParam: "value with unicode characters: 👍"
+  expectedError: false
+
 - name: "Missing Required List Parameter"
   description: "Test that a missing required list parameter results in an error."
   parameterLayers:

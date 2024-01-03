@@ -133,6 +133,14 @@ func WithReplaceDefaultLayer(name string, layer map[string]interface{}) Paramete
 	}
 }
 
+func NewParameterFilter(options ...ParameterFilterOption) *ParameterFilter {
+	ret := &ParameterFilter{}
+	for _, opt := range options {
+		opt(ret)
+	}
+	return ret
+}
+
 func (od *ParameterFilter) ComputeMiddlewares(stream bool) []middlewares.Middleware {
 	ret := []middlewares.Middleware{}
 

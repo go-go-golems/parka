@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
@@ -42,11 +43,11 @@ func (t *TestGlazedCommand) RunIntoGlazeProcessor(
 	parsedLayers *layers.ParsedLayers,
 	gp middlewares.Processor,
 ) error {
-	m := map[string]interface{}{}
+	m := parameters.NewParsedParameters()
 
 	v, ok := parsedLayers.Get(layers.DefaultSlug)
 	if ok {
-		m = v.Parameters.ToMap()
+		m = v.Parameters
 	}
 
 	for i := 0; i < 3; i++ {
@@ -55,9 +56,10 @@ func (t *TestGlazedCommand) RunIntoGlazeProcessor(
 			types.MRP("test2", fmt.Sprintf("test-%d", i)),
 			types.MRP("test3", fmt.Sprintf("test3-%d", i)),
 		)
-		for k, v := range m {
-			row.Set(k, v)
-		}
+		m.ForEach(func(_ string, p *parameters.ParsedParameter) {
+			row.Set(p.ParameterDefinition.Name, p.Value)
+
+		})
 		err := gp.AddRow(ctx,
 			row,
 		)

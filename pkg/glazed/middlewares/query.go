@@ -88,8 +88,11 @@ func UpdateFromQueryParameters(c *gin.Context, options ...parameters.ParseStepOp
 				return err
 			}
 
+			l, _ := parsedLayers.Get("default")
+			l.Parameters.ForEach(func(_ string, p *parameters.ParsedParameter) {
+				fmt.Println("p", p.ParameterDefinition.Name, p.Value)
+			})
 			return nil
-
 		}
 	}
 }

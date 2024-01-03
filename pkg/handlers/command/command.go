@@ -87,9 +87,9 @@ func WithMergeAdditionalData(data map[string]interface{}, override bool) Command
 	}
 }
 
-func WithParameterFilter(overridesAndDefaults *config.ParameterFilter) CommandHandlerOption {
+func WithParameterFilter(parameterFilter *config.ParameterFilter) CommandHandlerOption {
 	return func(handler *CommandHandler) {
-		handler.ParameterFilter = overridesAndDefaults
+		handler.ParameterFilter = parameterFilter
 	}
 }
 

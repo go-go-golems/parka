@@ -66,7 +66,6 @@ func UpdateFromQueryParameters(c *gin.Context, options ...parameters.ParseStepOp
 						} else {
 							values = []string{value}
 						}
-						// TODO(manuel, 2023-12-25) Need to pass in options to ParseParameter
 						pp, err := p.ParseParameter(values, options...)
 						if err != nil {
 							return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
@@ -88,10 +87,6 @@ func UpdateFromQueryParameters(c *gin.Context, options ...parameters.ParseStepOp
 				return err
 			}
 
-			l, _ := parsedLayers.Get("default")
-			l.Parameters.ForEach(func(_ string, p *parameters.ParsedParameter) {
-				fmt.Println("p", p.ParameterDefinition.Name, p.Value)
-			})
 			return nil
 		}
 	}

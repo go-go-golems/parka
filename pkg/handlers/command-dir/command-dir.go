@@ -38,7 +38,7 @@ type CommandDirHandler struct {
 	// AdditionalData is passed to the template being rendered.
 	AdditionalData map[string]interface{}
 
-	OverridesAndDefaults *config.OverridesAndDefaults
+	ParameterFilter *config.ParameterFilter
 
 	// If true, all glazed outputs will try to use a row output if possible.
 	// This means that "ragged" objects (where columns might not all be present)
@@ -58,16 +58,16 @@ func WithTemplateName(name string) CommandDirHandlerOption {
 	}
 }
 
-func WithOverridesAndDefaults(overridesAndDefaults *config.OverridesAndDefaults) CommandDirHandlerOption {
+func WithParameterFilter(overridesAndDefaults *config.ParameterFilter) CommandDirHandlerOption {
 	return func(handler *CommandDirHandler) {
-		handler.OverridesAndDefaults = overridesAndDefaults
+		handler.ParameterFilter = overridesAndDefaults
 	}
 }
 
-func WithOverridesAndDefaultsOptions(opts ...config.OverridesAndDefaultsOption) CommandDirHandlerOption {
+func WithParameterFilterOptions(opts ...config.ParameterFilterOption) CommandDirHandlerOption {
 	return func(handler *CommandDirHandler) {
 		for _, opt := range opts {
-			opt(handler.OverridesAndDefaults)
+			opt(handler.ParameterFilter)
 		}
 	}
 }
@@ -134,40 +134,16 @@ func NewCommandDirHandlerFromConfig(
 	options ...CommandDirHandlerOption,
 ) (*CommandDirHandler, error) {
 	cd := &CommandDirHandler{
-		TemplateName:         config_.TemplateName,
-		IndexTemplateName:    config_.IndexTemplateName,
-		AdditionalData:       config_.AdditionalData,
-		OverridesAndDefaults: &config.OverridesAndDefaults{},
+		TemplateName:      config_.TemplateName,
+		IndexTemplateName: config_.IndexTemplateName,
+		AdditionalData:    config_.AdditionalData,
+		ParameterFilter:   &config.ParameterFilter{},
 	}
 
-	if config_.Overrides != nil {
-		cd.OverridesAndDefaults.Overrides = &config.HandlerParameters{
-			Flags:     config_.Overrides.Flags,
-			Arguments: config_.Overrides.Arguments,
-			Layers:    config_.Overrides.Layers,
-		}
-	} else {
-		cd.OverridesAndDefaults.Overrides = &config.HandlerParameters{
-			Flags:     map[string]interface{}{},
-			Arguments: map[string]interface{}{},
-			Layers:    map[string]map[string]interface{}{},
-		}
-	}
-
-	if config_.Defaults != nil {
-		cd.OverridesAndDefaults.Defaults = &config.HandlerParameters{
-			Flags:     config_.Defaults.Flags,
-			Arguments: config_.Defaults.Arguments,
-			Layers:    config_.Defaults.Layers,
-		}
-	} else {
-		cd.OverridesAndDefaults.Defaults = &config.HandlerParameters{
-			Flags:     map[string]interface{}{},
-			Arguments: map[string]interface{}{},
-			Layers:    map[string]map[string]interface{}{},
-		}
-	}
-
+	cd.ParameterFilter.Overrides = config_.Overrides
+	cd.ParameterFilter.Defaults = config_.Defaults
+	cd.ParameterFilter.Blacklist = config_.Blacklist
+	cd.ParameterFilter.Whitelist = config_.Whitelist
 	// by default, we stream when outputting to datatables too
 	if config_.Stream != nil {
 		cd.Stream = *config_.Stream
@@ -244,7 +220,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		c.Redirect(301, newURL)
 	})
 
-	parserOptions := cd.OverridesAndDefaults.ComputeParserOptions(cd.Stream)
+	middlewares := cd.ParameterFilter.ComputeMiddlewares(cd.Stream)
 	server.Router.GET(path+"/text/*path", func(c *gin.Context) {
 		commandPath := c.Param("path")
 		commandPath = strings.TrimPrefix(commandPath, "/")
@@ -254,7 +230,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			return
 		}
 
-		text.CreateQueryHandler(command, parserOptions...)(c)
+		text.CreateQueryHandler(command, middlewares...)(c)
 	})
 
 	server.Router.GET(path+"/streaming/*path", func(c *gin.Context) {
@@ -266,7 +242,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			return
 		}
 
-		sse.CreateQueryHandler(command, parserOptions...)(c)
+		sse.CreateQueryHandler(command, middlewares...)(c)
 	})
 
 	server.Router.GET(path+"/datatables/*path",
@@ -283,7 +259,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			switch v := command.(type) {
 			case cmds.GlazeCommand:
 				options := []datatables.QueryHandlerOption{
-					datatables.WithParserOptions(parserOptions...),
+					datatables.WithMiddlewares(middlewares...),
 					datatables.WithTemplateLookup(cd.TemplateLookup),
 					datatables.WithTemplateName(cd.TemplateName),
 					datatables.WithAdditionalData(cd.AdditionalData),
@@ -322,7 +298,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			output_file.CreateGlazedFileHandler(
 				v,
 				fileName,
-				parserOptions...,
+				middlewares...,
 			)(c)
 
 		case cmds.WriterCommand:

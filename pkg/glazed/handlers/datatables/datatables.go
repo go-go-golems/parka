@@ -6,15 +6,17 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
+	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/formatters"
 	"github.com/go-go-golems/glazed/pkg/formatters/json"
 	table_formatter "github.com/go-go-golems/glazed/pkg/formatters/table"
 	"github.com/go-go-golems/glazed/pkg/middlewares/row"
 	"github.com/go-go-golems/glazed/pkg/middlewares/table"
 	"github.com/go-go-golems/glazed/pkg/types"
-	"github.com/go-go-golems/parka/pkg/glazed"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
-	"github.com/go-go-golems/parka/pkg/glazed/parser"
+	parka_middlewares "github.com/go-go-golems/parka/pkg/glazed/middlewares"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/render/layout"
 	"github.com/pkg/errors"
@@ -98,9 +100,8 @@ func (dt *DataTables) Clone() *DataTables {
 }
 
 type QueryHandler struct {
-	cmd                cmds.GlazeCommand
-	contextMiddlewares []glazed.ContextMiddleware
-	parserOptions      []parser.ParserOption
+	cmd         cmds.GlazeCommand
+	middlewares []middlewares.Middleware
 
 	templateName string
 	lookup       render.TemplateLookup
@@ -134,16 +135,9 @@ func WithDataTables(dt *DataTables) QueryHandlerOption {
 	}
 }
 
-func WithContextMiddlewares(middlewares ...glazed.ContextMiddleware) QueryHandlerOption {
-	return func(h *QueryHandler) {
-		h.contextMiddlewares = middlewares
-	}
-}
-
-// WithParserOptions sets the parser options for the QueryHandler
-func WithParserOptions(options ...parser.ParserOption) QueryHandlerOption {
-	return func(h *QueryHandler) {
-		h.parserOptions = options
+func WithMiddlewares(middlewares ...middlewares.Middleware) QueryHandlerOption {
+	return func(qh *QueryHandler) {
+		qh.middlewares = middlewares
 	}
 }
 
@@ -171,22 +165,22 @@ func WithStreamRows(streamRows bool) QueryHandlerOption {
 	}
 }
 
-func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
-	pc := glazed.NewCommandContext(qh.cmd)
+var _ handlers.Handler = &QueryHandler{}
 
-	qh.contextMiddlewares = append(
-		qh.contextMiddlewares,
-		glazed.NewContextParserMiddleware(
-			qh.cmd,
-			glazed.NewCommandQueryParser(qh.cmd, qh.parserOptions...),
-		),
+func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
+	description := qh.cmd.Description()
+	parsedLayers := layers.NewParsedLayers()
+
+	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers,
+		append(
+			qh.middlewares,
+			parka_middlewares.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
+			middlewares.SetFromDefaults(),
+		)...,
 	)
 
-	for _, h := range qh.contextMiddlewares {
-		err := h.Handle(c, pc)
-		if err != nil {
-			return err
-		}
+	if err != nil {
+		return err
 	}
 
 	// rowC is the channel where the rows are sent to. They will need to get converted
@@ -212,7 +206,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	}
 
 	// manually create a streaming output TableProcessor
-	gp, err := handlers.CreateTableProcessorWithOutput(pc, "table", "ascii")
+	gp, err := handlers.CreateTableProcessorWithOutput(parsedLayers, "table", "ascii")
 	if err != nil {
 		return err
 	}
@@ -259,7 +253,6 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	})
 
 	// actually run the command
-	allParameters := pc.GetAllParameterValues()
 	eg.Go(func() error {
 		defer func() {
 			close(rowC)
@@ -269,7 +262,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 		}()
 
 		// NOTE(manuel, 2023-10-16) The GetAllParameterValues is a bit of a hack because really what we want is to only get those flags through the layers
-		err = qh.cmd.Run(ctx3, pc.ParsedLayers, allParameters, gp)
+		err = qh.cmd.RunIntoGlazeProcessor(ctx3, parsedLayers, gp)
 		if err != nil {
 			dt_.ErrorStream <- err.Error()
 			return err
@@ -286,9 +279,9 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	eg.Go(func() error {
 		// if qh.Cmd implements cmds.CommandWithMetadata, get Metadata
 		if cm_, ok := qh.cmd.(cmds.CommandWithMetadata); ok {
-			dt_.CommandMetadata, err = cm_.Metadata(c, pc.ParsedLayers, allParameters)
+			dt_.CommandMetadata, err = cm_.Metadata(c, parsedLayers)
 		}
-		err := qh.renderTemplate(c, pc, w, dt_, columnsC)
+		err := qh.renderTemplate(parsedLayers, w, dt_, columnsC)
 		if err != nil {
 			return err
 		}
@@ -300,8 +293,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 }
 
 func (qh *QueryHandler) renderTemplate(
-	c *gin.Context,
-	pc *glazed.CommandContext,
+	parsedLayers *layers.ParsedLayers,
 	w io.Writer,
 	dt_ *DataTables,
 	columnsC chan []types.FieldName,
@@ -316,12 +308,12 @@ func (qh *QueryHandler) renderTemplate(
 		return err
 	}
 
-	layout_, err := layout.ComputeLayout(pc)
+	layout_, err := layout.ComputeLayout(qh.cmd, parsedLayers)
 	if err != nil {
 		return err
 	}
 
-	description := pc.Cmd.Description()
+	description := qh.cmd.Description()
 
 	longHTML, err := render.RenderMarkdownToHTML(description.Long)
 	if err != nil {

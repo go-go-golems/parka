@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+# echo -- "---"
+echo "This is the handler test runner we want to run. Unit tests should be specified as YAML that will then be passed to the runner."
+# echo -- "---"
+echo "package handlers"
+echo ""
+oak go definitions --with-body --function-name "$1" "pkg/glazed/handlers/handlers_test.go"

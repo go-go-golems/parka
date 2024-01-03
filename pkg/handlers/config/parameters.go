@@ -1,83 +1,27 @@
 package config
 
 import (
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/parka/pkg/glazed/parser"
+	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
+	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 )
 
-type HandlerParameters struct {
-	Layers    map[string]map[string]interface{}
-	Flags     map[string]interface{}
-	Arguments map[string]interface{}
+type ParameterFilter struct {
+	Overrides *LayerParameters
+	Defaults  *LayerParameters
+	Whitelist *ParameterFilterList
+	Blacklist *ParameterFilterList
 }
 
-func NewHandlerParameters() *HandlerParameters {
-	return &HandlerParameters{
-		Layers:    map[string]map[string]interface{}{},
-		Flags:     map[string]interface{}{},
-		Arguments: map[string]interface{}{},
-	}
-}
+type ParameterFilterOption func(*ParameterFilter)
 
-// NewHandlerParametersFromLayerParams creates a new HandlerParameters from the config file.
-// It currently requires a list of layerDefinitions in order to lookup the correct
-// layers to stored as ParsedParameterLayer. It doesn't fail if configured layers don't exist.
-//
-// TODO(manuel, 2023-05-31) Add a way to validate the fact that overrides in a config file might
-// have a typo and don't correspond to existing layer definitions in the application.
-func NewHandlerParametersFromLayerParams(p *LayerParams) {
-	ret := NewHandlerParameters()
-	for name, l := range p.Layers {
-		ret.Layers[name] = map[string]interface{}{}
-		for k, v := range l {
-			ret.Layers[name][k] = v
-		}
-	}
-
-	for name, v := range p.Flags {
-		ret.Flags[name] = v
-	}
-
-	for name, v := range p.Arguments {
-		ret.Arguments[name] = v
-	}
-}
-
-// Merge merges the given overrides into this one.
-// If a layer is already present, it is merged with the given one.
-// Flags and arguments are merged, overrides taking precedence.
-func (ho *HandlerParameters) Merge(other *HandlerParameters) {
-	for k, v := range other.Layers {
-		if _, ok := ho.Layers[k]; !ok {
-			ho.Layers[k] = map[string]interface{}{}
-		}
-		for k2, v2 := range v {
-			ho.Layers[k][k2] = v2
-		}
-	}
-	for k, v := range other.Flags {
-		ho.Flags[k] = v
-	}
-	for k, v := range other.Arguments {
-		ho.Arguments[k] = v
-	}
-}
-
-type OverridesAndDefaults struct {
-	Overrides *HandlerParameters
-	Defaults  *HandlerParameters
-}
-
-type OverridesAndDefaultsOption func(*OverridesAndDefaults)
-
-func WithReplaceOverrides(overrides *HandlerParameters) OverridesAndDefaultsOption {
-	return func(handler *OverridesAndDefaults) {
+func WithReplaceOverrides(overrides *LayerParameters) ParameterFilterOption {
+	return func(handler *ParameterFilter) {
 		handler.Overrides = overrides
 	}
 }
 
-func WithMergeOverrides(overrides *HandlerParameters) OverridesAndDefaultsOption {
-	return func(handler *OverridesAndDefaults) {
+func WithMergeOverrides(overrides *LayerParameters) ParameterFilterOption {
+	return func(handler *ParameterFilter) {
 		if handler.Overrides == nil {
 			handler.Overrides = overrides
 		} else {
@@ -86,28 +30,19 @@ func WithMergeOverrides(overrides *HandlerParameters) OverridesAndDefaultsOption
 	}
 }
 
-func WithOverrideFlag(name string, value string) OverridesAndDefaultsOption {
-	return func(handler *OverridesAndDefaults) {
+func WithOverrideParameter(name string, value string) ParameterFilterOption {
+	return func(handler *ParameterFilter) {
 		if handler.Overrides == nil {
-			handler.Overrides = NewHandlerParameters()
+			handler.Overrides = NewLayerParameters()
 		}
-		handler.Overrides.Flags[name] = value
+		handler.Overrides.Parameters[name] = value
 	}
 }
 
-func WithOverrideArgument(name string, value string) OverridesAndDefaultsOption {
-	return func(handler *OverridesAndDefaults) {
+func WithMergeOverrideLayer(name string, layer map[string]interface{}) ParameterFilterOption {
+	return func(handler *ParameterFilter) {
 		if handler.Overrides == nil {
-			handler.Overrides = NewHandlerParameters()
-		}
-		handler.Overrides.Arguments[name] = value
-	}
-}
-
-func WithMergeOverrideLayer(name string, layer map[string]interface{}) OverridesAndDefaultsOption {
-	return func(handler *OverridesAndDefaults) {
-		if handler.Overrides == nil {
-			handler.Overrides = NewHandlerParameters()
+			handler.Overrides = NewLayerParameters()
 		}
 		for k, v := range layer {
 			if _, ok := handler.Overrides.Layers[name]; !ok {
@@ -119,10 +54,10 @@ func WithMergeOverrideLayer(name string, layer map[string]interface{}) Overrides
 }
 
 // WithLayerDefaults populates the defaults for the given layer. If a value is already set, the value is skipped.
-func WithLayerDefaults(name string, layer map[string]interface{}) OverridesAndDefaultsOption {
-	return func(handler *OverridesAndDefaults) {
+func WithLayerDefaults(name string, layer map[string]interface{}) ParameterFilterOption {
+	return func(handler *ParameterFilter) {
 		if handler.Overrides == nil {
-			handler.Overrides = NewHandlerParameters()
+			handler.Overrides = NewLayerParameters()
 		}
 		for k, v := range layer {
 			if _, ok := handler.Overrides.Layers[name]; !ok {
@@ -135,10 +70,10 @@ func WithLayerDefaults(name string, layer map[string]interface{}) OverridesAndDe
 	}
 }
 
-func WithReplaceOverrideLayer(name string, layer map[string]interface{}) OverridesAndDefaultsOption {
-	return func(handler *OverridesAndDefaults) {
+func WithReplaceOverrideLayer(name string, layer map[string]interface{}) ParameterFilterOption {
+	return func(handler *ParameterFilter) {
 		if handler.Overrides == nil {
-			handler.Overrides = NewHandlerParameters()
+			handler.Overrides = NewLayerParameters()
 		}
 		handler.Overrides.Layers[name] = layer
 	}
@@ -150,14 +85,14 @@ func WithReplaceOverrideLayer(name string, layer map[string]interface{}) Overrid
 //
 // Handling all the way to configure defaults.
 
-func WithReplaceDefaults(defaults *HandlerParameters) OverridesAndDefaultsOption {
-	return func(handler *OverridesAndDefaults) {
+func WithReplaceDefaults(defaults *LayerParameters) ParameterFilterOption {
+	return func(handler *ParameterFilter) {
 		handler.Defaults = defaults
 	}
 }
 
-func WithMergeDefaults(defaults *HandlerParameters) OverridesAndDefaultsOption {
-	return func(handler *OverridesAndDefaults) {
+func WithMergeDefaults(defaults *LayerParameters) ParameterFilterOption {
+	return func(handler *ParameterFilter) {
 		if handler.Defaults == nil {
 			handler.Defaults = defaults
 		} else {
@@ -166,30 +101,21 @@ func WithMergeDefaults(defaults *HandlerParameters) OverridesAndDefaultsOption {
 	}
 }
 
-func WithDefaultFlag(name string, value string) OverridesAndDefaultsOption {
-	return func(handler *OverridesAndDefaults) {
+func WithDefaultParameter(name string, value string) ParameterFilterOption {
+	return func(handler *ParameterFilter) {
 		if handler.Defaults == nil {
-			handler.Defaults = NewHandlerParameters()
+			handler.Defaults = NewLayerParameters()
 		}
-		handler.Defaults.Flags[name] = value
+		handler.Defaults.Parameters[name] = value
 	}
 }
 
-func WithDefaultArgument(name string, value string) OverridesAndDefaultsOption {
-	return func(handler *OverridesAndDefaults) {
+func WithMergeDefaultLayer(name string, layer map[string]interface{}) ParameterFilterOption {
+	return func(handler *ParameterFilter) {
 		if handler.Defaults == nil {
-			handler.Defaults = NewHandlerParameters()
+			handler.Defaults = NewLayerParameters()
 		}
-		handler.Defaults.Arguments[name] = value
-	}
-}
-
-func WithMergeDefaultLayer(name string, layer *layers.ParsedParameterLayer) OverridesAndDefaultsOption {
-	return func(handler *OverridesAndDefaults) {
-		if handler.Defaults == nil {
-			handler.Defaults = NewHandlerParameters()
-		}
-		for k, v := range layer.Parameters {
+		for k, v := range layer {
 			if _, ok := handler.Defaults.Layers[name]; !ok {
 				handler.Defaults.Layers[name] = map[string]interface{}{}
 			}
@@ -198,53 +124,36 @@ func WithMergeDefaultLayer(name string, layer *layers.ParsedParameterLayer) Over
 	}
 }
 
-func WithReplaceDefaultLayer(name string, layer map[string]interface{}) OverridesAndDefaultsOption {
-	return func(handler *OverridesAndDefaults) {
+func WithReplaceDefaultLayer(name string, layer map[string]interface{}) ParameterFilterOption {
+	return func(handler *ParameterFilter) {
 		if handler.Defaults == nil {
-			handler.Defaults = NewHandlerParameters()
+			handler.Defaults = NewLayerParameters()
 		}
 		handler.Defaults.Layers[name] = layer
 	}
 }
 
-func (od *OverridesAndDefaults) ComputeParserOptions(stream bool) []parser.ParserOption {
-	parserOptions := []parser.ParserOption{}
-
-	if stream {
-		// if the config file says to use stream (which is the default), override the stream glazed flag,
-		// which will make it prefer the row output when possible
-		parserOptions = append(parserOptions,
-			parser.WithAppendOverrides("glazed", map[string]interface{}{
-				"stream": true,
-			}))
-	}
-
-	// TODO(manuel, 2023-06-21) This needs to be handled for each backend, not just the HTML one
-	if od.Overrides != nil {
-		parserOptions = append(parserOptions,
-			parser.WithAppendOverrides(parser.DefaultSlug, od.Overrides.Flags),
-		)
-		parserOptions = append(parserOptions,
-			parser.WithAppendOverrides(parser.DefaultSlug, od.Overrides.Arguments),
-		)
-		for slug, layer := range od.Overrides.Layers {
-			parserOptions = append(parserOptions, parser.WithAppendOverrides(slug, layer))
-		}
-	}
+func (od *ParameterFilter) ComputeMiddlewares(stream bool) []middlewares.Middleware {
+	ret := []middlewares.Middleware{}
 
 	if od.Defaults != nil {
-		parserOptions = append(parserOptions,
-			parser.WithPrependDefaults(parser.DefaultSlug, od.Defaults.Flags),
-		)
-		parserOptions = append(parserOptions,
-			parser.WithPrependDefaults(parser.DefaultSlug, od.Defaults.Arguments),
-		)
-		for slug, layer := range od.Defaults.Layers {
-			// we use prepend because that way, later options will actually override earlier flag values,
-			// since they will be applied earlier.
-			parserOptions = append(parserOptions, parser.WithPrependDefaults(slug, layer))
-		}
+		// this needs to override the defaults set by the underlying handler...
+		ret = append(ret, middlewares.UpdateFromMapAsDefaultFirst(od.Defaults.GetParameterMap(), parameters.WithParseStepSource("defaults")))
 	}
 
-	return parserOptions
+	if od.Overrides != nil {
+		ret = append(ret, middlewares.UpdateFromMap(od.Overrides.GetParameterMap(), parameters.WithParseStepSource("overrides")))
+	}
+
+	if od.Whitelist != nil {
+		ret = append(ret, middlewares.WhitelistLayers(od.Whitelist.Layers))
+		ret = append(ret, middlewares.WhitelistLayerParameters(od.Whitelist.GetAllLayerParameters()))
+	}
+
+	if od.Blacklist != nil {
+		ret = append(ret, middlewares.BlacklistLayers(od.Blacklist.Layers))
+		ret = append(ret, middlewares.BlacklistLayerParameters(od.Blacklist.GetAllLayerParameters()))
+	}
+
+	return ret
 }

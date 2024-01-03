@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+prompto get glazed/parameters
+prompto get glazed/tests/middlewares
+
+pwd
+oak go definitions pkg/utils/test-helpers.go

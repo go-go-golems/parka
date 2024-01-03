@@ -5,9 +5,13 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
+	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/helpers/list"
+	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/glazed"
-	"github.com/go-go-golems/parka/pkg/glazed/parser"
+	parka_middlewares "github.com/go-go-golems/parka/pkg/glazed/middlewares"
 	"io"
 	"os"
 	"path/filepath"
@@ -27,6 +31,8 @@ func NewOutputFileHandler(handler handlers.Handler, outputFileName string) *Outp
 
 	return h
 }
+
+var _ handlers.Handler = (*OutputFileHandler)(nil)
 
 func (h *OutputFileHandler) Handle(c *gin.Context, w io.Writer) error {
 	buf := &bytes.Buffer{}
@@ -61,7 +67,7 @@ func (h *OutputFileHandler) Handle(c *gin.Context, w io.Writer) error {
 func CreateGlazedFileHandler(
 	cmd cmds.GlazeCommand,
 	fileName string,
-	parserOptions ...parser.ParserOption,
+	middlewares_ ...middlewares.Middleware,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		glazedOverrides := map[string]interface{}{}
@@ -113,8 +119,19 @@ func CreateGlazedFileHandler(
 			glazedOverrides["output-file"] = tmpFile.Name()
 		}
 
-		parserOptions = append(parserOptions, parser.WithAppendOverrides("glazed", glazedOverrides))
-		handler := glazed.NewQueryHandler(cmd, glazed.WithQueryHandlerParserOptions(parserOptions...))
+		glazedOverride := middlewares.UpdateFromMap(
+			map[string]map[string]interface{}{
+				settings.GlazedSlug: glazedOverrides,
+			},
+			parameters.WithParseStepSource("output-file-glazed-override"),
+		)
+
+		handler := glazed.NewQueryHandler(cmd,
+			glazed.WithMiddlewares(
+				list.Prepend(middlewares_,
+					parka_middlewares.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
+					glazedOverride)...,
+			))
 
 		baseName := filepath.Base(fileName)
 		c.Writer.Header().Set("Content-Disposition", "attachment; filename="+baseName)

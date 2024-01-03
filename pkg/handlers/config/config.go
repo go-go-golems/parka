@@ -1,68 +1,11 @@
 package config
 
 import (
-	"github.com/pkg/errors"
+	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 	"os"
-	"strings"
 )
-
-// Route represents a single sub-route of the server.
-// Only one of the booleans or one of the pointers should be true or non-nil.
-// This is the first attempt at the structure of a config file, and is bound to change.
-type Route struct {
-	Path              string       `yaml:"path"`
-	CommandDirectory  *CommandDir  `yaml:"commandDirectory,omitempty"`
-	Command           *Command     `yaml:"command,omitempty"`
-	Static            *Static      `yaml:"static,omitempty"`
-	StaticFile        *StaticFile  `yaml:"staticFile,omitempty"`
-	TemplateDirectory *TemplateDir `yaml:"templateDirectory,omitempty"`
-	Template          *Template    `yaml:"template,omitempty"`
-}
-
-// RouteHandlerConfiguration is the interface that all route handler configurations must implement.
-// By RouteHandlerConfiguration, we mean things like CommandDir, Command, Static, etc...
-type RouteHandlerConfiguration interface {
-	//
-	ExpandPaths() error
-}
-
-func (r *Route) HandlesCommand() bool {
-	return r.Command != nil || r.CommandDirectory != nil
-}
-
-func (r *Route) HandlesStatic() bool {
-	return r.Static != nil || r.StaticFile != nil
-}
-
-func (r *Route) HandlesTemplate() bool {
-	return r.Template != nil || r.TemplateDirectory != nil
-}
-
-func (r *Route) IsCommandRoute() bool {
-	return r.Command != nil
-}
-
-func (r *Route) IsCommandDirRoute() bool {
-	return r.CommandDirectory != nil
-}
-
-func (r *Route) IsStaticRoute() bool {
-	return r.Static != nil
-}
-
-func (r *Route) IsStaticFileRoute() bool {
-	return r.StaticFile != nil
-}
-
-func (r *Route) IsTemplateRoute() bool {
-	return r.Template != nil
-}
-
-func (r *Route) IsTemplateDirRoute() bool {
-	return r.TemplateDirectory != nil
-}
 
 func expandPath(path string) string {
 	// expand ~
@@ -74,34 +17,6 @@ func expandPath(path string) string {
 	// expand env vars
 	path = os.ExpandEnv(path)
 	return path
-}
-
-// TemplateLookupConfig is used to configured a directory based template lookup.
-type TemplateLookupConfig struct {
-	// Directories is a list of directories that will be searched for templates.
-	Directories []string `yaml:"directories,omitempty"`
-	// Patterns is a list of glob patterns that will be used to match files in the directories.
-	// If the list is empty, the default of **/*.tmpl.md and **/*.tmpl.html will be used
-	Patterns []string `yaml:"patterns,omitempty"`
-}
-
-// CommandDir represents the config file entry for a command directory route.
-type CommandDir struct {
-	Repositories               []string `yaml:"repositories"`
-	IncludeDefaultRepositories *bool    `yaml:"includeDefaultRepositories"`
-
-	TemplateLookup *TemplateLookupConfig `yaml:"templateLookup,omitempty"`
-
-	TemplateName      string `yaml:"templateName,omitempty"`
-	IndexTemplateName string `yaml:"indexTemplateName,omitempty"`
-
-	AdditionalData map[string]interface{} `yaml:"additionalData,omitempty"`
-	Defaults       *LayerParams           `yaml:"defaults,omitempty"`
-	Overrides      *LayerParams           `yaml:"overrides,omitempty"`
-	BlackList      *LayerFlagNames        `yaml:"blackList,omitempty"`
-	WhiteList      *LayerFlagNames        `yaml:"whiteList,omitempty"`
-
-	Stream *bool `yaml:"stream,omitempty"`
 }
 
 func expandPaths(paths []string) ([]string, error) {
@@ -124,184 +39,52 @@ func expandPaths(paths []string) ([]string, error) {
 	return expandedPaths, nil
 }
 
-func (c *CommandDir) ExpandPaths() error {
-	var err error
-
-	if c.TemplateLookup != nil {
-		c.TemplateLookup.Directories, err = expandPaths(c.TemplateLookup.Directories)
-		if err != nil {
-			return err
-		}
-	}
-
-	if c.IncludeDefaultRepositories == nil {
-		c.IncludeDefaultRepositories = boolPtr(true)
-	}
-
-	repositories, err := expandPaths(c.Repositories)
-	if err != nil {
-		return err
-	}
-
-	if len(repositories) == 0 && !*c.IncludeDefaultRepositories {
-		return errors.Errorf("no repositories found: %s", strings.Join(repositories, ", "))
-	}
-	c.Repositories = repositories
-
-	evaluatedData, err := EvaluateConfigEntry(c.AdditionalData)
-	if err != nil {
-		return err
-	}
-	c.AdditionalData = evaluatedData.(map[string]interface{})
-
-	if c.Defaults != nil {
-		evaluatedDefaults, err := evaluateLayerParams(c.Defaults)
-		if err != nil {
-			return err
-		}
-		c.Defaults = evaluatedDefaults
-	}
-	if c.Overrides != nil {
-		evaluatedOverrides, err := evaluateLayerParams(c.Overrides)
-		if err != nil {
-			return err
-		}
-		c.Overrides = evaluatedOverrides
-	}
-
-	return nil
+// TemplateLookupConfig is used to configured a directory based template lookup.
+type TemplateLookupConfig struct {
+	// Directories is a list of directories that will be searched for templates.
+	Directories []string `yaml:"directories,omitempty"`
+	// Patterns is a list of glob patterns that will be used to match files in the directories.
+	// If the list is empty, the default of **/*.tmpl.md and **/*.tmpl.html will be used
+	Patterns []string `yaml:"patterns,omitempty"`
 }
 
-type Command struct {
-	File         string `yaml:"file"`
-	TemplateName string `yaml:"templateName"`
-
-	TemplateLookup *TemplateLookupConfig `yaml:"templateLookup,omitempty"`
-
-	AdditionalData map[string]interface{} `yaml:"additionalData,omitempty"`
-	Defaults       *LayerParams           `yaml:"defaults,omitempty"`
-	Overrides      *LayerParams           `yaml:"overrides,omitempty"`
-
-	Stream *bool `yaml:"stream,omitempty"`
+// ParameterFilterList are used to configure whitelists and blacklists.
+// Entire layers as well as individual flags and arguments can be whitelisted or blacklisted.
+// Params is used for the default layer.
+type ParameterFilterList struct {
+	Layers          []string            `yaml:"layers,omitempty"`
+	LayerParameters map[string][]string `yaml:"layerParameters,omitempty"`
+	Parameters      []string            `yaml:"parameters,omitempty"`
 }
 
-func (c *Command) ExpandPaths() error {
-	c.File = expandPath(c.File)
-
-	evaluatedData, err := EvaluateConfigEntry(c.AdditionalData)
-	if err != nil {
-		return err
+func (p *ParameterFilterList) GetAllLayerParameters() map[string][]string {
+	ret := map[string][]string{}
+	for layer, params := range p.LayerParameters {
+		ret[layer] = params
 	}
-	c.AdditionalData = evaluatedData.(map[string]interface{})
-
-	if c.Defaults != nil {
-		evaluatedDefaults, err := evaluateLayerParams(c.Defaults)
-		if err != nil {
-			return err
-		}
-		c.Defaults = evaluatedDefaults
+	if _, ok := ret[layers.DefaultSlug]; !ok {
+		ret[layers.DefaultSlug] = []string{}
 	}
-	if c.Overrides != nil {
-		evaluatedOverrides, err := evaluateLayerParams(c.Overrides)
-		if err != nil {
-			return err
-		}
-		c.Overrides = evaluatedOverrides
-	}
-
-	if c.TemplateLookup != nil {
-		c.TemplateLookup.Directories, err = expandPaths(c.TemplateLookup.Directories)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	ret[layers.DefaultSlug] = append(ret[layers.DefaultSlug], p.Parameters...)
+	return ret
 }
 
-type Static struct {
-	LocalPath string `yaml:"localPath"`
+type LayerParameters struct {
+	Layers     map[string]map[string]interface{} `yaml:"layers,omitempty"`
+	Parameters map[string]interface{}            `yaml:"parameters,omitempty"`
 }
 
-func (s *Static) ExpandPaths() error {
-	s.LocalPath = expandPath(s.LocalPath)
-	return nil
-}
-
-type StaticFile struct {
-	LocalPath string `yaml:"localPath"`
-}
-
-func (s *StaticFile) ExpandPaths() error {
-	s.LocalPath = expandPath(s.LocalPath)
-	return nil
-}
-
-// TemplateDir serves a directory of html, md, .tmpl.md, .tmpl.html files.
-// Markdown files are renderer using the given MarkdownBaseTemplateName, which will be
-// looked up in the TemplateDir itself, or using the default renderer if empty.
-type TemplateDir struct {
-	LocalDirectory    string                 `yaml:"localDirectory"`
-	IndexTemplateName string                 `yaml:"indexTemplateName,omitempty"`
-	AdditionalData    map[string]interface{} `yaml:"additionalData,omitempty"`
-}
-
-func (t *TemplateDir) ExpandPaths() error {
-	t.LocalDirectory = expandPath(t.LocalDirectory)
-
-	evaluatedData, err := EvaluateConfigEntry(t.AdditionalData)
-	if err != nil {
-		return err
-	}
-	t.AdditionalData = evaluatedData.(map[string]interface{})
-
-	return nil
-}
-
-type Template struct {
-	// every request will be rendered from the template file, using the default renderer in the case of markdown
-	// content.
-	TemplateFile   string                 `yaml:"templateFile"`
-	AdditionalData map[string]interface{} `yaml:"additionalData,omitempty"`
-}
-
-func (t *Template) ExpandPaths() error {
-	t.TemplateFile = expandPath(t.TemplateFile)
-
-	evaluatedData, err := EvaluateConfigEntry(t.AdditionalData)
-	if err != nil {
-		return err
-	}
-	t.AdditionalData = evaluatedData.(map[string]interface{})
-
-	return nil
-}
-
-type LayerFlagNames struct {
-	Layers      []string            `yaml:"layers,omitempty"`
-	LayerParams map[string][]string `yaml:"layerParams,omitempty"`
-	Flags       []string            `yaml:"flags,omitempty"`
-	Arguments   []string            `yaml:"arguments,omitempty"`
-}
-
-type LayerParams struct {
-	Layers    map[string]map[string]interface{} `yaml:"layers,omitempty"`
-	Flags     map[string]interface{}            `yaml:"flags,omitempty"`
-	Arguments map[string]interface{}            `yaml:"arguments,omitempty"`
-}
-
-func NewLayerParams() *LayerParams {
-	return &LayerParams{
-		Layers:    map[string]map[string]interface{}{},
-		Flags:     map[string]interface{}{},
-		Arguments: map[string]interface{}{},
+func NewLayerParameters() *LayerParameters {
+	return &LayerParameters{
+		Layers:     map[string]map[string]interface{}{},
+		Parameters: map[string]interface{}{},
 	}
 }
 
-// Merge merges the two LayerParams, with the overrides taking precedence.
+// Merge merges the two LayerParameters, with the overrides taking precedence.
 // It merges all the layers, flags, and arguments. For each layer, the layer flags are merged as well,
 // overrides taking precedence.
-func (p *LayerParams) Merge(overrides *LayerParams) {
+func (p *LayerParameters) Merge(overrides *LayerParameters) {
 	for k, v := range overrides.Layers {
 		if _, ok := p.Layers[k]; !ok {
 			p.Layers[k] = map[string]interface{}{}
@@ -311,13 +94,28 @@ func (p *LayerParams) Merge(overrides *LayerParams) {
 		}
 	}
 
-	for k, v := range overrides.Flags {
-		p.Flags[k] = v
+	for k, v := range overrides.Parameters {
+		p.Parameters[k] = v
+	}
+}
+
+func (p *LayerParameters) Clone() *LayerParameters {
+	ret := NewLayerParameters()
+	ret.Merge(p)
+	return ret
+}
+
+func (p *LayerParameters) GetParameterMap() map[string]map[string]interface{} {
+	r := p.Clone()
+	ret := r.Layers
+	if _, ok := ret[layers.DefaultSlug]; !ok {
+		ret[layers.DefaultSlug] = map[string]interface{}{}
+	}
+	for k, v := range r.Parameters {
+		ret[layers.DefaultSlug][k] = v
 	}
 
-	for k, v := range overrides.Arguments {
-		p.Arguments[k] = v
-	}
+	return ret
 }
 
 // Defaults controls the default renderer and which embedded static files to serve.

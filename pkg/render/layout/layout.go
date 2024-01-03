@@ -2,8 +2,9 @@ package layout
 
 import (
 	"fmt"
+	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
-	"github.com/go-go-golems/parka/pkg/glazed"
 )
 
 // This section groups all the functionality related to laying out forms for input parameters
@@ -77,9 +78,10 @@ type Option struct {
 }
 
 func ComputeLayout(
-	pc *glazed.CommandContext,
+	cmd cmds.Command,
+	parsedLayers *layers.ParsedLayers,
 ) (*Layout, error) {
-	description := pc.Cmd.Description()
+	description := cmd.Description()
 
 	layout := description.Layout
 
@@ -87,12 +89,12 @@ func ComputeLayout(
 		Sections: []*Section{},
 	}
 
-	values := pc.GetAllParameterValues()
+	defaultLayer := parsedLayers.GetDefaultParameterLayer()
 
 	if len(layout) == 0 {
-		pds := pc.GetFlagsAndArgumentsParameterDefinitions()
+		pds := defaultLayer.Layer.GetParameterDefinitions()
 		flagSection := NewSectionFromParameterDefinitions(
-			pds, values,
+			pds, defaultLayer.Parameters.ToMap(),
 			WithSectionTitle("All flags and arguments"),
 		)
 		ret.Sections = append(ret.Sections, flagSection)
@@ -100,7 +102,6 @@ func ComputeLayout(
 		// This code would add a section for all layers, in the form.
 		// I don't think this is super useful in the context of Parka,
 		// and can be overriden with layouts if you really want.
-		//
 		//
 		//for _, l := range description.Layers {
 		//	pds = l.GetParameterDefinitions()
@@ -112,12 +113,8 @@ func ComputeLayout(
 		//	ret.Sections = append(ret.Sections, section)
 		//}
 	} else {
-		allParameterDefinitions := pc.GetAllParameterDefinitions()
-		allParameterDefinitionsByName := map[string]*parameters.ParameterDefinition{}
-
-		for _, pd := range allParameterDefinitions {
-			allParameterDefinitionsByName[pd.Name] = pd
-		}
+		allParameterDefinitions := cmd.Description().Layers.GetAllParameterDefinitions()
+		values := parsedLayers.GetDataMap()
 
 		for _, section_ := range layout {
 			section := &Section{
@@ -134,7 +131,7 @@ func ComputeLayout(
 				}
 
 				for _, input_ := range row_.Inputs {
-					pd, ok := allParameterDefinitionsByName[input_.Name]
+					pd, ok := allParameterDefinitions.Get(input_.Name)
 					if !ok {
 						return nil, fmt.Errorf("parameter %s not found", input_.Name)
 					}
@@ -159,7 +156,10 @@ func ComputeLayout(
 					if input_.InputType != "" {
 						type_ = input_.InputType
 					}
-					default_ := pd.Default
+					default_ := interface{}(nil)
+					if pd.Default != nil {
+						default_ = *pd.Default
+					}
 					if input_.DefaultValue != nil {
 						default_ = input_.DefaultValue
 					}
@@ -212,7 +212,7 @@ func choicesToOptions(choices []string) []Option {
 }
 
 func NewSectionFromParameterDefinitions(
-	pds []*parameters.ParameterDefinition,
+	pds *parameters.ParameterDefinitions,
 	values map[string]interface{},
 	options ...SectionOption) *Section {
 	section := &Section{
@@ -225,7 +225,7 @@ func NewSectionFromParameterDefinitions(
 
 	// if there is no layout, go through all flags and put 3 per row
 	currentRow := Row{}
-	for _, pd := range pds {
+	pds.ForEach(func(pd *parameters.ParameterDefinition) {
 		name := pd.Name
 		value, ok := values[name]
 		if !ok {
@@ -235,19 +235,23 @@ func NewSectionFromParameterDefinitions(
 		if help == "" {
 			help = pd.Name
 		}
-		currentRow.Inputs = append(currentRow.Inputs, Input{
+		input := Input{
 			Name:    name,
 			Value:   value,
 			Type:    string(pd.Type),
-			Default: pd.Default,
 			Help:    help,
 			Options: choicesToOptions(pd.Choices),
-		})
+		}
+		if pd.Default != nil {
+			input.Default = *pd.Default
+		}
+		currentRow.Inputs = append(currentRow.Inputs, input)
 		if len(currentRow.Inputs) == 3 {
 			section.Rows = append(section.Rows, currentRow)
 			currentRow = Row{}
 		}
-	}
+	})
+
 	if len(currentRow.Inputs) > 0 {
 		section.Rows = append(section.Rows, currentRow)
 	}

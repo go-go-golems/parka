@@ -12,7 +12,12 @@ import (
 func UpdateFromQueryParameters(c *gin.Context, options ...parameters.ParseStepOption) middlewares.Middleware {
 	return func(next middlewares.HandlerFunc) middlewares.HandlerFunc {
 		return func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
-			err := layers_.ForEachE(func(_ string, l layers.ParameterLayer) error {
+			err := next(layers_, parsedLayers)
+			if err != nil {
+				return err
+			}
+
+			err = layers_.ForEachE(func(_ string, l layers.ParameterLayer) error {
 				parsedLayer := parsedLayers.GetOrCreate(l)
 
 				pds := l.GetParameterDefinitions()

@@ -65,9 +65,7 @@ func (p *ParameterFilterList) GetAllLayerParameters() map[string][]string {
 	if _, ok := ret[layers.DefaultSlug]; !ok {
 		ret[layers.DefaultSlug] = []string{}
 	}
-	for _, param := range p.Parameters {
-		ret[layers.DefaultSlug] = append(ret[layers.DefaultSlug], param)
-	}
+	ret[layers.DefaultSlug] = append(ret[layers.DefaultSlug], p.Parameters...)
 	return ret
 }
 

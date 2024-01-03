@@ -55,6 +55,24 @@
   expectedOutput: "Hello, World!"
   expectedError: false
 
+- name: "Default Values with one parameter override"
+  description: "Test that default values are used when parameters are not provided."
+  parameterLayers:
+    - name: "default"
+      definitions:
+        - name: "greeting"
+          type: "string"
+          default: "Hello"
+        - name: "target"
+          type: "string"
+          default: "World"
+  queryParameters:
+    - name: "target"
+      value: "Alice"
+  template: "{{.greeting}}, {{.target}}!"
+  expectedOutput: "Hello, Alice!"
+  expectedError: false
+
 # Test Case: Integer Parameter Type Test
 - name: "Integer Parameter Type"
   description: "Test that integer parameters are parsed correctly."
@@ -95,7 +113,7 @@
       definitions:
         - name: "configFile"
           type: "file"
-          default: "defaultConfig"
+          required: true
   queryParameters:
     - name: "configFile"
       value: "customConfigContent"

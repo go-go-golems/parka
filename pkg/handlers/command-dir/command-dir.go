@@ -192,6 +192,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 
 	path = strings.TrimSuffix(path, "/")
 
+	middlewares_ := cd.ParameterFilter.ComputeMiddlewares(cd.Stream)
 	server.Router.GET(path+"/data/*path", func(c *gin.Context) {
 		commandPath := c.Param("path")
 		commandPath = strings.TrimPrefix(commandPath, "/")
@@ -203,13 +204,14 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 
 		switch v := command.(type) {
 		case cmds.GlazeCommand:
-			json.CreateJSONQueryHandler(v)(c)
+			json.CreateJSONQueryHandler(v, json.WithMiddlewares(middlewares_...))(c)
 		default:
 			text.CreateQueryHandler(v)(c)
 		}
 	})
 
-	// Redirect Route
+	// Redirect Route for legacy
+	// TODO(manuel, 2024-01-17) This really should be moved to some kind of config file option
 	server.Router.GET(path+"/sqleton/*path", func(c *gin.Context) {
 		commandPath := c.Param("path")
 		rawQuery := c.Request.URL.RawQuery
@@ -220,7 +222,6 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		c.Redirect(301, newURL)
 	})
 
-	middlewares := cd.ParameterFilter.ComputeMiddlewares(cd.Stream)
 	server.Router.GET(path+"/text/*path", func(c *gin.Context) {
 		commandPath := c.Param("path")
 		commandPath = strings.TrimPrefix(commandPath, "/")
@@ -230,7 +231,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			return
 		}
 
-		text.CreateQueryHandler(command, middlewares...)(c)
+		text.CreateQueryHandler(command, middlewares_...)(c)
 	})
 
 	server.Router.GET(path+"/streaming/*path", func(c *gin.Context) {
@@ -242,7 +243,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			return
 		}
 
-		sse.CreateQueryHandler(command, middlewares...)(c)
+		sse.CreateQueryHandler(command, middlewares_...)(c)
 	})
 
 	server.Router.GET(path+"/datatables/*path",
@@ -259,7 +260,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			switch v := command.(type) {
 			case cmds.GlazeCommand:
 				options := []datatables.QueryHandlerOption{
-					datatables.WithMiddlewares(middlewares...),
+					datatables.WithMiddlewares(middlewares_...),
 					datatables.WithTemplateLookup(cd.TemplateLookup),
 					datatables.WithTemplateName(cd.TemplateName),
 					datatables.WithAdditionalData(cd.AdditionalData),
@@ -298,7 +299,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			output_file.CreateGlazedFileHandler(
 				v,
 				fileName,
-				middlewares...,
+				middlewares_...,
 			)(c)
 
 		case cmds.WriterCommand:

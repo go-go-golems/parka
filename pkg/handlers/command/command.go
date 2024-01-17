@@ -226,10 +226,15 @@ func NewCommandHandlerFromConfig(
 func (ch *CommandHandler) Serve(server *parka.Server, path string) error {
 	path = strings.TrimSuffix(path, "/")
 
-	server.Router.GET(path+"/data", func(c *gin.Context) {
-		json.CreateJSONQueryHandler(ch.Command)(c)
-	})
 	middlewares_ := ch.ParameterFilter.ComputeMiddlewares(ch.Stream)
+
+	server.Router.GET(path+"/data", func(c *gin.Context) {
+		options := []json.QueryHandlerOption{
+			json.WithMiddlewares(middlewares_...),
+		}
+		json.CreateJSONQueryHandler(ch.Command, options...)(c)
+	})
+	// TODO(manuel, 2024-01-17) This doesn't seem to match what is in command-dir
 	server.Router.GET(path+"/glazed", func(c *gin.Context) {
 		options := []datatables.QueryHandlerOption{
 			datatables.WithMiddlewares(middlewares_...),

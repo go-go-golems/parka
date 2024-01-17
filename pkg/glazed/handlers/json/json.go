@@ -48,7 +48,8 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 	description := h.cmd.Description()
 	parsedLayers := layers.NewParsedLayers()
 
-	middlewares_ := append(h.middlewares,
+	middlewares_ := append(
+		h.middlewares,
 		middlewares2.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
 		middlewares.SetFromDefaults(),
 	)
@@ -119,11 +120,9 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 
 func CreateJSONQueryHandler(
 	cmd cmds.Command,
-	middlewares ...middlewares.Middleware,
+	options ...QueryHandlerOption,
 ) gin.HandlerFunc {
-	handler := NewQueryHandler(cmd,
-		WithMiddlewares(middlewares...),
-	)
+	handler := NewQueryHandler(cmd, options...)
 	return func(c *gin.Context) {
 		err := handler.Handle(c, c.Writer)
 		if err != nil {

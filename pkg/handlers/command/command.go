@@ -234,6 +234,7 @@ func (ch *CommandHandler) Serve(server *parka.Server, path string) error {
 		}
 		json.CreateJSONQueryHandler(ch.Command, options...)(c)
 	})
+	// TODO(manuel, 2024-01-17) This doesn't seem to match what is in command-dir
 	server.Router.GET(path+"/glazed", func(c *gin.Context) {
 		options := []datatables.QueryHandlerOption{
 			datatables.WithMiddlewares(middlewares_...),

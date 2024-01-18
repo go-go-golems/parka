@@ -3,7 +3,7 @@ package command_dir
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"github.com/go-go-golems/clay/pkg/repositories/fs"
+	"github.com/go-go-golems/clay/pkg/repositories"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/json"
@@ -32,7 +32,7 @@ type CommandDirHandler struct {
 	TemplateLookup render.TemplateLookup
 
 	// Repository is the command repository that is exposed over HTTP through this handler.
-	Repository *fs.Repository
+	Repository *repositories.Repository
 
 	// AdditionalData is passed to the template being rendered.
 	AdditionalData map[string]interface{}
@@ -122,7 +122,7 @@ func WithDevMode(devMode bool) CommandDirHandlerOption {
 	}
 }
 
-func WithRepository(r *fs.Repository) CommandDirHandlerOption {
+func WithRepository(r *repositories.Repository) CommandDirHandlerOption {
 	return func(handler *CommandDirHandler) {
 		handler.Repository = r
 	}
@@ -323,7 +323,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 
 // getRepositoryCommand lookups a command in the given repository and return success as bool and the given command,
 // or sends an error code over HTTP using the gin.Context.
-func getRepositoryCommand(c *gin.Context, r *fs.Repository, commandPath string) (
+func getRepositoryCommand(c *gin.Context, r *repositories.Repository, commandPath string) (
 	cmds.Command,
 	bool,
 ) {

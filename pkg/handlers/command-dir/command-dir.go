@@ -3,7 +3,6 @@ package command_dir
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"github.com/go-go-golems/clay/pkg/repositories"
 	"github.com/go-go-golems/clay/pkg/repositories/fs"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
@@ -324,7 +323,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 
 // getRepositoryCommand lookups a command in the given repository and return success as bool and the given command,
 // or sends an error code over HTTP using the gin.Context.
-func getRepositoryCommand(c *gin.Context, r repositories.Repository, commandPath string) (
+func getRepositoryCommand(c *gin.Context, r *fs.Repository, commandPath string) (
 	cmds.Command,
 	bool,
 ) {

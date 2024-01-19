@@ -9,8 +9,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.37.5
 	github.com/gin-gonic/contrib v0.0.0-20221130124618-7e01895a63f2
 	github.com/gin-gonic/gin v1.9.0
-	github.com/go-go-golems/clay v0.1.0
-	github.com/go-go-golems/glazed v0.5.0
+	github.com/go-go-golems/clay v0.1.8
+	github.com/go-go-golems/glazed v0.5.7
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.30.0
 	github.com/spf13/cobra v1.7.0

@@ -40,6 +40,7 @@ func NewRepositoryFactoryFromReaderLoaders(
 ) RepositoryFactory {
 	return func(dirs []string) (*repositories.Repository, error) {
 		r := repositories.NewRepository(
+			repositories.WithFS(os.DirFS(".")),
 			repositories.WithDirectories(dirs...),
 			repositories.WithUpdateCallback(func(cmd cmds.Command) error {
 				description := cmd.Description()

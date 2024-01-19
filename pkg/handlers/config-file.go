@@ -3,9 +3,10 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"github.com/go-go-golems/clay/pkg/repositories/fs"
+	"github.com/go-go-golems/clay/pkg/repositories"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/loaders"
+	"github.com/go-go-golems/glazed/pkg/help"
 	"github.com/go-go-golems/glazed/pkg/helpers/strings"
 	"github.com/go-go-golems/parka/pkg/handlers/command-dir"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
@@ -28,7 +29,7 @@ import (
 
 // RepositoryFactory is a function that returns a repository given a list of directories.
 // This is used to provision the CommandDir handlers.
-type RepositoryFactory func(dirs []string) (*fs.Repository, error)
+type RepositoryFactory func(dirs []string) (*repositories.Repository, error)
 
 // TODO(manuel, 2023-12-13) This currently uses a ReaderCommandLoader which assumes that there is a command in a single file
 // THat's however not the case when loading fat commands (like in escuse-me), so we might need something
@@ -37,10 +38,11 @@ type RepositoryFactory func(dirs []string) (*fs.Repository, error)
 func NewRepositoryFactoryFromReaderLoaders(
 	fsLoader loaders.CommandLoader,
 ) RepositoryFactory {
-	return func(dirs []string) (*fs.Repository, error) {
-		r := fs.NewRepository(
-			fs.WithDirectories(dirs),
-			fs.WithUpdateCallback(func(cmd cmds.Command) error {
+	return func(dirs []string) (*repositories.Repository, error) {
+		r := repositories.NewRepository(
+			repositories.WithFS(os.DirFS(".")),
+			repositories.WithDirectories(dirs...),
+			repositories.WithUpdateCallback(func(cmd cmds.Command) error {
 				description := cmd.Description()
 				log.Info().Str("name", description.Name).
 					Str("source", description.Source).
@@ -48,7 +50,7 @@ func NewRepositoryFactoryFromReaderLoaders(
 				// TODO(manuel, 2023-04-19) This is where we would recompute the HandlerFunc used below in GET and POST
 				return nil
 			}),
-			fs.WithRemoveCallback(func(cmd cmds.Command) error {
+			repositories.WithRemoveCallback(func(cmd cmds.Command) error {
 				description := cmd.Description()
 				log.Info().Str("name", description.Name).
 					Str("source", description.Source).
@@ -58,10 +60,12 @@ func NewRepositoryFactoryFromReaderLoaders(
 				// We don't need to recompute the func, since it fetches the command at runtime.
 				return nil
 			}),
-			fs.WithFSLoader(fsLoader),
+			repositories.WithCommandLoader(fsLoader),
 		)
 
-		err := r.LoadCommands()
+		// TODO(manuel, 2024-01-18) Properly integrate help system into parka
+		helpSystem := help.NewHelpSystem()
+		err := r.LoadCommands(helpSystem)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "Error initializing commands: %s\n", err)
 			os.Exit(1)

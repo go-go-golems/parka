@@ -136,7 +136,7 @@ func NewCommandHandlerFromConfig(
 	}
 
 	cmds_, err := loaders.LoadCommandsFromFS(
-		fs_, filePath,
+		fs_, filePath, config_.File,
 		loader, []cmds.CommandDescriptionOption{}, []alias.Option{})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load commands from file")

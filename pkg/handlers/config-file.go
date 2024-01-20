@@ -39,9 +39,18 @@ func NewRepositoryFactoryFromReaderLoaders(
 	fsLoader loaders.CommandLoader,
 ) RepositoryFactory {
 	return func(dirs []string) (*repositories.Repository, error) {
+		directories := []repositories.Directory{}
+		for _, dir := range dirs {
+			directories = append(directories, repositories.Directory{
+				FS:               os.DirFS(dir),
+				RootDirectory:    ".",
+				RootDocDirectory: "doc",
+				Name:             dir,
+				SourcePrefix:     "file",
+			})
+		}
 		r := repositories.NewRepository(
-			repositories.WithFS(os.DirFS(".")),
-			repositories.WithDirectories(dirs...),
+			repositories.WithDirectories(directories...),
 			repositories.WithUpdateCallback(func(cmd cmds.Command) error {
 				description := cmd.Description()
 				log.Info().Str("name", description.Name).

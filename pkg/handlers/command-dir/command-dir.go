@@ -209,18 +209,6 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		}
 	})
 
-	// Redirect Route for legacy
-	// TODO(manuel, 2024-01-17) This really should be moved to some kind of config file option
-	server.Router.GET(path+"/sqleton/*path", func(c *gin.Context) {
-		commandPath := c.Param("path")
-		rawQuery := c.Request.URL.RawQuery
-		newURL := path + "/datatables" + commandPath
-		if rawQuery != "" {
-			newURL += "?" + rawQuery
-		}
-		c.Redirect(301, newURL)
-	})
-
 	server.Router.GET(path+"/text/*path", func(c *gin.Context) {
 		commandPath := c.Param("path")
 		commandPath = strings.TrimPrefix(commandPath, "/")
@@ -315,6 +303,24 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 
 		default:
 			c.JSON(500, gin.H{"error": fmt.Sprintf("command %s is not a glazed/writer command", commandPath)})
+		}
+	})
+
+	server.Router.GET(path+"/", func(c *gin.Context) {
+		commands := cd.Repository.CollectCommands(nil, true)
+		templ, err := cd.TemplateLookup.Lookup("index.tmpl.html")
+		if err != nil {
+			c.JSON(500, gin.H{"error": errors.Wrapf(err, "could not load index template").Error()})
+			return
+		}
+
+		err = templ.Execute(c.Writer, gin.H{
+			"commands": commands,
+			"path":     path,
+		})
+		if err != nil {
+			c.JSON(500, gin.H{"error": errors.Wrapf(err, "could not execute index template").Error()})
+			return
 		}
 	})
 

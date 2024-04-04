@@ -292,6 +292,5 @@ func (r *Renderer) HandleWithTrimPrefix(prefix string, data map[string]interface
 				return
 			}
 		}
-		c.Next()
 	}
 }

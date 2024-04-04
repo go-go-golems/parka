@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Commands Tree</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.4.1/milligram.min.css">
+</head>
+<body>
+<div class="container">
+    <ul>
+        {{ $path := .path }}
+        {{ range $name, $node := .nodes }}
+            {{ template "node" (dict "node" $node "path" $path) }}
+        {{ end }}
+    </ul>
+</div>
+
+
+{{ define "node" }}
+{{ $ = . }}
+{{ $node := $.node }}
+<li><strong>{{ $node.Name }}</strong>
+    {{ if $node.Command }}
+        {{ with $node.Command }}
+            <a href="{{$.path}}/datatables/{{ join "/" .Parents  }}/{{ .Name }}">
+                <strong>{{ .Name }}</strong>
+            </a> (<a href="{{$.path}}/text/{{ join "/" .Parents }}/{{ .Name }}">text</a>,
+            <a href="{{$.path}}/data/{{ join "/" .Parents }}/{{ .Name }}">json</a>
+            )
+            {{ if .Short }}- {{ .Short }} {{ end }}
+            {{ if .Long }}
+                <details>
+                    <summary>Details</summary>
+                    {{ .Long }}
+                </details>
+            {{ end }}
+        {{ end}}
+    {{end}}
+
+    {{ if $node.Children }}
+        <ul>
+            {{ range $name, $child := $node.Children }}
+                {{ template "node" (dict "node" $child "path" $.path) }}
+            {{end}}
+        </ul>
+    {{ end }}
+    {{ end }}
+</li>
+</body>
+</html>

@@ -1,5 +1,37 @@
 package command_dir
 
+// Package command_dir provides an HTTP interface for exposing commands from a
+// repository in various formats such as API responses, downloadable files, or
+// rendered in a DataTables UI. It allows users to interact with commands through
+// a web interface, offering different endpoints for accessing command data in
+// text, JSON, streaming, and file download formats.
+//
+// The handler integrates with a command repository to serve command outputs over
+// HTTP and supports the following output formats:
+// - `/data/*path` for JSON output.
+// - `/text/*path` for plain text output.
+// - `/streaming/*path` for streaming output using server-sent events.
+// - `/download/*path` for downloading command output as a file.
+// - `/datatables/*path` for rendering commands in a DataTables UI.
+//
+// Configuration options include:
+// - TemplateName: Specifies the template for rendering command outputs.
+// - IndexTemplateName: Specifies the template for rendering command indexes.
+// - TemplateLookup: Interface for finding and reloading templates.
+// - Repository: The command repository to expose over HTTP.
+// - AdditionalData: Extra data to be passed to the template.
+// - ParameterFilter: Filters for command parameters, including overrides,
+//   defaults, blacklist, and whitelist.
+// - Stream: Use a channel to stream row results to the HTML template render. Easy to get into concurrency deadlocks, use with care.
+//
+// Edge cases and potential exceptions are handled as follows:
+// - If a command is not found, a `404` error is returned.
+// - Ambiguous commands result in a `404` error with an appropriate message.
+// - Errors during file download handling or template execution result in a `500`
+//   error with an error message.
+// - The handler expects exactly one directory for template lookup; otherwise, it
+//   returns an error.
+
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -209,18 +241,6 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		}
 	})
 
-	// Redirect Route for legacy
-	// TODO(manuel, 2024-01-17) This really should be moved to some kind of config file option
-	server.Router.GET(path+"/sqleton/*path", func(c *gin.Context) {
-		commandPath := c.Param("path")
-		rawQuery := c.Request.URL.RawQuery
-		newURL := path + "/datatables" + commandPath
-		if rawQuery != "" {
-			newURL += "?" + rawQuery
-		}
-		c.Redirect(301, newURL)
-	})
-
 	server.Router.GET(path+"/text/*path", func(c *gin.Context) {
 		commandPath := c.Param("path")
 		commandPath = strings.TrimPrefix(commandPath, "/")
@@ -315,6 +335,46 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 
 		default:
 			c.JSON(500, gin.H{"error": fmt.Sprintf("command %s is not a glazed/writer command", commandPath)})
+		}
+	})
+
+	server.Router.GET(path+"/commands/*path", func(c *gin.Context) {
+		path_ := c.Param("path")
+		path_ = strings.TrimPrefix(path_, "/")
+		path_ = strings.TrimSuffix(path_, "/")
+		splitPath := strings.Split(path_, "/")
+		if path_ == "" {
+			splitPath = []string{}
+		}
+		renderNode, ok := cd.Repository.GetRenderNode(splitPath)
+		if !ok {
+			c.JSON(404, gin.H{"error": fmt.Sprintf("command %s not found", path_)})
+			return
+		}
+		templateName := cd.IndexTemplateName
+		if cd.IndexTemplateName == "" {
+			templateName = "commands.tmpl.html"
+		}
+		templ, err := cd.TemplateLookup.Lookup(templateName)
+		if err != nil {
+			c.JSON(500, gin.H{"error": errors.Wrapf(err, "could not load index template").Error()})
+			return
+		}
+
+		var nodes []*repositories.RenderNode
+
+		if renderNode.Command != nil {
+			nodes = append(nodes, renderNode)
+		} else {
+			nodes = append(nodes, renderNode.Children...)
+		}
+		err = templ.Execute(c.Writer, gin.H{
+			"nodes": nodes,
+			"path":  path,
+		})
+		if err != nil {
+			c.JSON(500, gin.H{"error": errors.Wrapf(err, "could not execute index template").Error()})
+			return
 		}
 	})
 

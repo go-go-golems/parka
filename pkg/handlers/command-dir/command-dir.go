@@ -307,7 +307,8 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 	})
 
 	server.Router.GET(path+"/", func(c *gin.Context) {
-		commands := cd.Repository.CollectCommands(nil, true)
+		//commands := cd.Repository.CollectCommands(nil, true)
+		rootNode := cd.Repository.FindNode(nil)
 		templ, err := cd.TemplateLookup.Lookup("index.tmpl.html")
 		if err != nil {
 			c.JSON(500, gin.H{"error": errors.Wrapf(err, "could not load index template").Error()})
@@ -315,7 +316,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		}
 
 		err = templ.Execute(c.Writer, gin.H{
-			"commands": commands,
+			"commands": rootNode,
 			"path":     path,
 		})
 		if err != nil {

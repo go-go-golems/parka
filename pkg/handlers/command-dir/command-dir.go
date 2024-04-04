@@ -306,18 +306,37 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		}
 	})
 
-	server.Router.GET(path+"/", func(c *gin.Context) {
-		//commands := cd.Repository.CollectCommands(nil, true)
-		rootNode := cd.Repository.FindNode(nil)
-		templ, err := cd.TemplateLookup.Lookup("index.tmpl.html")
+	server.Router.GET(path+"/commands/*path", func(c *gin.Context) {
+		path_ := c.Param("path")
+		path_ = strings.TrimPrefix(path_, "/")
+		path_ = strings.TrimSuffix(path_, "/")
+		splitPath := strings.Split(path_, "/")
+		if path_ == "" {
+			splitPath = []string{}
+		}
+		renderNode, ok := cd.Repository.GetRenderNode(splitPath)
+		if !ok {
+			c.JSON(404, gin.H{"error": fmt.Sprintf("command %s not found", path_)})
+			return
+		}
+		templ, err := cd.TemplateLookup.Lookup("commands.tmpl.html")
 		if err != nil {
 			c.JSON(500, gin.H{"error": errors.Wrapf(err, "could not load index template").Error()})
 			return
 		}
 
+		var nodes []*repositories.RenderNode
+
+		if renderNode.Command != nil {
+			nodes = append(nodes, renderNode)
+		} else {
+			for _, v := range renderNode.Children {
+				nodes = append(nodes, v)
+			}
+		}
 		err = templ.Execute(c.Writer, gin.H{
-			"commands": rootNode,
-			"path":     path,
+			"nodes": nodes,
+			"path":  path,
 		})
 		if err != nil {
 			c.JSON(500, gin.H{"error": errors.Wrapf(err, "could not execute index template").Error()})

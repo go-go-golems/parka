@@ -330,9 +330,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		if renderNode.Command != nil {
 			nodes = append(nodes, renderNode)
 		} else {
-			for _, v := range renderNode.Children {
-				nodes = append(nodes, v)
-			}
+			nodes = append(nodes, renderNode.Children...)
 		}
 		err = templ.Execute(c.Writer, gin.H{
 			"nodes": nodes,

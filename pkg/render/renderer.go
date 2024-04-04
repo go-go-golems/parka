@@ -292,7 +292,5 @@ func (r *Renderer) HandleWithTrimPrefix(prefix string, data map[string]interface
 				return
 			}
 		}
-		// we're done and have written our piece, so we can return
-		return
 	}
 }

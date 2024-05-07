@@ -179,8 +179,20 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 		)...,
 	)
 
-	if err != nil {
-		return err
+	dt_ := qh.dt.Clone()
+	if cm_, ok := qh.cmd.(cmds.CommandWithMetadata); ok {
+		dt_.CommandMetadata, err = cm_.Metadata(c, parsedLayers)
+	}
+
+	var of formatters.RowOutputFormatter
+	// buffered so that we don't hang on it when exiting
+	dt_.ErrorStream = make(chan string, 1)
+	if dt_.JSRendering {
+		of = json.NewOutputFormatter(json.WithOutputIndividualRows(true))
+		dt_.JSStream = make(chan template.JS, 100)
+	} else {
+		of = table_formatter.NewOutputFormatter("html")
+		dt_.HTMLStream = make(chan template.HTML, 100)
 	}
 
 	// rowC is the channel where the rows are sent to. They will need to get converted
@@ -193,16 +205,23 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	// since we have a context there, and there is no need to block the middleware processing.
 	columnsC := make(chan []types.FieldName, 10)
 
-	dt_ := qh.dt.Clone()
-	var of formatters.RowOutputFormatter
-	// buffered so that we don't hang on it when exciting
-	dt_.ErrorStream = make(chan string, 1)
-	if dt_.JSRendering {
-		of = json.NewOutputFormatter(json.WithOutputIndividualRows(true))
-		dt_.JSStream = make(chan template.JS, 100)
-	} else {
-		of = table_formatter.NewOutputFormatter("html")
-		dt_.HTMLStream = make(chan template.HTML, 100)
+	if err != nil {
+		if dt_.JSStream != nil {
+			close(dt_.JSStream)
+		}
+		if dt_.HTMLStream != nil {
+			close(dt_.HTMLStream)
+		}
+		dt_.ErrorStream <- err.Error()
+		close(dt_.ErrorStream)
+		columnsC <- []types.FieldName{}
+		close(columnsC)
+		close(rowC)
+		err_ := qh.renderTemplate(parsedLayers, w, dt_, columnsC)
+		if err_ != nil {
+			return err_
+		}
+		return err_
 	}
 
 	// manually create a streaming output TableProcessor
@@ -264,6 +283,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 		// NOTE(manuel, 2023-10-16) The GetAllParameterValues is a bit of a hack because really what we want is to only get those flags through the layers
 		err = qh.cmd.RunIntoGlazeProcessor(ctx3, parsedLayers, gp)
 		if err != nil {
+			// make sure to render the ErrorStream at the bottom, because we would otherwise get into a deadlock with the streaming channels
 			dt_.ErrorStream <- err.Error()
 			return err
 		}
@@ -278,9 +298,6 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 
 	eg.Go(func() error {
 		// if qh.Cmd implements cmds.CommandWithMetadata, get Metadata
-		if cm_, ok := qh.cmd.(cmds.CommandWithMetadata); ok {
-			dt_.CommandMetadata, err = cm_.Metadata(c, parsedLayers)
-		}
 		err := qh.renderTemplate(parsedLayers, w, dt_, columnsC)
 		if err != nil {
 			return err
@@ -326,7 +343,10 @@ func (qh *QueryHandler) renderTemplate(
 
 	// Wait for the column names to be sent to the channel. This will only
 	// take the first row into account.
-	columns := <-columnsC
+	columns, ok := <-columnsC
+	if !ok {
+		return fmt.Errorf("no columns received")
+	}
 	dt_.Columns = columns
 
 	// start copying from rowC to HTML or JS stream

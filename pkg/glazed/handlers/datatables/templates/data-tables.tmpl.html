@@ -17,125 +17,142 @@
     <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
     <script src="/dist/ag.js"></script>
 
+    <style>
+        .alert-danger {
+            padding: 10px;
+            background-color: #f44336; /* Red background */
+            color: white; /* White text */
+            margin-bottom: 15px;
+            border-radius: 4px;
+        }
+
+        .alert-danger strong {
+            margin-right: 6px;
+        }
+    </style>
+
+
     {{ if .UseDataTables }}
-    <!-- DataTables CSS -->
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.foundation.min.css">
-    <link href="https://cdn.datatables.net/v/dt/dt-1.13.4/sc-2.1.1/datatables.min.css" rel="stylesheet"/>
-    <script src="https://cdn.datatables.net/v/dt/dt-1.13.4/sc-2.1.1/datatables.min.js"></script>
+        <!-- DataTables CSS -->
+        <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.foundation.min.css">
+        <link href="https://cdn.datatables.net/v/dt/dt-1.13.4/sc-2.1.1/datatables.min.css" rel="stylesheet"/>
+        <script src="https://cdn.datatables.net/v/dt/dt-1.13.4/sc-2.1.1/datatables.min.js"></script>
     {{ end }}
 </head>
 <body>
 {{ define "form-widget" }}
-<div {{ if .Id }}id="{{.Id}}" {{end -}}
-     {{ if .Classes }}class="{{.Classes }}" {{end -}}
-     {{ if .CSS }} style="{{.CSS}}"{{end}}
-     style="height: 100%"
->
-    <div style="display: flex; flex-direction: column; align-items: end; height: 100%">
-        <!-- types can be string, int, float, bool, date, choice -->
-        {{ if eq .Type "string" }}
-        <label for="{{.Name}}">{{.Help}}</label>
-        <input type="text" name="{{.Name}}" value="{{.Value}}">
-        {{ else if eq .Type "stringList" }}
-        <label for="{{.Name}}">{{.Help}}</label>
-        <input type="text" name="{{.Name}}" value='{{.Value | join "," }}'>
-        {{ else if eq .Type "intList" }}
-        <label for="{{.Name}}">{{.Help}}</label>
-        <input type="text" name="{{.Name}}" value='{{.Value | join "," }}'>
-        {{ else if eq .Type "floatList" }}
-        <label for="{{.Name}}">{{.Help}}</label>
-        <input type="text" name="{{.Name}}" value='{{.Value | join "," }}'>
-        {{ else if eq .Type "int" }}
-        <label for="{{.Name}}">{{.Help}}</label>
-        <input type="number" name="{{.Name}}" value="{{.Value}}">
-        {{ else if eq .Type "float" }}
-        <label for="{{.Name}}">{{.Help}}</label>
-        <input type="number" name="{{.Name}}" value="{{.Value}}">
-        {{ else if eq .Type "bool" }}
-        <div style="height: 100%"></div>
-        <div class="float-right">
-            <label class="label-inline" for="{{.Name}}">{{.Help}}</label>
-            <input type="checkbox" name="{{.Name}}" {{if .Value}}checked{{end}}>
+    <div {{ if .Id }}id="{{.Id}}" {{end -}}
+            {{ if .Classes }}class="{{.Classes }}" {{end -}}
+            {{ if .CSS }} style="{{.CSS}}"{{end}}
+         style="height: 100%"
+    >
+        <div style="display: flex; flex-direction: column; align-items: end; height: 100%">
+            <!-- types can be string, int, float, bool, date, choice -->
+            {{ if eq .Type "string" }}
+                <label for="{{.Name}}">{{.Help}}</label>
+                <input type="text" name="{{.Name}}" value="{{.Value}}">
+            {{ else if eq .Type "stringList" }}
+                <label for="{{.Name}}">{{.Help}}</label>
+                <input type="text" name="{{.Name}}" value='{{.Value | join "," }}'>
+            {{ else if eq .Type "intList" }}
+                <label for="{{.Name}}">{{.Help}}</label>
+                <input type="text" name="{{.Name}}" value='{{.Value | join "," }}'>
+            {{ else if eq .Type "floatList" }}
+                <label for="{{.Name}}">{{.Help}}</label>
+                <input type="text" name="{{.Name}}" value='{{.Value | join "," }}'>
+            {{ else if eq .Type "int" }}
+                <label for="{{.Name}}">{{.Help}}</label>
+                <input type="number" name="{{.Name}}" value="{{.Value}}">
+            {{ else if eq .Type "float" }}
+                <label for="{{.Name}}">{{.Help}}</label>
+                <input type="number" name="{{.Name}}" value="{{.Value}}">
+            {{ else if eq .Type "bool" }}
+                <div style="height: 100%"></div>
+                <div class="float-right">
+                    <label class="label-inline" for="{{.Name}}">{{.Help}}</label>
+                    <input type="checkbox" name="{{.Name}}" {{if .Value}}checked{{end}}>
+                </div>
+            {{ else if eq .Type "date" }}
+                <label for="{{.Name}}">{{.Help}}</label>
+                <input type="date" name="{{.Name}}" {{if .Value}}value="{{.Value | toDate}}" {{end}}>
+            {{ else if eq .Type "choice" }}
+                <label for="{{.Name}}">{{.Help}}</label>
+                <select name="{{.Name}}">
+                    {{ $parent := . }}
+                    {{range $choice := .Options}}
+                        <option value="{{$choice.Value}}" label="{{$choice.Label}}" {{if eq $choice.Value
+                        $parent.Value}}selected{{end}}>{{$choice.Label}} - {{$parent.Value}}
+                        </option>
+                    {{end}}
+                </select>
+            {{ else if eq .Type "choiceList" }}
+                <label for="{{.Name}}">{{.Help}}</label>
+                <select multiple name="{{.Name}}[]">
+                    {{ $parent := . }}
+                    {{range $choice := .Options}}
+                        <option value="{{$choice.Value}}" label="{{$choice.Label}}"
+                                {{if has $choice.Value $parent.Value }}selected{{end}}>{{$choice.Label}}
+                        </option>
+                    {{end}}
+                </select>
+            {{ else }}
+                <label for="{{.Name}}">{{.Help}}</label>
+                <input type="text" name="{{.Name}}" value="{{.Value}}">
+            {{ end }}
         </div>
-        {{ else if eq .Type "date" }}
-        <label for="{{.Name}}">{{.Help}}</label>
-        <input type="date" name="{{.Name}}" {{if .Value}}value="{{.Value | toDate}}" {{end}}>
-        {{ else if eq .Type "choice" }}
-        <label for="{{.Name}}">{{.Help}}</label>
-        <select name="{{.Name}}">
-            {{ $parent := . }}
-            {{range $choice := .Options}}
-            <option value="{{$choice.Value}}" label="{{$choice.Label}}" {{if eq $choice.Value
-                    $parent.Value}}selected{{end}}>{{$choice.Label}} - {{$parent.Value}}
-            </option>
-            {{end}}
-        </select>
-        {{ else if eq .Type "choiceList" }}
-        <label for="{{.Name}}">{{.Help}}</label>
-        <select multiple name="{{.Name}}[]">
-            {{ $parent := . }}
-            {{range $choice := .Options}}
-            <option value="{{$choice.Value}}" label="{{$choice.Label}}"
-                    {{if has $choice.Value $parent.Value }}selected{{end}}>{{$choice.Label}}
-            </option>
-            {{end}}
-        </select>
-        {{ else }}
-        <label for="{{.Name}}">{{.Help}}</label>
-        <input type="text" name="{{.Name}}" value="{{.Value}}">
-        {{ end }}
     </div>
-</div>
 {{ end }}
 
 <div class="container" id="formContainer">
     <p class="header">
         {{ range $link := .AdditionalData.HeaderLinks}}
-        <a href="{{$link.Url}}">{{$link.Label}}</a>
+            <a href="{{$link.Url}}">{{$link.Label}}</a>
         {{ end }}
-<!--    <a href="{{.BasePath}}/sqleton">Top</a>-->
+        <a href="{{.BasePath}}/commands">Top</a>
     </p>
     <h1>{{.Command.Name}}</h1>
     <p>{{.Command.Short}}</p>
 
     {{ if .LongDescription }}
-    <div>{{.LongDescription }}</div>
+        <div>{{.LongDescription }}</div>
     {{ end }}
 
     {{ if .CommandMetadata }}
-    <details>
-        <summary>Command Metadata</summary>
-        {{ range $key, $value := .CommandMetadata }}
-        <p><strong>{{$key}}:</strong> <pre>{{$value}}</pre></p>
-        {{ end }}
-    </details>
+        <details>
+            <summary>Command Metadata</summary>
+            {{ range $key, $value := .CommandMetadata }}
+                <p><strong>{{$key}}:</strong>
+                <pre>{{$value}}</pre></p>
+            {{ end }}
+        </details>
     {{ end }}
 
     <form id="form" action="{{.Command.Name}}" method="get">
         <fieldset>
             {{range $section := .Layout.Sections}}
-            <div class="row" {{if $section.Classes}}class="{{$section.Classes}}" {{end}} {{if
-                 $section.Style}}style="{{$section.Style}}" {{end}}>
-                <div class="columns">
-                    {{if $section.Title}}<h3>{{$section.Title}}</h3>{{end}}
-                    {{if $section.ShortDescription}}
-                    <p>{{$section.ShortDescription}}</p>
-                    {{end}}
-                    {{ if $section.LongDescription }}
-                    <p>{{$section.LongDescription }}</p>
-                    {{end}}
+                <div class="row" {{if $section.Classes}}class="{{$section.Classes}}" {{end}} {{if
+                $section.Style}}style="{{$section.Style}}" {{end}}>
+                    <div class="columns">
+                        {{if $section.Title}}<h3>{{$section.Title}}</h3>{{end}}
+                        {{if $section.ShortDescription}}
+                            <p>{{$section.ShortDescription}}</p>
+                        {{end}}
+                        {{ if $section.LongDescription }}
+                            <p>{{$section.LongDescription }}</p>
+                        {{end}}
+                    </div>
                 </div>
-            </div>
-            {{range $row := $section.Rows}}
-            <div class="row" {{if $row.Classes}}class="{{$row.Classes}}" {{end}} {{if $row.Style}}style="{{$row.Style}}"
-                 {{end}}>
-                {{range $field := $row.Inputs}}
-                <div class="column">
-                    {{ template "form-widget" $field }}
-                </div>
+                {{range $row := $section.Rows}}
+                    <div class="row"
+                         {{if $row.Classes}}class="{{$row.Classes}}" {{end}} {{if $row.Style}}style="{{$row.Style}}"
+                    {{end}}>
+                        {{range $field := $row.Inputs}}
+                            <div class="column">
+                                {{ template "form-widget" $field }}
+                            </div>
+                        {{end}}
+                    </div>
                 {{end}}
-            </div>
-            {{end}}
             {{end}}
         </fieldset>
         <div class="row">
@@ -147,17 +164,18 @@
     </form>
     <div class="row">
         {{ range $link := .Links }}
-        <div class="column">
-            <a class="{{ $link.Class }}" href="{{ $link.Href }}" target="_blank">{{ $link.Text }}</a>
-        </div>
+            <div class="column">
+                <a class="{{ $link.Class }}" href="{{ $link.Href }}" target="_blank">{{ $link.Text }}</a>
+            </div>
         {{ end }}
     </div>
     <hr>
     <!-- additional div for the table plugin to add its own widgets -->
     <div id="additionalWidgets"></div>
     {{ if .HTMLStream }}{{ range .HTMLStream}}{{.}}{{end}}
-    {{ else }} <table id="dataTable"></table> {{ end }}
-    <div id="tableContainer"  style="height: 1000px; width:100%;" class="ag-theme-alpine">
+    {{ else }}
+        <table id="dataTable"></table> {{ end }}
+    <div id="tableContainer" style="height: 1000px; width:100%;" class="ag-theme-alpine">
     </div>
 </div>
 
@@ -196,7 +214,7 @@
             {{ end }}];
 
         {{ if .UseDataTables }}
-        function setupDataTables(columnDefs, data ) {
+        function setupDataTables(columnDefs, data) {
             $('table').DataTable({
                 "paging": true,
                 "searching": true,
@@ -267,12 +285,12 @@
     });
 </script>
 
-    <!-- This needs to be at the bottom to avoid deadlock,
-         because the row and column channels get populated first -->
-    {{ $hasError := false }}
-    {{ range .ErrorStream }}
+<!-- This needs to be at the bottom to avoid deadlock,
+     because the row and column channels get populated first -->
+{{ $hasError := false }}
+{{ range .ErrorStream }}
     {{ $hasError = true }}
-    <div class="container">
+    <div class="container" id="errorContainer">
         <div class="row">
             <div class="column">
                 <div class="alert alert-danger">
@@ -281,13 +299,17 @@
             </div>
         </div>
     </div>
-    {{ end }}
-    {{ if $hasError }}
+{{ end }}
+{{ if $hasError }}
     <script>
-       // hide #tableContainer
-        document.getElementById("formContainer").style.display = "none";
+        $(document).ready(function () {
+            // move errorContainer right above tableContainer
+            const errorContainer = document.getElementById('errorContainer');
+            const tableContainer = document.getElementById('tableContainer');
+            tableContainer.parentNode.insertBefore(errorContainer, tableContainer);
+        });
     </script>
-    {{ end }}
+{{ end }}
 
 </body>
 </html>

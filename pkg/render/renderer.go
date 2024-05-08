@@ -240,7 +240,7 @@ func (r *Renderer) Render(
 	return nil
 }
 
-func (r *Renderer) HandleWithTemplate(
+func (r *Renderer) HandleWithTemplateMiddleware(
 	path string,
 	templateName string,
 	data map[string]interface{},
@@ -267,7 +267,7 @@ func (r *Renderer) HandleWithTemplate(
 	}
 }
 
-func (r *Renderer) HandleWithTrimPrefix(prefix string, data map[string]interface{}) echo.MiddlewareFunc {
+func (r *Renderer) HandleWithTrimPrefixMiddleware(prefix string, data map[string]interface{}) echo.MiddlewareFunc {
 	prefix = strings.TrimPrefix(prefix, "/")
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {

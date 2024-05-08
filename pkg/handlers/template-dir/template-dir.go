@@ -132,7 +132,7 @@ func (td *TemplateDirHandler) Serve(server *server.Server, path string) error {
 	// The use of a middleware to handle something that could be handled by the routing framework itself
 	// is because gin (which really should get replaced because we actually go against its grain heavily)
 	// does not allow routes to overlap.
-	server.Router.Use(td.renderer.HandleWithTrimPrefix(path, nil))
+	server.Router.Use(td.renderer.HandleWithTrimPrefixMiddleware(path, nil))
 
 	return nil
 }

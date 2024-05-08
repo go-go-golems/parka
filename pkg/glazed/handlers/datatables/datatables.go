@@ -171,30 +171,7 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	description := qh.cmd.Description()
 	parsedLayers := layers.NewParsedLayers()
 
-	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers,
-		append(
-			qh.middlewares,
-			parka_middlewares.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
-			middlewares.SetFromDefaults(),
-		)...,
-	)
-
 	dt_ := qh.dt.Clone()
-	if cm_, ok := qh.cmd.(cmds.CommandWithMetadata); ok {
-		dt_.CommandMetadata, err = cm_.Metadata(c.Request().Context(), parsedLayers)
-	}
-
-	var of formatters.RowOutputFormatter
-	// buffered so that we don't hang on it when exiting
-	dt_.ErrorStream = make(chan string, 1)
-	if dt_.JSRendering {
-		of = json.NewOutputFormatter(json.WithOutputIndividualRows(true))
-		dt_.JSStream = make(chan template.JS, 100)
-	} else {
-		of = table_formatter.NewOutputFormatter("html")
-		dt_.HTMLStream = make(chan template.HTML, 100)
-	}
-
 	// rowC is the channel where the rows are sent to. They will need to get converted
 	// to template.JS or template.HTML before being sent to either
 	rowC := make(chan string, 100)
@@ -204,6 +181,14 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	// about not blocking. Potentially, this could be done by starting a goroutine in the middleware,
 	// since we have a context there, and there is no need to block the middleware processing.
 	columnsC := make(chan []types.FieldName, 10)
+
+	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers,
+		append(
+			qh.middlewares,
+			parka_middlewares.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
+			middlewares.SetFromDefaults(),
+		)...,
+	)
 
 	if err != nil {
 		if dt_.JSStream != nil {
@@ -222,6 +207,25 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 			return err_
 		}
 		return err_
+	}
+
+	// This needs to run after parsing the layers
+	if cm_, ok := qh.cmd.(cmds.CommandWithMetadata); ok {
+		dt_.CommandMetadata, err = cm_.Metadata(c.Request().Context(), parsedLayers)
+		if err != nil {
+			return err
+		}
+	}
+
+	var of formatters.RowOutputFormatter
+	// buffered so that we don't hang on it when exiting
+	dt_.ErrorStream = make(chan string, 1)
+	if dt_.JSRendering {
+		of = json.NewOutputFormatter(json.WithOutputIndividualRows(true))
+		dt_.JSStream = make(chan template.JS, 100)
+	} else {
+		of = table_formatter.NewOutputFormatter("html")
+		dt_.HTMLStream = make(chan template.HTML, 100)
 	}
 
 	// manually create a streaming output TableProcessor
@@ -343,10 +347,7 @@ func (qh *QueryHandler) renderTemplate(
 
 	// Wait for the column names to be sent to the channel. This will only
 	// take the first row into account.
-	columns, ok := <-columnsC
-	if !ok {
-		return fmt.Errorf("no columns received")
-	}
+	columns := <-columnsC
 	dt_.Columns = columns
 
 	// start copying from rowC to HTML or JS stream

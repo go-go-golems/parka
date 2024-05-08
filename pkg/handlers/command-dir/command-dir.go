@@ -264,9 +264,9 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		return sse.CreateQueryHandler(command, middlewares_...)(c)
 	})
 
-	server.Router.GET(path+"/datatables/*path",
+	server.Router.GET(path+"/datatables/*",
 		func(c echo.Context) error {
-			commandPath := c.Param("path")
+			commandPath := c.Param("*")
 			commandPath = strings.TrimPrefix(commandPath, "/")
 
 			// Get repository command

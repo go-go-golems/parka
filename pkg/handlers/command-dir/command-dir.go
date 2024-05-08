@@ -34,7 +34,6 @@ package command_dir
 
 import (
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/clay/pkg/repositories"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
@@ -45,7 +44,10 @@ import (
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
 	parka "github.com/go-go-golems/parka/pkg/server"
+	"github.com/go-go-golems/parka/pkg/utils"
+	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -224,58 +226,55 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 	path = strings.TrimSuffix(path, "/")
 
 	middlewares_ := cd.ParameterFilter.ComputeMiddlewares(cd.Stream)
-	server.Router.GET(path+"/data/*path", func(c *gin.Context) {
+	server.Router.GET(path+"/data/*path", func(c echo.Context) error {
 		commandPath := c.Param("path")
 		commandPath = strings.TrimPrefix(commandPath, "/")
-		command, ok := getRepositoryCommand(c, cd.Repository, commandPath)
-		if !ok {
-			c.JSON(404, gin.H{"error": fmt.Sprintf("command %s not found", commandPath)})
-			return
+		command, err := getRepositoryCommand(c, cd.Repository, commandPath)
+		if err != nil {
+			return err
 		}
 
 		switch v := command.(type) {
 		case cmds.GlazeCommand:
-			json.CreateJSONQueryHandler(v, json.WithMiddlewares(middlewares_...))(c)
+			return json.CreateJSONQueryHandler(v, json.WithMiddlewares(middlewares_...))(c)
 		default:
-			text.CreateQueryHandler(v)(c)
+			return text.CreateQueryHandler(v)(c)
 		}
 	})
 
-	server.Router.GET(path+"/text/*path", func(c *gin.Context) {
+	server.Router.GET(path+"/text/*path", func(c echo.Context) error {
 		commandPath := c.Param("path")
 		commandPath = strings.TrimPrefix(commandPath, "/")
-		command, ok := getRepositoryCommand(c, cd.Repository, commandPath)
-		if !ok {
-			c.JSON(404, gin.H{"error": fmt.Sprintf("command %s not found", commandPath)})
-			return
+		command, err := getRepositoryCommand(c, cd.Repository, commandPath)
+		if err != nil {
+			return err
 		}
 
-		text.CreateQueryHandler(command, middlewares_...)(c)
+		return text.CreateQueryHandler(command, middlewares_...)(c)
 	})
 
-	server.Router.GET(path+"/streaming/*path", func(c *gin.Context) {
+	server.Router.GET(path+"/streaming/*path", func(c echo.Context) error {
 		commandPath := c.Param("path")
 		commandPath = strings.TrimPrefix(commandPath, "/")
-		command, ok := getRepositoryCommand(c, cd.Repository, commandPath)
-		if !ok {
-			c.JSON(404, gin.H{"error": fmt.Sprintf("command %s not found", commandPath)})
-			return
+		command, err := getRepositoryCommand(c, cd.Repository, commandPath)
+		if err != nil {
+			return err
 		}
 
-		sse.CreateQueryHandler(command, middlewares_...)(c)
+		return sse.CreateQueryHandler(command, middlewares_...)(c)
 	})
 
 	server.Router.GET(path+"/datatables/*path",
-		func(c *gin.Context) {
+		func(c echo.Context) error {
 			commandPath := c.Param("path")
 			commandPath = strings.TrimPrefix(commandPath, "/")
 
 			// Get repository command
-			command, ok := getRepositoryCommand(c, cd.Repository, commandPath)
-			if !ok {
-				c.JSON(404, gin.H{"error": fmt.Sprintf("command %s not found", commandPath)})
-				return
+			command, err := getRepositoryCommand(c, cd.Repository, commandPath)
+			if err != nil {
+				return err
 			}
+
 			switch v := command.(type) {
 			case cmds.GlazeCommand:
 				options := []datatables.QueryHandlerOption{
@@ -286,36 +285,33 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 					datatables.WithStreamRows(cd.Stream),
 				}
 
-				datatables.CreateDataTablesHandler(v, path, commandPath, options...)(c)
+				return datatables.CreateDataTablesHandler(v, path, commandPath, options...)(c)
 			default:
-				c.JSON(500, gin.H{"error": fmt.Sprintf("command %s is not a glazed command", commandPath)})
+				return c.JSON(http.StatusInternalServerError, utils.H{"error": fmt.Sprintf("command %s is not a glazed command", commandPath)})
 			}
 		})
 
-	server.Router.GET(path+"/download/*path", func(c *gin.Context) {
+	server.Router.GET(path+"/download/*path", func(c echo.Context) error {
 		path_ := c.Param("path")
 		path_ = strings.TrimPrefix(path_, "/")
 		index := strings.LastIndex(path_, "/")
 		if index == -1 {
-			c.JSON(500, gin.H{"error": "could not find file name"})
-			return
+			return c.JSON(http.StatusInternalServerError, utils.H{"error": "could not find file name"})
 		}
 		if index >= len(path_)-1 {
-			c.JSON(500, gin.H{"error": "could not find file name"})
-			return
+			return c.JSON(http.StatusInternalServerError, utils.H{"error": "could not find file name"})
 		}
 		fileName := path_[index+1:]
 
 		commandPath := strings.TrimPrefix(path_[:index], "/")
-		command, ok := getRepositoryCommand(c, cd.Repository, commandPath)
-		if !ok {
-			// JSON output and error code already handled by getRepositoryCommand
-			return
+		command, err := getRepositoryCommand(c, cd.Repository, commandPath)
+		if err != nil {
+			return err
 		}
 
 		switch v := command.(type) {
 		case cmds.GlazeCommand:
-			output_file.CreateGlazedFileHandler(
+			return output_file.CreateGlazedFileHandler(
 				v,
 				fileName,
 				middlewares_...,
@@ -325,20 +321,22 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 			handler := text.NewQueryHandler(command)
 
 			baseName := filepath.Base(fileName)
-			c.Writer.Header().Set("Content-Disposition", "attachment; filename="+baseName)
+			c.Response().Header().Set("Content-Disposition", "attachment; filename="+baseName)
 
-			err := handler.Handle(c, c.Writer)
+			err := handler.Handle(c)
 			if err != nil {
-				c.JSON(500, gin.H{"error": err.Error()})
-				return
+				return err
 			}
 
+			return nil
+
 		default:
-			c.JSON(500, gin.H{"error": fmt.Sprintf("command %s is not a glazed/writer command", commandPath)})
+			return c.JSON(http.StatusInternalServerError, utils.H{"error": fmt.Sprintf("command %s is not a glazed/writer command", commandPath)})
 		}
+
 	})
 
-	server.Router.GET(path+"/commands/*path", func(c *gin.Context) {
+	server.Router.GET(path+"/commands/*path", func(c echo.Context) error {
 		path_ := c.Param("path")
 		path_ = strings.TrimPrefix(path_, "/")
 		path_ = strings.TrimSuffix(path_, "/")
@@ -348,8 +346,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		}
 		renderNode, ok := cd.Repository.GetRenderNode(splitPath)
 		if !ok {
-			c.JSON(404, gin.H{"error": fmt.Sprintf("command %s not found", path_)})
-			return
+			return errors.Errorf("command %s not found", path_)
 		}
 		templateName := cd.IndexTemplateName
 		if cd.IndexTemplateName == "" {
@@ -357,8 +354,7 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		}
 		templ, err := cd.TemplateLookup.Lookup(templateName)
 		if err != nil {
-			c.JSON(500, gin.H{"error": errors.Wrapf(err, "could not load index template").Error()})
-			return
+			return err
 		}
 
 		var nodes []*repositories.RenderNode
@@ -368,39 +364,63 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, path string) error {
 		} else {
 			nodes = append(nodes, renderNode.Children...)
 		}
-		err = templ.Execute(c.Writer, gin.H{
+		err = templ.Execute(c.Response(), utils.H{
 			"nodes": nodes,
 			"path":  path,
 		})
 		if err != nil {
-			c.JSON(500, gin.H{"error": errors.Wrapf(err, "could not execute index template").Error()})
-			return
+			return err
 		}
+
+		return nil
 	})
 
 	return nil
 }
 
+type CommandNotFound struct {
+	CommandPath string
+}
+
+func (e CommandNotFound) Error() string {
+	return fmt.Sprintf("command %s not found", e.CommandPath)
+}
+
+type AmbiguousCommand struct {
+	CommandPath       string
+	PotentialCommands []string
+}
+
+func (e AmbiguousCommand) Error() string {
+	return fmt.Sprintf("command %s is ambiguous, could be one of: %s", e.CommandPath, strings.Join(e.PotentialCommands, ", "))
+
+}
+
 // getRepositoryCommand lookups a command in the given repository and return success as bool and the given command,
 // or sends an error code over HTTP using the gin.Context.
-func getRepositoryCommand(c *gin.Context, r *repositories.Repository, commandPath string) (
+func getRepositoryCommand(c echo.Context, r *repositories.Repository, commandPath string) (
 	cmds.Command,
-	bool,
+	error,
 ) {
 	path := strings.Split(commandPath, "/")
 	commands := r.CollectCommands(path, false)
 	if len(commands) == 0 {
-		c.JSON(404, gin.H{"error": fmt.Sprintf("command %s not found", commandPath)})
-		return nil, false
+		return nil, CommandNotFound{CommandPath: commandPath}
 	}
 
 	if len(commands) > 1 {
-		c.JSON(404, gin.H{"error": fmt.Sprintf("ambiguous command %s", commandPath)})
-		return nil, false
+		err := &AmbiguousCommand{
+			CommandPath: commandPath,
+		}
+		for _, command := range commands {
+			description := command.Description()
+			err.PotentialCommands = append(err.PotentialCommands, strings.Join(description.Parents, " ")+" "+description.Name)
+		}
+		return nil, err
 	}
 
 	// NOTE(manuel, 2023-05-15) Check if this is actually an alias, and populate the defaults from the alias flags
 	// This could potentially be moved to the repository code itself
 
-	return commands[0], true
+	return commands[0], nil
 }

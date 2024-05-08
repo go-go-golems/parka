@@ -40,7 +40,7 @@ and call Run on the underlying glaze.Command.
 #### CommandHandlerFunc - parsing incoming requests into a command's parameters and layers
 
 This is done through the `CommandHandlerFunc` type, which is a function that
-takes a `*gin.Context` and a `*CommandContext` and is allowed to modify both as
+takes a `echo.Context` and a `*CommandContext` and is allowed to modify both as
 it does its thing.
 
 A `CommandContext` is a struct that has a reference to the `GlazeCommand` and keeps
@@ -53,7 +53,7 @@ necessary to run the glaze command.
 #### CreateProcessorFunc - creating the output formatter
 
 We also have something called a `CreateProcessorFunc`, which is a function that
-takes a `*gin.Context` and a `*CommandContext` and returns a `glaze.Processor`.
+takes a `echo.Context` and a `*CommandContext` and returns a `glaze.Processor`.
 This allows us to override what output formatter is created, depending on the request.
 The default handler will process the parsed parameters for the `glazed` layer, just 
 as it would on the command line. If nothing is set, it would create a JSON output formatter.

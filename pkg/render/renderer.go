@@ -1,7 +1,7 @@
 package render
 
 import (
-	"github.com/gin-gonic/gin"
+	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"html/template"
@@ -167,7 +167,7 @@ func (r *Renderer) LookupTemplate(name ...string) (*template.Template, error) {
 // This could lead to partial writes with an error code of 200 if there is an error rendering the template,
 // not sure if that's exactly what we want.
 func (r *Renderer) Render(
-	c *gin.Context,
+	c echo.Context,
 	page string,
 	data map[string]interface{},
 ) error {
@@ -195,10 +195,10 @@ func (r *Renderer) Render(
 
 	if baseTemplate == nil {
 		// no base template to render the markdown to HTML, so just return the markdown
-		c.Header("Content-Type", "text/plain")
-		c.Status(http.StatusOK)
+		c.Response().Header().Set("Content-Type", "text/plain")
+		c.Response().WriteHeader(http.StatusOK)
 
-		err := t.Execute(c.Writer, data)
+		err := t.Execute(c.Response(), data)
 		if err != nil {
 			return errors.Wrap(err, "error executing template")
 		}
@@ -212,9 +212,9 @@ func (r *Renderer) Render(
 			return errors.Wrap(err, "error rendering markdown")
 		}
 
-		c.Status(http.StatusOK)
+		c.Response().WriteHeader(http.StatusOK)
 		err = baseTemplate.Execute(
-			c.Writer,
+			c.Response(),
 			map[string]interface{}{
 				"markdown": template.HTML(markdown),
 			})
@@ -230,9 +230,9 @@ func (r *Renderer) Render(
 			return &NoPageFoundError{Page: page}
 		}
 
-		c.Status(http.StatusOK)
+		c.Response().WriteHeader(http.StatusOK)
 
-		err := t.Execute(c.Writer, data)
+		err := t.Execute(c.Response(), data)
 		if err != nil {
 			return errors.Wrap(err, "error executing template")
 		}
@@ -241,56 +241,63 @@ func (r *Renderer) Render(
 }
 
 func (r *Renderer) HandleWithTemplate(
+	path string,
 	templateName string,
 	data map[string]interface{},
-) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if c.Writer.Written() {
-			c.Next()
-			return
-		}
-		err := r.Render(c, templateName, data)
-		if err != nil {
-			if _, ok := err.(*NoPageFoundError); ok {
-				c.Next()
-				return
+) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if c.Response().Committed {
+				return next(c)
 			}
-			_ = c.AbortWithError(http.StatusInternalServerError, err)
-			return
+
+			if c.Request().URL.Path == path {
+				err := r.Render(c, templateName, data)
+				if err != nil {
+					if _, ok := err.(*NoPageFoundError); ok {
+						return next(c)
+					}
+					return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+				}
+				return nil
+			}
+
+			return next(c)
 		}
-		c.Status(http.StatusOK)
 	}
 }
 
-func (r *Renderer) Handle(data map[string]interface{}) gin.HandlerFunc {
-	return r.HandleWithTrimPrefix("", data)
-}
-
-func (r *Renderer) HandleWithTrimPrefix(prefix string, data map[string]interface{}) gin.HandlerFunc {
+func (r *Renderer) HandleWithTrimPrefix(prefix string, data map[string]interface{}) echo.MiddlewareFunc {
 	prefix = strings.TrimPrefix(prefix, "/")
-	return func(c *gin.Context) {
-		if c.Writer.Written() {
-			c.Next()
-			return
-		}
-		// check if context is already finished
-		rawPath := c.Request.URL.Path
-		if len(rawPath) > 0 && rawPath[0] == '/' {
-			trimmedPath := rawPath[1:]
-			trimmedPath = strings.TrimPrefix(trimmedPath, prefix)
-			if trimmedPath == "" || strings.HasSuffix(trimmedPath, "/") {
-				trimmedPath += "index"
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if c.Response().Committed {
+				return next(c)
 			}
 
-			err := r.Render(c, trimmedPath, data)
-			if err != nil {
-				if _, ok := err.(*NoPageFoundError); ok {
-					c.Next()
-					return
+			rawPath := c.Request().URL.Path
+
+			if len(rawPath) > 0 && rawPath[0] == '/' {
+				trimmedPath := rawPath[1:]
+				trimmedPath = strings.TrimPrefix(trimmedPath, prefix)
+				if trimmedPath == "" || strings.HasSuffix(trimmedPath, "/") {
+					trimmedPath += "index"
 				}
-				_ = c.AbortWithError(http.StatusInternalServerError, err)
-				return
+
+				err := r.Render(c, trimmedPath, data)
+				if err != nil {
+					if _, ok := err.(*NoPageFoundError); ok {
+						return next(c)
+					}
+					return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+				}
+
+				return nil
 			}
+
+			// TODO(manuel, 2024-05-07) I'm not entirely sure this is the correct way of doing things
+			// this is if the rawPath is empty? I'm not sure I understand the logic here
+			return c.NoContent(http.StatusOK)
 		}
 	}
 }

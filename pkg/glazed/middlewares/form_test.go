@@ -3,13 +3,14 @@ package middlewares
 import (
 	_ "embed"
 	"github.com/go-go-golems/parka/pkg/utils"
+	"github.com/labstack/echo/v4"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/go-go-golems/glazed/pkg/cmds/helpers"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/helpers/yaml"
 
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,17 +36,21 @@ func TestUpdateFromFormQuery(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			// Create a mock gin.Context with the multipart form data
-			gin.SetMode(gin.TestMode)
-			c, _ := utils.MockGinContextWithMultipartForm(tt.Form)
+			req, err := utils.NewRequestWithMultipartForm(tt.Form)
+			require.NoError(t, err)
 
 			// Create ParameterLayers and ParsedLayers from test definitions
 			layers_ := helpers.NewTestParameterLayers(tt.ParameterLayers)
 			parsedLayers := helpers.NewTestParsedLayers(layers_, tt.ParsedLayers...)
 
+			resp := httptest.NewRecorder()
+			e := echo.New()
+
+			c := e.NewContext(req, resp)
+
 			// Create the middleware and execute it
 			middleware := UpdateFromFormQuery(c)
-			err := middleware(func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
+			err = middleware(func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
 				return nil
 			})(layers_, parsedLayers)
 

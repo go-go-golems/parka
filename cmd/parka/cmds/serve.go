@@ -45,7 +45,7 @@ var ServeCmd = &cobra.Command{
 				Str("templateDir", "pkg/web/src/templates").
 				Msg("Using assets from disk")
 			serverOptions = append(serverOptions,
-				server.WithStaticPaths(fs.NewStaticPath(http.FS(os.DirFS("pkg/web/dist")), "/dist")),
+				server.WithStaticPaths(fs.NewStaticPath(os.DirFS("pkg/web/dist"), "/dist")),
 			)
 			defaultLookups = append(defaultLookups, render.NewLookupTemplateFromDirectory("pkg/web/src/templates"))
 		} else {

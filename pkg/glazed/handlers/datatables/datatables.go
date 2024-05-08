@@ -4,7 +4,6 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
@@ -19,6 +18,7 @@ import (
 	parka_middlewares "github.com/go-go-golems/parka/pkg/glazed/middlewares"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/render/layout"
+	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
@@ -167,7 +167,7 @@ func WithStreamRows(streamRows bool) QueryHandlerOption {
 
 var _ handlers.Handler = &QueryHandler{}
 
-func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
+func (qh *QueryHandler) Handle(c echo.Context) error {
 	description := qh.cmd.Description()
 	parsedLayers := layers.NewParsedLayers()
 
@@ -181,7 +181,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 
 	dt_ := qh.dt.Clone()
 	if cm_, ok := qh.cmd.(cmds.CommandWithMetadata); ok {
-		dt_.CommandMetadata, err = cm_.Metadata(c, parsedLayers)
+		dt_.CommandMetadata, err = cm_.Metadata(c.Request().Context(), parsedLayers)
 	}
 
 	var of formatters.RowOutputFormatter
@@ -217,7 +217,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 		columnsC <- []types.FieldName{}
 		close(columnsC)
 		close(rowC)
-		err_ := qh.renderTemplate(parsedLayers, w, dt_, columnsC)
+		err_ := qh.renderTemplate(parsedLayers, c.Response(), dt_, columnsC)
 		if err_ != nil {
 			return err_
 		}
@@ -239,7 +239,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 		gp.AddTableMiddleware(table.NewOutputChannelMiddleware(of, rowC))
 	}
 
-	ctx := c.Request.Context()
+	ctx := c.Request().Context()
 	ctx2, cancel := context.WithCancel(ctx)
 	eg, ctx3 := errgroup.WithContext(ctx2)
 
@@ -298,7 +298,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 
 	eg.Go(func() error {
 		// if qh.Cmd implements cmds.CommandWithMetadata, get Metadata
-		err := qh.renderTemplate(parsedLayers, w, dt_, columnsC)
+		err := qh.renderTemplate(parsedLayers, c.Response(), dt_, columnsC)
 		if err != nil {
 			return err
 		}
@@ -364,8 +364,8 @@ func CreateDataTablesHandler(
 	path string,
 	commandPath string,
 	options ...QueryHandlerOption,
-) gin.HandlerFunc {
-	return func(c *gin.Context) {
+) echo.HandlerFunc {
+	return func(c echo.Context) error {
 		name := cmd.Description().Name
 		dateTime := time.Now().Format("2006-01-02--15-04-05")
 		links := []layout.Link{
@@ -415,9 +415,11 @@ func CreateDataTablesHandler(
 
 		handler := NewQueryHandler(cmd, options_...)
 
-		err := handler.Handle(c, c.Writer)
+		err := handler.Handle(c)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			log.Error().Err(err).Msg("error handling query")
 		}
+
+		return nil
 	}
 }

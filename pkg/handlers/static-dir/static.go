@@ -5,7 +5,6 @@ import (
 	"github.com/go-go-golems/parka/pkg/server"
 	fs2 "github.com/go-go-golems/parka/pkg/utils/fs"
 	"io/fs"
-	"net/http"
 	"os"
 	"strings"
 )
@@ -63,6 +62,6 @@ func (s *StaticDirHandler) Serve(server *server.Server, path string) error {
 	if s.localPath != "" {
 		fs_ = fs2.NewAddPrefixPathFS(s.fs, s.localPath)
 	}
-	server.Router.StaticFS(path, http.FS(fs_))
+	server.Router.StaticFS(path, fs_)
 	return nil
 }

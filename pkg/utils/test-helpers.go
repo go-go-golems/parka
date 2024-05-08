@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-
-	"github.com/gin-gonic/gin"
 )
 
 // QueryParameter holds a key-value pair for a query parameter.
@@ -34,11 +32,11 @@ type File struct {
 	Content string `yaml:"content"`
 }
 
-// MockGinContextWithQueryParameters creates a mock *gin.Context with the
+// NewRequestWithQueryParameters creates a mock echo.Context with the
 // provided query parameters set. It is intended for use in tests.
 //
 // It returns a GET request for the path "/"
-func MockGinContextWithQueryParameters(parameters []QueryParameter) (*gin.Context, error) {
+func NewRequestWithQueryParameters(parameters []QueryParameter) *http.Request {
 	// Create a new HTTP request
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 
@@ -53,20 +51,16 @@ func MockGinContextWithQueryParameters(parameters []QueryParameter) (*gin.Contex
 	// Set the RawQuery field of the request URL
 	req.URL.RawQuery = values.Encode()
 
-	// Create a new gin context with the request
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Request = req
-
-	return c, nil
+	return req
 }
 
-// MockGinContextWithMultipartForm creates a mock gin.Context populated
+// NewRequestWithMultipartForm creates a mock gin.Context populated
 // with the provided multipart form data. It constructs the multipart
 // form, attaches it to a mock request, and creates a gin.Context using
 // that request. Returns the created context and any error.
 //
 // The request is a POST request to "/" with the provided form data.
-func MockGinContextWithMultipartForm(form MultipartForm) (*gin.Context, error) {
+func NewRequestWithMultipartForm(form MultipartForm) (*http.Request, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -99,8 +93,5 @@ func MockGinContextWithMultipartForm(form MultipartForm) (*gin.Context, error) {
 
 	req := httptest.NewRequest("POST", "/", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Request = req
-	return c, nil
+	return req, nil
 }

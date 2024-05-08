@@ -2,14 +2,14 @@ package middlewares
 
 import (
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/labstack/echo/v4"
 	"strings"
 )
 
-func UpdateFromQueryParameters(c *gin.Context, options ...parameters.ParseStepOption) middlewares.Middleware {
+func UpdateFromQueryParameters(c echo.Context, options ...parameters.ParseStepOption) middlewares.Middleware {
 	return func(next middlewares.HandlerFunc) middlewares.HandlerFunc {
 		return func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
 			err := next(layers_, parsedLayers)
@@ -28,7 +28,7 @@ func UpdateFromQueryParameters(c *gin.Context, options ...parameters.ParseStepOp
 
 					if p.Type.IsList() {
 						// check p.Name[] parameter
-						values, ok := c.GetQueryArray(fmt.Sprintf("%s[]", p.Name))
+						values, ok := c.QueryParams()[fmt.Sprintf("%s[]", p.Name)]
 						if ok {
 							// TODO(manuel, 2023-12-25) Need to pass in options to ParseParameter
 							pp, err := p.ParseParameter(values, options...)
@@ -39,8 +39,8 @@ func UpdateFromQueryParameters(c *gin.Context, options ...parameters.ParseStepOp
 							return nil
 						}
 					}
-					value, ok := c.GetQuery(p.Name)
-					if !ok || value == "" {
+					value := c.QueryParam(p.Name)
+					if value == "" {
 						if p.Required {
 							return fmt.Errorf("required parameter '%s' is missing", p.Name)
 						}

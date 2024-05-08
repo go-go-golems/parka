@@ -6,9 +6,10 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/helpers/yaml"
 	"github.com/go-go-golems/parka/pkg/utils"
+	"github.com/labstack/echo/v4"
+	"net/http/httptest"
 	"testing"
 
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -34,13 +35,16 @@ func TestUpdateFromQueryParameters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			// Create a mock gin.Context with the multipart form data
-			gin.SetMode(gin.TestMode)
-			c, _ := utils.MockGinContextWithQueryParameters(tt.QueryParameters)
+			req := utils.NewRequestWithQueryParameters(tt.QueryParameters)
 
 			// Create ParameterLayers and ParsedLayers from test definitions
 			layers_ := helpers.NewTestParameterLayers(tt.ParameterLayers)
 			parsedLayers := helpers.NewTestParsedLayers(layers_, tt.ParsedLayers...)
+
+			resp := httptest.NewRecorder()
+			e := echo.New()
+			e.ServeHTTP(resp, req)
+			c := e.NewContext(req, resp)
 
 			// Create the middleware and execute it
 			middleware := UpdateFromQueryParameters(c)

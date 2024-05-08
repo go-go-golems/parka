@@ -1,7 +1,6 @@
 package command
 
 import (
-	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/alias"
 	"github.com/go-go-golems/glazed/pkg/cmds/loaders"
@@ -11,7 +10,10 @@ import (
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
 	parka "github.com/go-go-golems/parka/pkg/server"
+	"github.com/go-go-golems/parka/pkg/utils"
+	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
+	"net/http"
 	"os"
 	"strings"
 )
@@ -228,14 +230,14 @@ func (ch *CommandHandler) Serve(server *parka.Server, path string) error {
 
 	middlewares_ := ch.ParameterFilter.ComputeMiddlewares(ch.Stream)
 
-	server.Router.GET(path+"/data", func(c *gin.Context) {
+	server.Router.GET(path+"/data", func(c echo.Context) error {
 		options := []json.QueryHandlerOption{
 			json.WithMiddlewares(middlewares_...),
 		}
-		json.CreateJSONQueryHandler(ch.Command, options...)(c)
+		return json.CreateJSONQueryHandler(ch.Command, options...)(c)
 	})
 	// TODO(manuel, 2024-01-17) This doesn't seem to match what is in command-dir
-	server.Router.GET(path+"/glazed", func(c *gin.Context) {
+	server.Router.GET(path+"/glazed", func(c echo.Context) error {
 		options := []datatables.QueryHandlerOption{
 			datatables.WithMiddlewares(middlewares_...),
 			datatables.WithTemplateLookup(ch.TemplateLookup),
@@ -244,23 +246,21 @@ func (ch *CommandHandler) Serve(server *parka.Server, path string) error {
 			datatables.WithStreamRows(ch.Stream),
 		}
 
-		datatables.CreateDataTablesHandler(ch.Command, path, "", options...)(c)
+		return datatables.CreateDataTablesHandler(ch.Command, path, "", options...)(c)
 	})
-	server.Router.GET(path+"/download/*path", func(c *gin.Context) {
+	server.Router.GET(path+"/download/*path", func(c echo.Context) error {
 		path_ := c.Param("path")
 		path_ = strings.TrimPrefix(path_, "/")
 		index := strings.LastIndex(path_, "/")
 		if index == -1 {
-			c.JSON(500, gin.H{"error": "could not find file name"})
-			return
+			return c.JSON(http.StatusInternalServerError, utils.H{"error": "could not find file name"})
 		}
 		if index >= len(path_)-1 {
-			c.JSON(500, gin.H{"error": "could not find file name"})
-			return
+			return c.JSON(http.StatusInternalServerError, utils.H{"error": "could not find file name"})
 		}
 		fileName := path_[index+1:]
 
-		output_file.CreateGlazedFileHandler(
+		return output_file.CreateGlazedFileHandler(
 			ch.Command,
 			fileName,
 			middlewares_...,

@@ -86,7 +86,7 @@ func NewTemplateHandlerFromConfig(
 }
 
 func (t *TemplateHandler) Serve(server_ *server.Server, path string) error {
-	server_.Router.Handle("GET", path, t.renderer.HandleWithTrimPrefix("", nil))
+	server_.Router.Pre(t.renderer.HandleWithTrimPrefix(path, nil))
 
 	return nil
 }

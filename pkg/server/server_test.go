@@ -2,7 +2,6 @@ package server_test
 
 import (
 	"encoding/json"
-	"github.com/gin-gonic/gin"
 	json2 "github.com/go-go-golems/parka/pkg/glazed/handlers/json"
 	"github.com/go-go-golems/parka/pkg/server"
 	"github.com/go-go-golems/parka/pkg/utils"
@@ -22,8 +21,6 @@ func TestRunGlazedCommand(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := json2.CreateJSONQueryHandler(tc)
-
-	gin.SetMode(gin.TestMode)
 
 	s.Router.GET("/test", handler)
 

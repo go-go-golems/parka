@@ -262,14 +262,6 @@ func (r *Renderer) WithTemplateHandler(path string, templateName string, data ma
 	}
 }
 
-func (r *Renderer) WithTemplateMiddleware(
-	path string,
-	templateName string,
-	data map[string]interface{},
-) echo.MiddlewareFunc {
-	return utils.WithPathPrefixMiddleware(path, r.WithTemplateHandler(path, templateName, data))
-}
-
 func (r *Renderer) WithTrimPrefixHandler(prefix string, data map[string]interface{}) echo.HandlerFunc {
 	prefix = strings.TrimPrefix(prefix, "/")
 	return func(c echo.Context) error {
@@ -294,8 +286,4 @@ func (r *Renderer) WithTrimPrefixHandler(prefix string, data map[string]interfac
 		// this is if the rawPath is empty? I'm not sure I understand the logic here
 		return c.NoContent(http.StatusOK)
 	}
-}
-
-func (r *Renderer) WithTrimPrefixMiddleware(path string, prefix string, data map[string]interface{}) echo.MiddlewareFunc {
-	return utils.WithPathPrefixMiddleware(path, r.WithTrimPrefixHandler(prefix, data))
 }

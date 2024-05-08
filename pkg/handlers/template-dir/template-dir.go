@@ -129,6 +129,5 @@ func NewTemplateDirHandlerFromConfig(td *config.TemplateDir, options ...Template
 
 func (td *TemplateDirHandler) Serve(server *server.Server, path string) error {
 	server.Router.GET(path+"/:page", td.renderer.WithTrimPrefixHandler("", nil))
-
 	return nil
 }

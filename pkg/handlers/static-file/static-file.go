@@ -3,7 +3,7 @@ package static_file
 import (
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/server"
-	fs2 "github.com/go-go-golems/parka/pkg/utils/fs"
+	"github.com/labstack/echo/v4"
 	"io/fs"
 	"os"
 	"strings"
@@ -56,6 +56,6 @@ func NewStaticFileHandlerFromConfig(shf *config.StaticFile, options ...StaticFil
 }
 
 func (s *StaticFileHandler) Serve(server *server.Server, path string) error {
-	server.Router.StaticFS(path, fs2.NewEmbedFileSystem(s.fs, s.localPath))
+	server.Router.StaticFS(path, echo.MustSubFS(s.fs, s.localPath))
 	return nil
 }

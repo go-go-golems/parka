@@ -86,7 +86,12 @@ func NewTemplateHandlerFromConfig(
 }
 
 func (t *TemplateHandler) Serve(server_ *server.Server, path string) error {
-	server_.Router.GET(path, t.renderer.WithTrimPrefixHandler("", nil))
+	templateName := strings.TrimSuffix(strings.TrimPrefix(path, "/"), ".tmpl.md")
+	templateName = strings.TrimPrefix(templateName, ".md")
+	if strings.HasSuffix(path, "/") {
+		templateName = "index"
+	}
+	server_.Router.GET(path, t.renderer.WithTemplateHandler(templateName, nil))
 
 	return nil
 }

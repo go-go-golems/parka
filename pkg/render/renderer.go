@@ -241,32 +241,19 @@ func (r *Renderer) Render(
 	return nil
 }
 
-func (r *Renderer) WithTemplateHandler(path string, templateName string, data map[string]interface{}) echo.HandlerFunc {
+func (r *Renderer) WithTemplateHandler(templateName string, data map[string]interface{}) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		if c.Response().Committed {
-			return nil
-		}
-
-		if c.Request().URL.Path == path {
-			err := r.Render(c, templateName, data)
-			if err != nil {
-				if _, ok := err.(*utils.NoPageFoundError); ok {
-					return c.NoContent(http.StatusNotFound)
-				}
-				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-			}
-			return nil
-		}
-
-		return c.NoContent(http.StatusOK)
+		return r.Render(c, templateName, data)
 	}
 }
 
 func (r *Renderer) WithTrimPrefixHandler(prefix string, data map[string]interface{}) echo.HandlerFunc {
 	prefix = strings.TrimPrefix(prefix, "/")
 	return func(c echo.Context) error {
-		rawPath := c.Request().URL.Path
 
+		rawPath := c.Request().URL.Path
+		rawPath_ := c.Param("*")
+		_ = rawPath_
 		if len(rawPath) > 0 && rawPath[0] == '/' {
 			trimmedPath := rawPath[1:]
 			trimmedPath = strings.TrimPrefix(trimmedPath, prefix)

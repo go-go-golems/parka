@@ -8,6 +8,7 @@ import (
 	"github.com/go-go-golems/parka/pkg/server"
 	"io/fs"
 	"path/filepath"
+	"strings"
 )
 
 // TODO(manuel, 2023-05-28) Add a proper Handler interface that also
@@ -128,6 +129,7 @@ func NewTemplateDirHandlerFromConfig(td *config.TemplateDir, options ...Template
 }
 
 func (td *TemplateDirHandler) Serve(server *server.Server, path string) error {
-	server.Router.GET(path+"/:page", td.renderer.WithTrimPrefixHandler("", nil))
+	path = strings.TrimPrefix(path, "/")
+	server.Router.GET(path+"/*", td.renderer.WithTrimPrefixHandler(path, nil))
 	return nil
 }

@@ -128,11 +128,7 @@ func NewTemplateDirHandlerFromConfig(td *config.TemplateDir, options ...Template
 }
 
 func (td *TemplateDirHandler) Serve(server *server.Server, path string) error {
-	// TODO(manuel, 2023-05-26) This is a hack because we currently mix and match content with commands.
-	// The use of a middleware to handle something that could be handled by the routing framework itself
-	// is because gin (which really should get replaced because we actually go against its grain heavily)
-	// does not allow routes to overlap.
-	server.Router.Use(td.renderer.HandleWithTrimPrefixMiddleware(path, nil))
+	server.Router.GET(path+"/:page", td.renderer.WithTrimPrefixHandler("", nil))
 
 	return nil
 }

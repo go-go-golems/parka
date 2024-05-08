@@ -1,6 +1,7 @@
 package render
 
 import (
+	"github.com/go-go-golems/parka/pkg/utils"
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -227,7 +228,7 @@ func (r *Renderer) Render(
 			return errors.Wrap(err, "error looking up template")
 		}
 		if t == nil {
-			return &NoPageFoundError{Page: page}
+			return &utils.NoPageFoundError{Page: page}
 		}
 
 		c.Response().WriteHeader(http.StatusOK)
@@ -240,64 +241,61 @@ func (r *Renderer) Render(
 	return nil
 }
 
-func (r *Renderer) HandleWithTemplateMiddleware(
+func (r *Renderer) WithTemplateHandler(path string, templateName string, data map[string]interface{}) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		if c.Response().Committed {
+			return nil
+		}
+
+		if c.Request().URL.Path == path {
+			err := r.Render(c, templateName, data)
+			if err != nil {
+				if _, ok := err.(*utils.NoPageFoundError); ok {
+					return c.NoContent(http.StatusNotFound)
+				}
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+			return nil
+		}
+
+		return c.NoContent(http.StatusOK)
+	}
+}
+
+func (r *Renderer) WithTemplateMiddleware(
 	path string,
 	templateName string,
 	data map[string]interface{},
 ) echo.MiddlewareFunc {
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			if c.Response().Committed {
-				return next(c)
+	return utils.WithPathPrefixMiddleware(path, r.WithTemplateHandler(path, templateName, data))
+}
+
+func (r *Renderer) WithTrimPrefixHandler(prefix string, data map[string]interface{}) echo.HandlerFunc {
+	prefix = strings.TrimPrefix(prefix, "/")
+	return func(c echo.Context) error {
+		rawPath := c.Request().URL.Path
+
+		if len(rawPath) > 0 && rawPath[0] == '/' {
+			trimmedPath := rawPath[1:]
+			trimmedPath = strings.TrimPrefix(trimmedPath, prefix)
+			if trimmedPath == "" || strings.HasSuffix(trimmedPath, "/") {
+				trimmedPath += "index"
 			}
 
-			if c.Request().URL.Path == path {
-				err := r.Render(c, templateName, data)
-				if err != nil {
-					if _, ok := err.(*NoPageFoundError); ok {
-						return next(c)
-					}
-					return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-				}
-				return nil
+			err := r.Render(c, trimmedPath, data)
+			if err != nil {
+				return err
 			}
 
-			return next(c)
+			return nil
 		}
+
+		// TODO(manuel, 2024-05-07) I'm not entirely sure this is the correct way of doing things
+		// this is if the rawPath is empty? I'm not sure I understand the logic here
+		return c.NoContent(http.StatusOK)
 	}
 }
 
-func (r *Renderer) HandleWithTrimPrefixMiddleware(prefix string, data map[string]interface{}) echo.MiddlewareFunc {
-	prefix = strings.TrimPrefix(prefix, "/")
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			if c.Response().Committed {
-				return next(c)
-			}
-
-			rawPath := c.Request().URL.Path
-
-			if len(rawPath) > 0 && rawPath[0] == '/' {
-				trimmedPath := rawPath[1:]
-				trimmedPath = strings.TrimPrefix(trimmedPath, prefix)
-				if trimmedPath == "" || strings.HasSuffix(trimmedPath, "/") {
-					trimmedPath += "index"
-				}
-
-				err := r.Render(c, trimmedPath, data)
-				if err != nil {
-					if _, ok := err.(*NoPageFoundError); ok {
-						return next(c)
-					}
-					return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-				}
-
-				return nil
-			}
-
-			// TODO(manuel, 2024-05-07) I'm not entirely sure this is the correct way of doing things
-			// this is if the rawPath is empty? I'm not sure I understand the logic here
-			return c.NoContent(http.StatusOK)
-		}
-	}
+func (r *Renderer) WithTrimPrefixMiddleware(path string, prefix string, data map[string]interface{}) echo.MiddlewareFunc {
+	return utils.WithPathPrefixMiddleware(path, r.WithTrimPrefixHandler(prefix, data))
 }

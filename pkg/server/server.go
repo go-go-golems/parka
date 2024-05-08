@@ -213,8 +213,8 @@ func (s *Server) Run(ctx context.Context) error {
 
 	// match all remaining paths to the templates
 	if s.DefaultRenderer != nil {
-		s.Router.Pre(s.DefaultRenderer.HandleWithTemplateMiddleware("/", "index", nil))
-		s.Router.Pre(s.DefaultRenderer.HandleWithTrimPrefixMiddleware("", nil))
+		s.Router.GET("/", s.DefaultRenderer.WithTemplateHandler("/", "index", nil))
+		s.Router.GET("/:path", s.DefaultRenderer.WithTemplateHandler("/", "index", nil))
 	}
 
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)

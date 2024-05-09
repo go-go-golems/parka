@@ -300,11 +300,7 @@ func (cfh *ConfigFileHandler) Serve(server_ *server.Server) error {
 		}
 
 		if route.Template != nil {
-			th, err := template.NewTemplateHandlerFromConfig(
-				route.Path,
-				route.Template,
-				cfh.TemplateOptions...,
-			)
+			th, err := template.NewTemplateHandlerFromConfig(route.Template, cfh.TemplateOptions...)
 			if err != nil {
 				return err
 			}

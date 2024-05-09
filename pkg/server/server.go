@@ -213,8 +213,9 @@ func (s *Server) Run(ctx context.Context) error {
 
 	// match all remaining paths to the templates
 	if s.DefaultRenderer != nil {
-		s.Router.GET("/", s.DefaultRenderer.WithTemplateHandler("index", nil))
-		s.Router.GET("/*", s.DefaultRenderer.WithTrimPrefixHandler("", nil))
+		// TODO(manuel, 2024-05-08) I don't think we even need the explicit index mapping
+		//s.Router.GET("/", s.DefaultRenderer.WithTemplateHandler("index", nil))
+		s.Router.GET("/*", s.DefaultRenderer.WithTemplateDirHandler(nil))
 	}
 
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)

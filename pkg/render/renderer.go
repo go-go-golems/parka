@@ -169,7 +169,7 @@ func (r *Renderer) LookupTemplate(name ...string) (*template.Template, error) {
 // not sure if that's exactly what we want.
 func (r *Renderer) Render(
 	c echo.Context,
-	page string,
+	templateName string,
 	data map[string]interface{},
 ) error {
 	// first, merge the data we want to pass to the templates, with the data passed in overridding
@@ -184,7 +184,7 @@ func (r *Renderer) Render(
 
 	// TODO(manuel, 2023-05-26) Don't render plain files as templates
 	// See https://github.com/go-go-golems/parka/issues/47
-	t, err := r.LookupTemplate(page+".tmpl.md", page+".md", page)
+	t, err := r.LookupTemplate(templateName+".tmpl.md", templateName+".md", templateName)
 	if err != nil {
 		return errors.Wrap(err, "error looking up template")
 	}
@@ -223,12 +223,12 @@ func (r *Renderer) Render(
 			return errors.Wrap(err, "error executing base template")
 		}
 	} else {
-		t, err = r.LookupTemplate(page+".tmpl.html", page+".html")
+		t, err = r.LookupTemplate(templateName+".tmpl.html", templateName+".html")
 		if err != nil {
 			return errors.Wrap(err, "error looking up template")
 		}
 		if t == nil {
-			return &utils.NoPageFoundError{Page: page}
+			return &utils.NoPageFoundError{Page: templateName}
 		}
 
 		c.Response().WriteHeader(http.StatusOK)
@@ -247,30 +247,18 @@ func (r *Renderer) WithTemplateHandler(templateName string, data map[string]inte
 	}
 }
 
-func (r *Renderer) WithTrimPrefixHandler(prefix string, data map[string]interface{}) echo.HandlerFunc {
-	prefix = strings.TrimPrefix(prefix, "/")
+func (r *Renderer) WithTemplateDirHandler(data map[string]interface{}) echo.HandlerFunc {
 	return func(c echo.Context) error {
-
-		rawPath := c.Request().URL.Path
-		rawPath_ := c.Param("*")
-		_ = rawPath_
-		if len(rawPath) > 0 && rawPath[0] == '/' {
-			trimmedPath := rawPath[1:]
-			trimmedPath = strings.TrimPrefix(trimmedPath, prefix)
-			if trimmedPath == "" || strings.HasSuffix(trimmedPath, "/") {
-				trimmedPath += "index"
-			}
-
-			err := r.Render(c, trimmedPath, data)
-			if err != nil {
-				return err
-			}
-
-			return nil
+		path := c.Param("*")
+		if path == "" || strings.HasSuffix(path, "/") {
+			path += "index"
 		}
 
-		// TODO(manuel, 2024-05-07) I'm not entirely sure this is the correct way of doing things
-		// this is if the rawPath is empty? I'm not sure I understand the logic here
-		return c.NoContent(http.StatusOK)
+		err := r.Render(c, path, data)
+		if err != nil {
+			return err
+		}
+
+		return nil
 	}
 }

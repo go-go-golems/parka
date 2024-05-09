@@ -5,7 +5,6 @@ import (
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/server"
 	"io/fs"
-	"strings"
 )
 
 type TemplateHandler struct {
@@ -49,11 +48,7 @@ func NewTemplateHandler(templateFile string, options ...TemplateHandlerOption) *
 	return handler
 }
 
-func NewTemplateHandlerFromConfig(
-	path string,
-	t *config.Template,
-	options ...TemplateHandlerOption,
-) (*TemplateHandler, error) {
+func NewTemplateHandlerFromConfig(t *config.Template, options ...TemplateHandlerOption) (*TemplateHandler, error) {
 	handler := &TemplateHandler{
 		TemplateFile: t.TemplateFile,
 	}
@@ -61,12 +56,10 @@ func NewTemplateHandlerFromConfig(
 		option(handler)
 	}
 
-	path = strings.TrimPrefix(path, "/")
-	if path == "" || strings.HasSuffix(path, "/") {
-		path += "index.tmpl.md"
-	}
-
-	templateLookup := render.NewLookupTemplateFromFile(handler.TemplateFile, path)
+	// the template name used to lookup the template is the template file path. We do need to specify
+	// a template name because we are also using the lookup to get the base template to render markdown files.
+	templateLookup := render.NewLookupTemplateFromFile(handler.TemplateFile, handler.TemplateFile)
+	// TODO(manuel, 2024-05-09) In dev mode, we want to watch the template file and reload when it changes
 	err := templateLookup.Reload()
 	if err != nil {
 		return nil, err
@@ -86,12 +79,7 @@ func NewTemplateHandlerFromConfig(
 }
 
 func (t *TemplateHandler) Serve(server_ *server.Server, path string) error {
-	templateName := strings.TrimSuffix(strings.TrimPrefix(path, "/"), ".tmpl.md")
-	templateName = strings.TrimPrefix(templateName, ".md")
-	if strings.HasSuffix(path, "/") {
-		templateName = "index"
-	}
-	server_.Router.GET(path, t.renderer.WithTemplateHandler(templateName, nil))
+	server_.Router.GET(path, t.renderer.WithTemplateHandler(t.TemplateFile, nil))
 
 	return nil
 }

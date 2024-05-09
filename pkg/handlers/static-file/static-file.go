@@ -3,8 +3,8 @@ package static_file
 import (
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/server"
+	"github.com/labstack/echo/v4"
 	"io/fs"
-	"net/http"
 	"os"
 	"strings"
 )
@@ -56,10 +56,6 @@ func NewStaticFileHandlerFromConfig(shf *config.StaticFile, options ...StaticFil
 }
 
 func (s *StaticFileHandler) Serve(server *server.Server, path string) error {
-	server.Router.StaticFileFS(
-		path,
-		s.localPath,
-		http.FS(s.fs),
-	)
+	server.Router.StaticFS(path, echo.MustSubFS(s.fs, s.localPath))
 	return nil
 }

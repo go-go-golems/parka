@@ -1,7 +1,6 @@
 package text
 
 import (
-	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
@@ -10,10 +9,8 @@ import (
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
 	parka_middlewares "github.com/go-go-golems/parka/pkg/glazed/middlewares"
+	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
-	"io"
-	"net/http"
 )
 
 type QueryHandler struct {
@@ -43,7 +40,7 @@ func WithMiddlewares(middlewares ...middlewares.Middleware) QueryHandlerOption {
 
 var _ handlers.Handler = (*QueryHandler)(nil)
 
-func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
+func (h *QueryHandler) Handle(c echo.Context) error {
 	description := h.cmd.Description()
 	parsedLayers := layers.NewParsedLayers()
 
@@ -57,12 +54,12 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 	if err != nil {
 		return err
 	}
-	c.Header("Content-Type", "text/plain; charset=utf-8")
+	c.Response().Header().Set("Content-Type", "text/plain; charset=utf-8")
 
-	ctx := c.Request.Context()
+	ctx := c.Request().Context()
 	switch cmd := h.cmd.(type) {
 	case cmds.WriterCommand:
-		err := cmd.RunIntoWriter(ctx, parsedLayers, writer)
+		err := cmd.RunIntoWriter(ctx, parsedLayers, c.Response())
 		if err != nil {
 			return err
 		}
@@ -87,7 +84,7 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 			return err
 		}
 
-		gp.AddTableMiddleware(table.NewOutputMiddleware(of, writer))
+		gp.AddTableMiddleware(table.NewOutputMiddleware(of, c.Response()))
 
 		err = cmd.RunIntoGlazeProcessor(ctx, parsedLayers, gp)
 		if err != nil {
@@ -114,17 +111,9 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 func CreateQueryHandler(
 	cmd cmds.Command,
 	middlewares_ ...middlewares.Middleware,
-) gin.HandlerFunc {
+) echo.HandlerFunc {
 	handler := NewQueryHandler(cmd,
 		WithMiddlewares(middlewares_...),
 	)
-	return func(c *gin.Context) {
-		err := handler.Handle(c, c.Writer)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to handle query")
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-		}
-	}
+	return handler.Handle
 }

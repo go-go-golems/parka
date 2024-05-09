@@ -4,10 +4,10 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	"github.com/gin-gonic/contrib/gzip"
-	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/parka/pkg/render"
 	utils_fs "github.com/go-go-golems/parka/pkg/utils/fs"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"golang.org/x/sync/errgroup"
 	"io/fs"
 	"net/http"
@@ -29,7 +29,7 @@ var distFS embed.FS
 // Router is the gin.Engine that is used to serve the content, and it is exposed so that you
 // can use it as just a gin.Engine if you want to.
 type Server struct {
-	Router *gin.Engine
+	Router *echo.Echo
 
 	// TODO(manuel, 2023-06-05) This should become a standard Static handler to be added to the Routes
 	StaticPaths []utils_fs.StaticPath
@@ -143,7 +143,7 @@ func WithDefaultParkaRenderer(options ...render.RendererOption) ServerOption {
 	return WithDefaultRenderer(renderer)
 }
 
-func GetParkaStaticHttpFS() http.FileSystem {
+func GetParkaStaticHttpFS() fs.FS {
 	return utils_fs.NewEmbedFileSystem(distFS, "web/dist")
 }
 
@@ -159,7 +159,7 @@ func WithDefaultParkaStaticPaths() ServerOption {
 
 func WithGzip() ServerOption {
 	return func(s *Server) error {
-		s.Router.Use(gzip.Gzip(gzip.DefaultCompression))
+		s.Router.Use(middleware.Gzip())
 		return nil
 	}
 }
@@ -169,7 +169,7 @@ func WithGzip() ServerOption {
 // These files provide tailwind support for Markdown rendering and a standard index and base page template.
 // NOTE(manuel, 2023-04-16) This is definitely ripe to be removed.
 func NewServer(options ...ServerOption) (*Server, error) {
-	router := gin.Default()
+	router := echo.New()
 
 	s := &Server{
 		Router:      router,
@@ -201,9 +201,7 @@ func (s *Server) RegisterDebugRoutes() {
 	for route, handler := range handlers_ {
 		route_ := route
 		handler_ := handler
-		s.Router.GET(route_, func(c *gin.Context) {
-			handler_(c.Writer, c.Request)
-		})
+		s.Router.GET(route_, echo.WrapHandler(handler_))
 	}
 }
 
@@ -215,8 +213,9 @@ func (s *Server) Run(ctx context.Context) error {
 
 	// match all remaining paths to the templates
 	if s.DefaultRenderer != nil {
-		s.Router.GET("/", s.DefaultRenderer.HandleWithTemplate("index", nil))
-		s.Router.Use(s.DefaultRenderer.Handle(nil))
+		// TODO(manuel, 2024-05-08) I don't think we even need the explicit index mapping
+		//s.Router.GET("/", s.DefaultRenderer.WithTemplateHandler("index", nil))
+		s.Router.GET("/*", s.DefaultRenderer.WithTemplateDirHandler(nil))
 	}
 
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
@@ -238,4 +237,23 @@ func (s *Server) Run(ctx context.Context) error {
 	})
 
 	return eg.Wait()
+}
+
+func CustomHTTPErrorHandler(err error, c echo.Context) {
+	code := http.StatusInternalServerError
+	if he, ok := err.(*echo.HTTPError); ok {
+		code = he.Code
+	}
+
+	// Create a custom error response
+	errorResponse := map[string]interface{}{
+		"error": err.Error(),
+	}
+
+	// Send the custom error response
+	if !c.Response().Committed {
+		_ = c.JSON(code, errorResponse)
+	}
+
+	c.Logger().Error(err)
 }

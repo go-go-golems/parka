@@ -1,63 +1,23 @@
 package output_file
 
 import (
-	"bytes"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/helpers/list"
 	"github.com/go-go-golems/glazed/pkg/settings"
-	"github.com/go-go-golems/parka/pkg/glazed/handlers"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/glazed"
 	parka_middlewares "github.com/go-go-golems/parka/pkg/glazed/middlewares"
+	"github.com/labstack/echo/v4"
+	"github.com/pkg/errors"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 )
-
-type OutputFileHandler struct {
-	handler        handlers.Handler
-	outputFileName string
-}
-
-func NewOutputFileHandler(handler handlers.Handler, outputFileName string) *OutputFileHandler {
-	h := &OutputFileHandler{
-		handler:        handler,
-		outputFileName: outputFileName,
-	}
-
-	return h
-}
-
-var _ handlers.Handler = (*OutputFileHandler)(nil)
-
-func (h *OutputFileHandler) Handle(c *gin.Context, w io.Writer) error {
-	buf := &bytes.Buffer{}
-	err := h.handler.Handle(c, buf)
-	if err != nil {
-		return err
-	}
-
-	c.Status(200)
-
-	f, err := os.Open(h.outputFileName)
-	if err != nil {
-		return err
-	}
-	defer func(f *os.File) {
-		_ = f.Close()
-	}(f)
-
-	_, err = io.Copy(c.Writer, f)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
 
 // CreateGlazedFileHandler creates a handler that will run a glazed command and write the output
 // with a Content-Disposition header to the response writer.
@@ -68,8 +28,8 @@ func CreateGlazedFileHandler(
 	cmd cmds.GlazeCommand,
 	fileName string,
 	middlewares_ ...middlewares.Middleware,
-) gin.HandlerFunc {
-	return func(c *gin.Context) {
+) echo.HandlerFunc {
+	return func(c echo.Context) error {
 		glazedOverrides := map[string]interface{}{}
 		needsRealFileOutput := false
 
@@ -97,27 +57,11 @@ func CreateGlazedFileHandler(
 			glazedOverrides["output"] = "table"
 			glazedOverrides["table-format"] = "ascii"
 		} else {
-			c.JSON(500, gin.H{"error": "could not determine output format"})
-			return
+			return errors.New("unsupported file format")
 		}
 
 		var tmpFile *os.File
 		var err error
-
-		// excel output needs a real output file, otherwise we can go stream to the HTTP response
-		if needsRealFileOutput {
-			tmpFile, err = os.CreateTemp("/tmp", fmt.Sprintf("glazed-output-*.%s", fileName))
-			if err != nil {
-				c.JSON(500, gin.H{"error": "could not create temporary file"})
-				return
-			}
-			defer func(name string) {
-				_ = os.Remove(name)
-			}(tmpFile.Name())
-
-			// now check file suffix for content-type
-			glazedOverrides["output-file"] = tmpFile.Name()
-		}
 
 		glazedOverride := middlewares.UpdateFromMap(
 			map[string]map[string]interface{}{
@@ -134,25 +78,55 @@ func CreateGlazedFileHandler(
 			))
 
 		baseName := filepath.Base(fileName)
-		c.Writer.Header().Set("Content-Disposition", "attachment; filename="+baseName)
+		c.Response().Header().Set("Content-Disposition", "attachment; filename="+baseName)
 
+		// excel output needs a real output file, otherwise we can go stream to the HTTP response
 		if needsRealFileOutput {
-			outputFileHandler := NewOutputFileHandler(handler, tmpFile.Name())
-
-			err = outputFileHandler.Handle(c, c.Writer)
+			tmpFile, err = os.CreateTemp("/tmp", fmt.Sprintf("glazed-output-*.%s", fileName))
 			if err != nil {
-				c.JSON(500, gin.H{"error": err.Error()})
-				return
+				return errors.Wrap(err, "could not create temporary file")
+			}
+			defer func(name string) {
+				_ = os.Remove(name)
+			}(tmpFile.Name())
+
+			// now check file suffix for content-type
+			glazedOverrides["output-file"] = tmpFile.Name()
+
+			// here we have the output of the handler go to a request that we discard, and
+			// we instead copy the temporary file to the response writer
+			res := httptest.NewRecorder()
+			req := c.Request()
+			newCtx := c.Echo().NewContext(req, res)
+
+			err = handler.Handle(newCtx)
+			if err != nil {
+				return err
+			}
+
+			// copy tmpFile to output
+			f, err := os.Open(tmpFile.Name())
+			if err != nil {
+				return errors.Wrap(err, "could not open temporary file")
+			}
+			defer func(f *os.File) {
+				_ = f.Close()
+			}(f)
+
+			c.Response().Header().Set("Content-Type", "application/octet-stream")
+			c.Response().WriteHeader(http.StatusOK)
+
+			_, err = io.Copy(c.Response().Writer, f)
+			if err != nil {
+				return err
 			}
 		} else {
-			err = handler.Handle(c, c.Writer)
+			err = handler.Handle(c)
 			if err != nil {
-				c.JSON(500, gin.H{"error": err.Error()})
-				return
+				return err
 			}
 		}
 
-		// override parameter layers at the end
-
+		return nil
 	}
 }

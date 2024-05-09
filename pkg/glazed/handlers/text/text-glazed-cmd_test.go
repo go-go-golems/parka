@@ -3,11 +3,11 @@ package text
 import (
 	_ "embed"
 	"encoding/json"
-	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/helpers"
 	"github.com/go-go-golems/glazed/pkg/helpers/yaml"
 	"github.com/go-go-golems/parka/pkg/utils"
+	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"net/http"
@@ -37,19 +37,17 @@ func TestTextHandlerGlazeCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			gin.SetMode(gin.TestMode)
-			c, _ := utils.MockGinContextWithQueryParameters(tt.QueryParameters)
+			req := utils.NewRequestWithQueryParameters(tt.QueryParameters)
 
 			// Create ParameterLayers and ParsedLayers from test definitions
 			layers_ := helpers.NewTestParameterLayers(tt.ParameterLayers)
 			cmd, err := utils.NewTestGlazedCommand(cmds.WithLayers(layers_))
 			require.NoError(t, err)
 
-			router := gin.Default()
-			router.GET("/", CreateQueryHandler(cmd))
-
 			resp := httptest.NewRecorder()
-			router.ServeHTTP(resp, c.Request)
+			e := echo.New()
+			e.GET("/", CreateQueryHandler(cmd))
+			e.ServeHTTP(resp, req)
 
 			// Check for expected error
 			if tt.ExpectedError {

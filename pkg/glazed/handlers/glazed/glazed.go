@@ -1,7 +1,6 @@
 package glazed
 
 import (
-	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
@@ -9,8 +8,9 @@ import (
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
 	middlewares2 "github.com/go-go-golems/parka/pkg/glazed/middlewares"
+	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
-	"io"
+	"net/http"
 )
 
 type QueryHandler struct {
@@ -40,7 +40,7 @@ func NewQueryHandler(cmd cmds.GlazeCommand, options ...QueryHandlerOption) *Quer
 
 var _ handlers.Handler = (*QueryHandler)(nil)
 
-func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
+func (h *QueryHandler) Handle(c echo.Context) error {
 	description := h.cmd.Description()
 	parsedLayers := layers.NewParsedLayers()
 
@@ -63,14 +63,15 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 		return err
 	}
 
-	of, err := settings.SetupProcessorOutput(gp, glazedLayer, writer)
+	of, err := settings.SetupProcessorOutput(gp, glazedLayer, c.Response())
 	if err != nil {
 		return err
 	}
 
-	c.Header("Content-Type", of.ContentType())
+	c.Response().Header().Set("Content-Type", of.ContentType())
+	c.Response().WriteHeader(http.StatusOK)
 
-	ctx := c.Request.Context()
+	ctx := c.Request().Context()
 	err = h.cmd.RunIntoGlazeProcessor(ctx, parsedLayers, gp)
 	if err != nil {
 		return err

@@ -4,7 +4,6 @@ package sse
 
 import (
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
@@ -13,7 +12,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/middlewares/row"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
 	middlewares2 "github.com/go-go-golems/parka/pkg/glazed/middlewares"
-	"github.com/rs/zerolog/log"
+	"github.com/labstack/echo/v4"
 	"golang.org/x/sync/errgroup"
 	"net/http"
 )
@@ -43,7 +42,7 @@ func WithMiddlewares(middlewares ...middlewares.Middleware) QueryHandlerOption {
 	}
 }
 
-func (h *QueryHandler) Handle(c *gin.Context, writer gin.ResponseWriter) error {
+func (h *QueryHandler) Handle(c echo.Context) error {
 	description := h.cmd.Description()
 	parsedLayers := layers.NewParsedLayers()
 
@@ -54,9 +53,12 @@ func (h *QueryHandler) Handle(c *gin.Context, writer gin.ResponseWriter) error {
 	if err != nil {
 		return err
 	}
-	c.Header("Content-Type", "text/event-stream")
+	c.Response().Header().Set("Content-Type", "text/event-stream")
+	c.Response().Header().Set("Cache-Control", "no-cache")
+	c.Response().Header().Set("Connection", "keep-alive")
+	c.Response().WriteHeader(http.StatusOK)
 
-	ctx := c.Request.Context()
+	ctx := c.Request().Context()
 	switch cmd := h.cmd.(type) {
 	case cmds.WriterCommand:
 		// Create a writer that on every read amount of bytes sends an sse message
@@ -83,12 +85,11 @@ func (h *QueryHandler) Handle(c *gin.Context, writer gin.ResponseWriter) error {
 						return nil
 					}
 					// write SSE event to writer
-					s := fmt.Sprintf("data: %s\n\n", msg)
-					_, err := writer.Write([]byte(s))
+					_, err := fmt.Fprintf(c.Response(), "data: %s\n\n", msg)
 					if err != nil {
 						return err
 					}
-					writer.Flush()
+					c.Response().Flush()
 				}
 			}
 		})
@@ -102,8 +103,8 @@ func (h *QueryHandler) Handle(c *gin.Context, writer gin.ResponseWriter) error {
 		}
 
 		gp.ReplaceTableMiddleware()
-		c := make(chan string, 100)
-		r := row.NewOutputChannelMiddleware(json2.NewOutputFormatter(), c)
+		eventChan := make(chan string, 100)
+		r := row.NewOutputChannelMiddleware(json2.NewOutputFormatter(), eventChan)
 		gp.AddRowMiddleware(r)
 
 		eg := errgroup.Group{}
@@ -124,8 +125,8 @@ func (h *QueryHandler) Handle(c *gin.Context, writer gin.ResponseWriter) error {
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
-				case row := <-c:
-					_, err := writer.Write([]byte(row))
+				case row := <-eventChan:
+					_, err := c.Response().Write([]byte(row))
 					if err != nil {
 						return err
 					}
@@ -153,17 +154,9 @@ func (h *QueryHandler) Handle(c *gin.Context, writer gin.ResponseWriter) error {
 func CreateQueryHandler(
 	cmd cmds.Command,
 	middlewares_ ...middlewares.Middleware,
-) gin.HandlerFunc {
+) echo.HandlerFunc {
 	handler := NewQueryHandler(cmd,
 		WithMiddlewares(middlewares_...),
 	)
-	return func(c *gin.Context) {
-		err := handler.Handle(c, c.Writer)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to handle query")
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-		}
-	}
+	return handler.Handle
 }

@@ -2,18 +2,22 @@ package middlewares
 
 import (
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/helpers/cast"
+	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 )
 
-func getListParameterFromForm(c *gin.Context, p *parameters.ParameterDefinition, options ...parameters.ParseStepOption) (*parameters.ParsedParameter, error) {
+func getListParameterFromForm(c echo.Context, p *parameters.ParameterDefinition, options ...parameters.ParseStepOption) (*parameters.ParsedParameter, error) {
 	if p.Type.IsList() {
 		// check p.Name[] parameter
-		values, ok := c.GetPostFormArray(fmt.Sprintf("%s[]", p.Name))
+		values_, err := c.FormParams()
+		if err != nil {
+			return nil, err
+		}
+		values, ok := values_[fmt.Sprintf("%s[]", p.Name)]
 		if ok {
 			pValue, err := p.ParseParameter(values, options...)
 			if err != nil {
@@ -28,7 +32,7 @@ func getListParameterFromForm(c *gin.Context, p *parameters.ParameterDefinition,
 	}
 }
 
-func getFileParameterFromForm(c *gin.Context, p *parameters.ParameterDefinition) (interface{}, error) {
+func getFileParameterFromForm(c echo.Context, p *parameters.ParameterDefinition) (interface{}, error) {
 	form, err := c.MultipartForm()
 	if err != nil {
 		return nil, err
@@ -105,7 +109,7 @@ func getFileParameterFromForm(c *gin.Context, p *parameters.ParameterDefinition)
 	return v, nil
 }
 
-func UpdateFromFormQuery(c *gin.Context, options ...parameters.ParseStepOption) middlewares.Middleware {
+func UpdateFromFormQuery(c echo.Context, options ...parameters.ParseStepOption) middlewares.Middleware {
 	return func(next middlewares.HandlerFunc) middlewares.HandlerFunc {
 		return func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
 			err := layers_.ForEachE(func(_ string, l layers.ParameterLayer) error {
@@ -141,9 +145,9 @@ func UpdateFromFormQuery(c *gin.Context, options ...parameters.ParseStepOption) 
 						return nil
 					}
 
-					value, ok := c.GetPostForm(p.Name)
+					value := c.FormValue(p.Name)
 					// TODO(manuel, 2023-02-28) is this enough to check if a file is missing?
-					if !ok {
+					if value == "" {
 						if p.Required {
 							return fmt.Errorf("required parameter '%s' is missing", p.Name)
 						}

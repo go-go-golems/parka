@@ -38,10 +38,10 @@ type LookupTemplateFromFile struct {
 	TemplateName string
 }
 
-func NewLookupTemplateFromFile(file string, path string) *LookupTemplateFromFile {
+func NewLookupTemplateFromFile(file string, templateName string) *LookupTemplateFromFile {
 	return &LookupTemplateFromFile{
 		File:         file,
-		TemplateName: path,
+		TemplateName: templateName,
 	}
 }
 

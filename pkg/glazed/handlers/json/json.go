@@ -3,7 +3,6 @@ package json
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
@@ -12,8 +11,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/middlewares/row"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
 	middlewares2 "github.com/go-go-golems/parka/pkg/glazed/middlewares"
-	"github.com/rs/zerolog/log"
-	"io"
+	"github.com/labstack/echo/v4"
 	"net/http"
 )
 
@@ -44,7 +42,7 @@ func WithMiddlewares(middlewares ...middlewares.Middleware) QueryHandlerOption {
 
 var _ handlers.Handler = (*QueryHandler)(nil)
 
-func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
+func (h *QueryHandler) Handle(c echo.Context) error {
 	description := h.cmd.Description()
 	parsedLayers := layers.NewParsedLayers()
 
@@ -58,9 +56,10 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 		return err
 	}
 
-	c.Header("Content-Type", "application/json")
+	c.Response().Header().Set("Content-Type", "application/json")
+	c.Response().WriteHeader(http.StatusOK)
 
-	ctx := c.Request.Context()
+	ctx := c.Request().Context()
 	switch cmd := h.cmd.(type) {
 	case cmds.WriterCommand:
 		buf := bytes.Buffer{}
@@ -74,7 +73,7 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 		}{
 			Data: buf.String(),
 		}
-		encoder := json.NewEncoder(writer)
+		encoder := json.NewEncoder(c.Response())
 		encoder.SetIndent("", "  ")
 		err = encoder.Encode(foo)
 		if err != nil {
@@ -89,7 +88,7 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 
 		// remove table middlewares because we are a streaming handler
 		gp.ReplaceTableMiddleware()
-		gp.AddRowMiddleware(row.NewOutputMiddleware(json2.NewOutputFormatter(), writer))
+		gp.AddRowMiddleware(row.NewOutputMiddleware(json2.NewOutputFormatter(), c.Response()))
 
 		if err != nil {
 			return err
@@ -121,15 +120,7 @@ func (h *QueryHandler) Handle(c *gin.Context, writer io.Writer) error {
 func CreateJSONQueryHandler(
 	cmd cmds.Command,
 	options ...QueryHandlerOption,
-) gin.HandlerFunc {
+) echo.HandlerFunc {
 	handler := NewQueryHandler(cmd, options...)
-	return func(c *gin.Context) {
-		err := handler.Handle(c, c.Writer)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to handle query")
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-		}
-	}
+	return handler.Handle
 }

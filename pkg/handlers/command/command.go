@@ -1,14 +1,12 @@
 package command
 
 import (
-	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/alias"
 	"github.com/go-go-golems/glazed/pkg/cmds/loaders"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
-	"github.com/go-go-golems/parka/pkg/glazed/handlers/json"
-	output_file "github.com/go-go-golems/parka/pkg/glazed/handlers/output-file"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
+	generic_command "github.com/go-go-golems/parka/pkg/handlers/generic-command"
 	"github.com/go-go-golems/parka/pkg/render"
 	parka "github.com/go-go-golems/parka/pkg/server"
 	"github.com/pkg/errors"
@@ -17,30 +15,11 @@ import (
 )
 
 type CommandHandler struct {
+	generic_command.GenericCommandHandler
 	DevMode bool
 
-	// TemplateName is the name of the template that is lookup up through the given TemplateLookup
-	// used to render the glazed command.
-	TemplateName string
-	// TemplateLookup is used to look up both TemplateName and IndexTemplateName
-	TemplateLookup render.TemplateLookup
-
 	// can be any of BareCommand, WriterCommand or GlazeCommand
-	Command cmds.GlazeCommand
-
-	// AdditionalData is passed to the template being rendered.
-	AdditionalData map[string]interface{}
-
-	ParameterFilter *config.ParameterFilter
-
-	// If true, all glazed outputs will try to use a row output if possible.
-	// This means that "ragged" objects (where columns might not all be present)
-	// will have missing columns, only the fields of the first object will be used
-	// as rows.
-	//
-	// This is true per default, and needs to be explicitly set to false to use
-	// a normal TableMiddleware oriented output.
-	Stream bool
+	Command cmds.Command
 }
 
 type CommandHandlerOption func(*CommandHandler)
@@ -51,65 +30,21 @@ func WithDevMode(devMode bool) CommandHandlerOption {
 	}
 }
 
-func WithTemplateName(templateName string) CommandHandlerOption {
+func WithGenericCommandHandlerOptions(options ...generic_command.GenericCommandHandlerOption) CommandHandlerOption {
 	return func(handler *CommandHandler) {
-		handler.TemplateName = templateName
-	}
-}
-
-func WithDefaultTemplateName(defaultTemplateName string) CommandHandlerOption {
-	return func(handler *CommandHandler) {
-		if handler.TemplateName == "" {
-			handler.TemplateName = defaultTemplateName
-		}
-	}
-}
-
-func WithTemplateLookup(templateLookup render.TemplateLookup) CommandHandlerOption {
-	return func(handler *CommandHandler) {
-		handler.TemplateLookup = templateLookup
-	}
-}
-
-// WithMergeAdditionalData merges the passed in map with the handler's AdditionalData map.
-// If a value is already set in the AdditionalData map and override is true, it will get overwritten.
-func WithMergeAdditionalData(data map[string]interface{}, override bool) CommandHandlerOption {
-	return func(handler *CommandHandler) {
-		if handler.AdditionalData == nil {
-			handler.AdditionalData = data
-		} else {
-			for k, v := range data {
-				if _, ok := handler.AdditionalData[k]; !ok || override {
-					handler.AdditionalData[k] = v
-				}
-			}
-		}
-	}
-}
-
-func WithParameterFilter(parameterFilter *config.ParameterFilter) CommandHandlerOption {
-	return func(handler *CommandHandler) {
-		handler.ParameterFilter = parameterFilter
-	}
-}
-
-func WithParameterFilterOptions(opts ...config.ParameterFilterOption) CommandHandlerOption {
-	return func(handler *CommandHandler) {
-		for _, opt := range opts {
-			opt(handler.ParameterFilter)
+		for _, option := range options {
+			option(&handler.GenericCommandHandler)
 		}
 	}
 }
 
 func NewCommandHandler(
-	command cmds.GlazeCommand,
+	command cmds.Command,
 	options ...CommandHandlerOption,
 ) *CommandHandler {
 	c := &CommandHandler{
-		Command:         command,
-		TemplateName:    "",
-		AdditionalData:  map[string]interface{}{},
-		ParameterFilter: &config.ParameterFilter{},
+		GenericCommandHandler: *generic_command.NewGenericCommandHandler(),
+		Command:               command,
 	}
 
 	for _, opt := range options {
@@ -119,24 +54,14 @@ func NewCommandHandler(
 	return c
 }
 
-func NewCommandHandlerFromConfig(
-	config_ *config.Command,
-	loader loaders.CommandLoader,
-	options ...CommandHandlerOption,
-) (*CommandHandler, error) {
-	c := &CommandHandler{
-		TemplateName:    config_.TemplateName,
-		AdditionalData:  config_.AdditionalData,
-		ParameterFilter: &config.ParameterFilter{},
-	}
-
-	fs_, filePath, err := loaders.FileNameToFsFilePath(config_.File)
+func LoadCommandFromFile(path string, loader loaders.CommandLoader) (cmds.Command, error) {
+	fs_, filePath, err := loaders.FileNameToFsFilePath(path)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get absolute path")
 	}
 
 	cmds_, err := loaders.LoadCommandsFromFS(
-		fs_, filePath, config_.File,
+		fs_, filePath, path,
 		loader, []cmds.CommandDescriptionOption{}, []alias.Option{})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load commands from file")
@@ -171,7 +96,27 @@ func NewCommandHandlerFromConfig(
 		)
 	}
 
-	c.Command = allCmds[0]
+	return allCmds[0], nil
+}
+
+func NewCommandHandlerFromConfig(
+	config_ *config.Command,
+	loader loaders.CommandLoader,
+	options ...CommandHandlerOption,
+) (*CommandHandler, error) {
+	genericOptions := []generic_command.GenericCommandHandlerOption{
+		generic_command.WithTemplateName(config_.TemplateName),
+		generic_command.WithMergeAdditionalData(config_.AdditionalData, true),
+	}
+	// TODO(manuel, 2024-05-09) To make this reloadable on dev mode, we would actually need to thunk this and pass the thunk to the GenericCommandHandler
+	cmd, err := LoadCommandFromFile(config_.File, loader)
+	if err != nil {
+		return nil, err
+	}
+
+	c := NewCommandHandler(cmd, WithGenericCommandHandlerOptions(genericOptions...))
+	// TODO(manuel, 2024-05-09) Handle devmode
+	c.Command = cmd
 
 	// TODO(manuel, 2023-08-06) I think we hav eto find the proper command here
 
@@ -192,6 +137,9 @@ func NewCommandHandlerFromConfig(
 	for _, option := range options {
 		option(c)
 	}
+
+	// TODO(manuel, 2024-05-09) The TemplateLookup initialization probably makes sense to be extracted as a reusable component
+	// to load templates dynamically in dev mode, since it's shared across quite a few handlers (see command-dir).
 
 	// we run this after the options in order to get the DevMode value
 	if c.TemplateLookup == nil {
@@ -226,46 +174,5 @@ func NewCommandHandlerFromConfig(
 func (ch *CommandHandler) Serve(server *parka.Server, path string) error {
 	path = strings.TrimSuffix(path, "/")
 
-	middlewares_ := ch.ParameterFilter.ComputeMiddlewares(ch.Stream)
-
-	server.Router.GET(path+"/data", func(c *gin.Context) {
-		options := []json.QueryHandlerOption{
-			json.WithMiddlewares(middlewares_...),
-		}
-		json.CreateJSONQueryHandler(ch.Command, options...)(c)
-	})
-	// TODO(manuel, 2024-01-17) This doesn't seem to match what is in command-dir
-	server.Router.GET(path+"/glazed", func(c *gin.Context) {
-		options := []datatables.QueryHandlerOption{
-			datatables.WithMiddlewares(middlewares_...),
-			datatables.WithTemplateLookup(ch.TemplateLookup),
-			datatables.WithTemplateName(ch.TemplateName),
-			datatables.WithAdditionalData(ch.AdditionalData),
-			datatables.WithStreamRows(ch.Stream),
-		}
-
-		datatables.CreateDataTablesHandler(ch.Command, path, "", options...)(c)
-	})
-	server.Router.GET(path+"/download/*path", func(c *gin.Context) {
-		path_ := c.Param("path")
-		path_ = strings.TrimPrefix(path_, "/")
-		index := strings.LastIndex(path_, "/")
-		if index == -1 {
-			c.JSON(500, gin.H{"error": "could not find file name"})
-			return
-		}
-		if index >= len(path_)-1 {
-			c.JSON(500, gin.H{"error": "could not find file name"})
-			return
-		}
-		fileName := path_[index+1:]
-
-		output_file.CreateGlazedFileHandler(
-			ch.Command,
-			fileName,
-			middlewares_...,
-		)(c)
-	})
-
-	return nil
+	return ch.GenericCommandHandler.ServeSingleCommand(server, path, ch.Command)
 }

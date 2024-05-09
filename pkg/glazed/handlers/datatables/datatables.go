@@ -4,7 +4,6 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
@@ -19,6 +18,7 @@ import (
 	parka_middlewares "github.com/go-go-golems/parka/pkg/glazed/middlewares"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/render/layout"
+	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
@@ -166,35 +166,13 @@ func WithStreamRows(streamRows bool) QueryHandlerOption {
 }
 
 var _ handlers.Handler = &QueryHandler{}
+var _ echo.HandlerFunc = (&QueryHandler{}).Handle
 
-func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
+func (qh *QueryHandler) Handle(c echo.Context) error {
 	description := qh.cmd.Description()
 	parsedLayers := layers.NewParsedLayers()
 
-	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers,
-		append(
-			qh.middlewares,
-			parka_middlewares.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
-			middlewares.SetFromDefaults(),
-		)...,
-	)
-
 	dt_ := qh.dt.Clone()
-	if cm_, ok := qh.cmd.(cmds.CommandWithMetadata); ok {
-		dt_.CommandMetadata, err = cm_.Metadata(c, parsedLayers)
-	}
-
-	var of formatters.RowOutputFormatter
-	// buffered so that we don't hang on it when exiting
-	dt_.ErrorStream = make(chan string, 1)
-	if dt_.JSRendering {
-		of = json.NewOutputFormatter(json.WithOutputIndividualRows(true))
-		dt_.JSStream = make(chan template.JS, 100)
-	} else {
-		of = table_formatter.NewOutputFormatter("html")
-		dt_.HTMLStream = make(chan template.HTML, 100)
-	}
-
 	// rowC is the channel where the rows are sent to. They will need to get converted
 	// to template.JS or template.HTML before being sent to either
 	rowC := make(chan string, 100)
@@ -204,6 +182,14 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 	// about not blocking. Potentially, this could be done by starting a goroutine in the middleware,
 	// since we have a context there, and there is no need to block the middleware processing.
 	columnsC := make(chan []types.FieldName, 10)
+
+	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers,
+		append(
+			qh.middlewares,
+			parka_middlewares.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
+			middlewares.SetFromDefaults(),
+		)...,
+	)
 
 	if err != nil {
 		if dt_.JSStream != nil {
@@ -217,11 +203,30 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 		columnsC <- []types.FieldName{}
 		close(columnsC)
 		close(rowC)
-		err_ := qh.renderTemplate(parsedLayers, w, dt_, columnsC)
+		err_ := qh.renderTemplate(parsedLayers, c.Response(), dt_, columnsC)
 		if err_ != nil {
 			return err_
 		}
 		return err_
+	}
+
+	// This needs to run after parsing the layers
+	if cm_, ok := qh.cmd.(cmds.CommandWithMetadata); ok {
+		dt_.CommandMetadata, err = cm_.Metadata(c.Request().Context(), parsedLayers)
+		if err != nil {
+			return err
+		}
+	}
+
+	var of formatters.RowOutputFormatter
+	// buffered so that we don't hang on it when exiting
+	dt_.ErrorStream = make(chan string, 1)
+	if dt_.JSRendering {
+		of = json.NewOutputFormatter(json.WithOutputIndividualRows(true))
+		dt_.JSStream = make(chan template.JS, 100)
+	} else {
+		of = table_formatter.NewOutputFormatter("html")
+		dt_.HTMLStream = make(chan template.HTML, 100)
 	}
 
 	// manually create a streaming output TableProcessor
@@ -239,7 +244,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 		gp.AddTableMiddleware(table.NewOutputChannelMiddleware(of, rowC))
 	}
 
-	ctx := c.Request.Context()
+	ctx := c.Request().Context()
 	ctx2, cancel := context.WithCancel(ctx)
 	eg, ctx3 := errgroup.WithContext(ctx2)
 
@@ -298,7 +303,7 @@ func (qh *QueryHandler) Handle(c *gin.Context, w io.Writer) error {
 
 	eg.Go(func() error {
 		// if qh.Cmd implements cmds.CommandWithMetadata, get Metadata
-		err := qh.renderTemplate(parsedLayers, w, dt_, columnsC)
+		err := qh.renderTemplate(parsedLayers, c.Response(), dt_, columnsC)
 		if err != nil {
 			return err
 		}
@@ -343,10 +348,7 @@ func (qh *QueryHandler) renderTemplate(
 
 	// Wait for the column names to be sent to the channel. This will only
 	// take the first row into account.
-	columns, ok := <-columnsC
-	if !ok {
-		return fmt.Errorf("no columns received")
-	}
+	columns := <-columnsC
 	dt_.Columns = columns
 
 	// start copying from rowC to HTML or JS stream
@@ -361,41 +363,41 @@ func (qh *QueryHandler) renderTemplate(
 
 func CreateDataTablesHandler(
 	cmd cmds.GlazeCommand,
-	path string,
-	commandPath string,
+	basePath string,
+	downloadPath string,
 	options ...QueryHandlerOption,
-) gin.HandlerFunc {
-	return func(c *gin.Context) {
+) echo.HandlerFunc {
+	return func(c echo.Context) error {
 		name := cmd.Description().Name
 		dateTime := time.Now().Format("2006-01-02--15-04-05")
 		links := []layout.Link{
 			{
-				Href:  fmt.Sprintf("%s/download/%s/%s-%s.csv", path, commandPath, dateTime, name),
+				Href:  fmt.Sprintf("%s/%s-%s.csv", downloadPath, dateTime, name),
 				Text:  "Download CSV",
 				Class: "download",
 			},
 			{
-				Href:  fmt.Sprintf("%s/download/%s/%s-%s.json", path, commandPath, dateTime, name),
+				Href:  fmt.Sprintf("%s/%s-%s.json", downloadPath, dateTime, name),
 				Text:  "Download JSON",
 				Class: "download",
 			},
 			{
-				Href:  fmt.Sprintf("%s/download/%s/%s-%s.xlsx", path, commandPath, dateTime, name),
+				Href:  fmt.Sprintf("%s/%s-%s.xlsx", downloadPath, dateTime, name),
 				Text:  "Download Excel",
 				Class: "download",
 			},
 			{
-				Href:  fmt.Sprintf("%s/download/%s/%s-%s.md", path, commandPath, dateTime, name),
+				Href:  fmt.Sprintf("%s/%s-%s.md", downloadPath, dateTime, name),
 				Text:  "Download Markdown",
 				Class: "download",
 			},
 			{
-				Href:  fmt.Sprintf("%s/download/%s/%s-%s.html", path, commandPath, dateTime, name),
+				Href:  fmt.Sprintf("%s/%s-%s.html", downloadPath, dateTime, name),
 				Text:  "Download HTML",
 				Class: "download",
 			},
 			{
-				Href:  fmt.Sprintf("%s/download/%s/%s-%s.txt", path, commandPath, dateTime, name),
+				Href:  fmt.Sprintf("%s/%s-%s.txt", downloadPath, dateTime, name),
 				Text:  "Download Text",
 				Class: "download",
 			},
@@ -404,7 +406,7 @@ func CreateDataTablesHandler(
 		dt := NewDataTables()
 		dt.Command = cmd.Description()
 		dt.Links = links
-		dt.BasePath = path
+		dt.BasePath = basePath
 		dt.JSRendering = true
 		dt.UseDataTables = false
 
@@ -415,9 +417,11 @@ func CreateDataTablesHandler(
 
 		handler := NewQueryHandler(cmd, options_...)
 
-		err := handler.Handle(c, c.Writer)
+		err := handler.Handle(c)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			log.Error().Err(err).Msg("error handling query")
 		}
+
+		return nil
 	}
 }

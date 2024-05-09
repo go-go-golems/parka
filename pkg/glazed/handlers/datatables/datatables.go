@@ -166,6 +166,7 @@ func WithStreamRows(streamRows bool) QueryHandlerOption {
 }
 
 var _ handlers.Handler = &QueryHandler{}
+var _ echo.HandlerFunc = (&QueryHandler{}).Handle
 
 func (qh *QueryHandler) Handle(c echo.Context) error {
 	description := qh.cmd.Description()
@@ -362,8 +363,8 @@ func (qh *QueryHandler) renderTemplate(
 
 func CreateDataTablesHandler(
 	cmd cmds.GlazeCommand,
-	path string,
-	commandPath string,
+	basePath string,
+	downloadPath string,
 	options ...QueryHandlerOption,
 ) echo.HandlerFunc {
 	return func(c echo.Context) error {
@@ -371,32 +372,32 @@ func CreateDataTablesHandler(
 		dateTime := time.Now().Format("2006-01-02--15-04-05")
 		links := []layout.Link{
 			{
-				Href:  fmt.Sprintf("%s/download/%s/%s-%s.csv", path, commandPath, dateTime, name),
+				Href:  fmt.Sprintf("%s/%s-%s.csv", downloadPath, dateTime, name),
 				Text:  "Download CSV",
 				Class: "download",
 			},
 			{
-				Href:  fmt.Sprintf("%s/download/%s/%s-%s.json", path, commandPath, dateTime, name),
+				Href:  fmt.Sprintf("%s/%s-%s.json", downloadPath, dateTime, name),
 				Text:  "Download JSON",
 				Class: "download",
 			},
 			{
-				Href:  fmt.Sprintf("%s/download/%s/%s-%s.xlsx", path, commandPath, dateTime, name),
+				Href:  fmt.Sprintf("%s/%s-%s.xlsx", downloadPath, dateTime, name),
 				Text:  "Download Excel",
 				Class: "download",
 			},
 			{
-				Href:  fmt.Sprintf("%s/download/%s/%s-%s.md", path, commandPath, dateTime, name),
+				Href:  fmt.Sprintf("%s/%s-%s.md", downloadPath, dateTime, name),
 				Text:  "Download Markdown",
 				Class: "download",
 			},
 			{
-				Href:  fmt.Sprintf("%s/download/%s/%s-%s.html", path, commandPath, dateTime, name),
+				Href:  fmt.Sprintf("%s/%s-%s.html", downloadPath, dateTime, name),
 				Text:  "Download HTML",
 				Class: "download",
 			},
 			{
-				Href:  fmt.Sprintf("%s/download/%s/%s-%s.txt", path, commandPath, dateTime, name),
+				Href:  fmt.Sprintf("%s/%s-%s.txt", downloadPath, dateTime, name),
 				Text:  "Download Text",
 				Class: "download",
 			},
@@ -405,7 +406,7 @@ func CreateDataTablesHandler(
 		dt := NewDataTables()
 		dt.Command = cmd.Description()
 		dt.Links = links
-		dt.BasePath = path
+		dt.BasePath = basePath
 		dt.JSRendering = true
 		dt.UseDataTables = false
 

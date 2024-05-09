@@ -8,6 +8,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/loaders"
 	"github.com/go-go-golems/glazed/pkg/help"
 	"github.com/go-go-golems/glazed/pkg/helpers/strings"
+	"github.com/go-go-golems/parka/pkg/handlers/command"
 	"github.com/go-go-golems/parka/pkg/handlers/command-dir"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/handlers/static-dir"
@@ -45,6 +46,7 @@ func NewRepositoryFactoryFromReaderLoaders(
 				FS:               os.DirFS(dir),
 				RootDirectory:    ".",
 				RootDocDirectory: "doc",
+				WatchDirectory:   dir,
 				Name:             dir,
 				SourcePrefix:     "file",
 			})
@@ -93,6 +95,7 @@ type ConfigFileHandler struct {
 	CommandDirectoryOptions  []command_dir.CommandDirHandlerOption
 	TemplateDirectoryOptions []template_dir.TemplateDirHandlerOption
 	TemplateOptions          []template.TemplateHandlerOption
+	CommandOptions           []command.CommandHandlerOption
 
 	// ConfigFileLocation is an optional path to the config file on disk in case it needs to be reloaded
 	ConfigFileLocation        string
@@ -120,6 +123,12 @@ func WithAppendCommandDirHandlerOptions(options ...command_dir.CommandDirHandler
 func WithAppendTemplateDirHandlerOptions(options ...template_dir.TemplateDirHandlerOption) ConfigFileHandlerOption {
 	return func(handler *ConfigFileHandler) {
 		handler.TemplateDirectoryOptions = append(handler.TemplateDirectoryOptions, options...)
+	}
+}
+
+func WithAppendCommandHandlerOptions(options ...command.CommandHandlerOption) ConfigFileHandlerOption {
+	return func(handler *ConfigFileHandler) {
+		handler.CommandOptions = append(handler.CommandOptions, options...)
 	}
 }
 
@@ -365,12 +374,9 @@ func (cfh *ConfigFileHandler) Serve(server_ *server.Server) error {
 func (cfh *ConfigFileHandler) Watch(ctx context.Context) error {
 	errGroup, ctx2 := errgroup.WithContext(ctx)
 	for _, cdh := range cfh.commandDirectoryHandlers {
-		cdh2 := cdh
-		if cdh.Repository == nil {
-			continue
-		}
+		cdh_ := cdh
 		errGroup.Go(func() error {
-			return cdh2.Repository.Watch(ctx2)
+			return cdh_.Watch(ctx2)
 		})
 	}
 

@@ -8,10 +8,12 @@ import (
 	utils_fs "github.com/go-go-golems/parka/pkg/utils/fs"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"io/fs"
 	"net/http"
 	"net/http/pprof"
+	"time"
 )
 
 //go:embed "web/src/templates/*"
@@ -171,6 +173,25 @@ func WithGzip() ServerOption {
 func NewServer(options ...ServerOption) (*Server, error) {
 	router := echo.New()
 
+	// Custom middleware logger using zerolog
+	router.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+		LogURI:    true,
+		LogStatus: true,
+		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+			log.Info().
+				Str("URI", v.URI).
+				Int("status", v.Status).
+				Str("method", v.Method).
+				Str("path", v.URIPath).
+				Str("host", v.Host).
+				Str("remote_ip", v.RemoteIP).
+				Dur("latency", time.Since(v.StartTime)).
+				Msg("request")
+
+			return nil
+		},
+	}))
+
 	s := &Server{
 		Router:      router,
 		StaticPaths: []utils_fs.StaticPath{},
@@ -188,6 +209,7 @@ func NewServer(options ...ServerOption) (*Server, error) {
 
 func (s *Server) RegisterDebugRoutes() {
 	handlers_ := map[string]http.HandlerFunc{
+		"/debug/pprof/":          pprof.Index,
 		"/debug/pprof/cmdline":   pprof.Cmdline,
 		"/debug/pprof/profile":   pprof.Profile,
 		"/debug/pprof/symbol":    pprof.Symbol,
@@ -196,6 +218,7 @@ func (s *Server) RegisterDebugRoutes() {
 		"/debug/pprof/allocs":    pprof.Index,
 		"/debug/pprof/block":     pprof.Index,
 		"/debug/pprof/goroutine": pprof.Index,
+		"/debug/pprof/heap":      pprof.Index,
 	}
 
 	for route, handler := range handlers_ {

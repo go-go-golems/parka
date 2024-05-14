@@ -108,7 +108,7 @@
         {{ range $link := .AdditionalData.HeaderLinks}}
             <a href="{{$link.Url}}">{{$link.Label}}</a>
         {{ end }}
-        <a href="{{.BasePath}}/commands">Top</a>
+        <a href="{{.BasePath}}/commands/">(All commands)</a>
     </p>
     <h1>{{.Command.Name}}</h1>
     <p>{{.Command.Short}}</p>

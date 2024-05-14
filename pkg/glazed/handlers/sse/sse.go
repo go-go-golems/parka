@@ -12,8 +12,8 @@ import (
 	"github.com/go-go-golems/glazed/pkg/middlewares/row"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
 	middlewares2 "github.com/go-go-golems/parka/pkg/glazed/middlewares"
+	"github.com/kucherenkovova/safegroup"
 	"github.com/labstack/echo/v4"
-	"golang.org/x/sync/errgroup"
 	"net/http"
 )
 
@@ -65,7 +65,7 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 		// to the client
 		sseWriter := NewSSEWriter()
 
-		eg := errgroup.Group{}
+		eg := safegroup.Group{}
 		eg.Go(func() error {
 			defer sseWriter.Close()
 			return cmd.RunIntoWriter(
@@ -107,7 +107,7 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 		r := row.NewOutputChannelMiddleware(json2.NewOutputFormatter(), eventChan)
 		gp.AddRowMiddleware(r)
 
-		eg := errgroup.Group{}
+		eg := safegroup.Group{}
 		eg.Go(func() error {
 			err := cmd.RunIntoGlazeProcessor(ctx, parsedLayers, gp)
 			if err != nil {

@@ -178,6 +178,7 @@ func NewServer(options ...ServerOption) (*Server, error) {
 
 	router.Logger = lecho.From(log.Logger)
 
+	router.Use(middleware.Recover())
 	// Custom middleware logger using zerolog
 	router.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogURI:    true,

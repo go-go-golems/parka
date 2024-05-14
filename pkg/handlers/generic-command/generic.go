@@ -248,6 +248,45 @@ func (gch *GenericCommandHandler) ServeRepository(server *parka.Server, basePath
 		return gch.ServeDownload(c, command)
 	})
 
+	server.Router.GET(basePath+"/commands/*", func(c echo.Context) error {
+		path_ := c.Param("*")
+		path_ = strings.TrimPrefix(path_, "/")
+		path_ = strings.TrimSuffix(path_, "/")
+		splitPath := strings.Split(path_, "/")
+		if path_ == "" {
+			splitPath = []string{}
+		}
+		renderNode, ok := repository.GetRenderNode(splitPath)
+		if !ok {
+			return errors.Errorf("command %s not found", path_)
+		}
+		templateName := gch.IndexTemplateName
+		if gch.IndexTemplateName == "" {
+			templateName = "commands.tmpl.html"
+		}
+		templ, err := gch.TemplateLookup.Lookup(templateName)
+		if err != nil {
+			return err
+		}
+
+		var nodes []*repositories.RenderNode
+
+		if renderNode.Command != nil {
+			nodes = append(nodes, renderNode)
+		} else {
+			nodes = append(nodes, renderNode.Children...)
+		}
+		err = templ.Execute(c.Response(), utils.H{
+			"nodes": nodes,
+			"path":  basePath,
+		})
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
 	return nil
 }
 

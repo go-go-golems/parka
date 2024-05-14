@@ -6,6 +6,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/labstack/echo/v4"
+	"github.com/pkg/errors"
 	"strings"
 )
 
@@ -23,7 +24,7 @@ func UpdateFromQueryParameters(c echo.Context, options ...parameters.ParseStepOp
 				pds := l.GetParameterDefinitions()
 				err := pds.ForEachE(func(p *parameters.ParameterDefinition) error {
 					if p.Type.IsFile() {
-						return fmt.Errorf("file parameters are not supported in query parameters")
+						return errors.New("file parameters are not supported in query parameters")
 					}
 
 					if p.Type.IsList() {
@@ -33,7 +34,7 @@ func UpdateFromQueryParameters(c echo.Context, options ...parameters.ParseStepOp
 							// TODO(manuel, 2023-12-25) Need to pass in options to ParseParameter
 							pp, err := p.ParseParameter(values, options...)
 							if err != nil {
-								return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, values, err.Error())
+								return errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, values)
 							}
 							parsedLayer.Parameters.Update(p.Name, pp)
 							return nil
@@ -42,7 +43,7 @@ func UpdateFromQueryParameters(c echo.Context, options ...parameters.ParseStepOp
 					value := c.QueryParam(p.Name)
 					if value == "" {
 						if p.Required {
-							return fmt.Errorf("required parameter '%s' is missing", p.Name)
+							return errors.Errorf("required parameter '%s' is missing", p.Name)
 						}
 						return nil
 					}
@@ -56,7 +57,7 @@ func UpdateFromQueryParameters(c echo.Context, options ...parameters.ParseStepOp
 						}
 						pp, err := p.ParseFromReader(f, fileName, options...)
 						if err != nil {
-							return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
+							return errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, value)
 						}
 						parsedLayer.Parameters.Update(p.Name, pp)
 					} else {
@@ -68,7 +69,7 @@ func UpdateFromQueryParameters(c echo.Context, options ...parameters.ParseStepOp
 						}
 						pp, err := p.ParseParameter(values, options...)
 						if err != nil {
-							return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
+							return errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, value)
 						}
 						parsedLayer.Parameters.Update(p.Name, pp)
 					}

@@ -1,10 +1,10 @@
 package layout
 
 import (
-	"fmt"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/pkg/errors"
 )
 
 // This section groups all the functionality related to laying out forms for input parameters
@@ -133,7 +133,7 @@ func ComputeLayout(
 				for _, input_ := range row_.Inputs {
 					pd, ok := allParameterDefinitions.Get(input_.Name)
 					if !ok {
-						return nil, fmt.Errorf("parameter %s not found", input_.Name)
+						return nil, errors.Errorf("parameter %s not found", input_.Name)
 					}
 					value, ok := values[input_.Name]
 					if !ok {

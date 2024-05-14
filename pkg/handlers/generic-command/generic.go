@@ -15,6 +15,8 @@ import (
 	parka "github.com/go-go-golems/parka/pkg/server"
 	"github.com/go-go-golems/parka/pkg/utils"
 	"github.com/labstack/echo/v4"
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -164,6 +166,10 @@ func (gch *GenericCommandHandler) ServeRepository(server *parka.Server, basePath
 		commandPath = strings.TrimPrefix(commandPath, "/")
 		command, err := getRepositoryCommand(repository, commandPath)
 		if err != nil {
+			log.Debug().
+				Str("commandPath", commandPath).
+				Str("basePath", basePath).
+				Msg("could not find command")
 			return err
 		}
 
@@ -175,6 +181,10 @@ func (gch *GenericCommandHandler) ServeRepository(server *parka.Server, basePath
 		commandPath = strings.TrimPrefix(commandPath, "/")
 		command, err := getRepositoryCommand(repository, commandPath)
 		if err != nil {
+			log.Debug().
+				Str("commandPath", commandPath).
+				Str("basePath", basePath).
+				Msg("could not find command")
 			return err
 		}
 
@@ -186,6 +196,10 @@ func (gch *GenericCommandHandler) ServeRepository(server *parka.Server, basePath
 		commandPath = strings.TrimPrefix(commandPath, "/")
 		command, err := getRepositoryCommand(repository, commandPath)
 		if err != nil {
+			log.Debug().
+				Str("commandPath", commandPath).
+				Str("basePath", basePath).
+				Msg("could not find command")
 			return err
 		}
 
@@ -199,6 +213,10 @@ func (gch *GenericCommandHandler) ServeRepository(server *parka.Server, basePath
 		// Get repository command
 		command, err := getRepositoryCommand(repository, commandPath)
 		if err != nil {
+			log.Debug().
+				Str("commandPath", commandPath).
+				Str("basePath", basePath).
+				Msg("could not find command")
 			return err
 		}
 
@@ -211,15 +229,19 @@ func (gch *GenericCommandHandler) ServeRepository(server *parka.Server, basePath
 		// strip file name from path
 		index := strings.LastIndex(commandPath, "/")
 		if index == -1 {
-			return c.JSON(http.StatusInternalServerError, utils.H{"error": "could not find file name"})
+			return errors.New("could not find file name")
 		}
 		if index >= len(commandPath)-1 {
-			return c.JSON(http.StatusInternalServerError, utils.H{"error": "could not find file name"})
+			return errors.New("could not find file name")
 		}
 		commandPath = commandPath[:index]
 
 		command, err := getRepositoryCommand(repository, commandPath)
 		if err != nil {
+			log.Debug().
+				Str("commandPath", commandPath).
+				Str("basePath", basePath).
+				Msg("could not find command")
 			return err
 		}
 

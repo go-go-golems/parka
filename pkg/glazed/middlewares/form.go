@@ -21,7 +21,7 @@ func getListParameterFromForm(c echo.Context, p *parameters.ParameterDefinition,
 		if ok {
 			pValue, err := p.ParseParameter(values, options...)
 			if err != nil {
-				return nil, errors.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, values, err.Error())
+				return nil, errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, values)
 			}
 			return pValue, nil
 		}
@@ -40,7 +40,7 @@ func getFileParameterFromForm(c echo.Context, p *parameters.ParameterDefinition)
 	headers := form.File[p.Name]
 	if len(headers) == 0 {
 		if p.Required {
-			return nil, fmt.Errorf("required parameter '%s' is missing", p.Name)
+			return nil, errors.Errorf("required parameter '%s' is missing", p.Name)
 		}
 
 		return nil, nil
@@ -59,7 +59,7 @@ func getFileParameterFromForm(c echo.Context, p *parameters.ParameterDefinition)
 
 			v, err := p.ParseFromReader(f, h.Filename)
 			if err != nil {
-				return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, h.Filename, err.Error())
+				return errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, h.Filename)
 			}
 
 			values = append(values, v.Value)
@@ -139,7 +139,7 @@ func UpdateFromFormQuery(c echo.Context, options ...parameters.ParseStepOption) 
 						if v != nil {
 							parsedLayer.Parameters.Update(p.Name, v)
 						} else if p.Required {
-							return fmt.Errorf("required parameter '%s' is missing", p.Name)
+							return errors.Errorf("required parameter '%s' is missing", p.Name)
 						}
 
 						return nil
@@ -149,7 +149,7 @@ func UpdateFromFormQuery(c echo.Context, options ...parameters.ParseStepOption) 
 					// TODO(manuel, 2023-02-28) is this enough to check if a file is missing?
 					if value == "" {
 						if p.Required {
-							return fmt.Errorf("required parameter '%s' is missing", p.Name)
+							return errors.Errorf("required parameter '%s' is missing", p.Name)
 						}
 						return nil
 					}
@@ -157,7 +157,7 @@ func UpdateFromFormQuery(c echo.Context, options ...parameters.ParseStepOption) 
 					v := []string{value}
 					parsedParameter, err := p.ParseParameter(v, options...)
 					if err != nil {
-						return fmt.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, value, err.Error())
+						return errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, value)
 					}
 					parsedLayer.Parameters.Update(p.Name, parsedParameter)
 

@@ -2,10 +2,10 @@ package config
 
 import (
 	"context"
-	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 )
@@ -18,7 +18,7 @@ type SsmEvaluator struct {
 func NewSsmEvaluator(ctx context.Context) (*SsmEvaluator, error) {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("unable to load AWS SDK config, %w", err)
+		return nil, errors.Wrap(err, "unable to load AWS SDK config")
 	}
 
 	return &SsmEvaluator{
@@ -34,11 +34,11 @@ func (s *SsmEvaluator) Evaluate(node interface{}) (interface{}, bool, error) {
 			if ssmKey, ok := value["_aws_ssm"]; ok {
 				v, err := EvaluateConfigEntry(ssmKey)
 				if err != nil {
-					return nil, false, fmt.Errorf("failed to evaluate SSM key: %v", err)
+					return nil, false, errors.Wrap(err, "failed to evaluate SSM key")
 				}
 				k, ok := v.(string)
 				if !ok {
-					return nil, false, fmt.Errorf("'_aws_ssm' key must have a string value")
+					return nil, false, errors.New("'_aws_ssm' key must have a string value")
 				}
 				eg, ctx := errgroup.WithContext(s.ctx)
 				var result *ssm.GetParameterOutput
@@ -52,7 +52,7 @@ func (s *SsmEvaluator) Evaluate(node interface{}) (interface{}, bool, error) {
 				})
 				log.Info().Msgf("getting parameter %s from AWS SSM", k)
 				if err := eg.Wait(); err != nil {
-					return nil, false, fmt.Errorf("failed to get parameter from AWS SSM: %v", err)
+					return nil, false, errors.Wrap(err, "failed to get parameter from AWS SSM")
 				}
 
 				return *result.Parameter.Value, true, nil

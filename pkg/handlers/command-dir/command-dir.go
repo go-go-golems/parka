@@ -34,7 +34,6 @@ package command_dir
 
 import (
 	"context"
-	"fmt"
 	"github.com/go-go-golems/clay/pkg/repositories"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
@@ -140,7 +139,7 @@ func (cd *CommandDirHandler) Watch(ctx context.Context) error {
 
 func (cd *CommandDirHandler) Serve(server *parka.Server, basePath string) error {
 	if cd.Repository == nil {
-		return fmt.Errorf("no repository configured")
+		return errors.New("no repository configured")
 	}
 
 	return cd.GenericCommandHandler.ServeRepository(server, basePath, cd.Repository)

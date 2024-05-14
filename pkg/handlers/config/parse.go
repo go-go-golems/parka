@@ -2,7 +2,7 @@ package config
 
 import (
 	"context"
-	"fmt"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"os"
 )
@@ -37,7 +37,7 @@ func (e *EnvEvaluator) Evaluate(node interface{}) (interface{}, bool, error) {
 			if envVar, ok := value["_env"]; ok {
 				envVal, ok := envVar.(string)
 				if !ok {
-					return nil, false, fmt.Errorf("'_env' key must have a string value")
+					return nil, false, errors.New("'_env' key must have a string value")
 				}
 				return os.Getenv(envVal), true, nil
 			}

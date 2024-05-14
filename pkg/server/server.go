@@ -8,11 +8,12 @@ import (
 	utils_fs "github.com/go-go-golems/parka/pkg/utils/fs"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+	"github.com/ziflex/lecho/v3"
 	"golang.org/x/sync/errgroup"
 	"io/fs"
 	"net/http"
-	"net/http/pprof"
 	"time"
 )
 
@@ -40,6 +41,8 @@ type Server struct {
 
 	Port    uint16
 	Address string
+
+	// TODO(manuel, 2024-05-13) Probably add some logging config, some dev mode flag
 }
 
 type ServerOption = func(*Server) error
@@ -173,6 +176,8 @@ func WithGzip() ServerOption {
 func NewServer(options ...ServerOption) (*Server, error) {
 	router := echo.New()
 
+	router.Logger = lecho.From(log.Logger)
+
 	// Custom middleware logger using zerolog
 	router.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogURI:    true,
@@ -192,6 +197,8 @@ func NewServer(options ...ServerOption) (*Server, error) {
 		},
 	}))
 
+	router.HTTPErrorHandler = CustomHTTPErrorHandler
+
 	s := &Server{
 		Router:      router,
 		StaticPaths: []utils_fs.StaticPath{},
@@ -200,32 +207,11 @@ func NewServer(options ...ServerOption) (*Server, error) {
 	for _, option := range options {
 		err := option(s)
 		if err != nil {
-			return nil, fmt.Errorf("failed to apply option: %w", err)
+			return nil, errors.Wrap(err, "failed to apply option")
 		}
 	}
 
 	return s, nil
-}
-
-func (s *Server) RegisterDebugRoutes() {
-	handlers_ := map[string]http.HandlerFunc{
-		"/debug/pprof/":          pprof.Index,
-		"/debug/pprof/cmdline":   pprof.Cmdline,
-		"/debug/pprof/profile":   pprof.Profile,
-		"/debug/pprof/symbol":    pprof.Symbol,
-		"/debug/pprof/trace":     pprof.Trace,
-		"/debug/pprof/mutex":     pprof.Index,
-		"/debug/pprof/allocs":    pprof.Index,
-		"/debug/pprof/block":     pprof.Index,
-		"/debug/pprof/goroutine": pprof.Index,
-		"/debug/pprof/heap":      pprof.Index,
-	}
-
-	for route, handler := range handlers_ {
-		route_ := route
-		handler_ := handler
-		s.Router.GET(route_, echo.WrapHandler(handler_))
-	}
 }
 
 // Run will start the server and listen on the given address and port.
@@ -260,23 +246,4 @@ func (s *Server) Run(ctx context.Context) error {
 	})
 
 	return eg.Wait()
-}
-
-func CustomHTTPErrorHandler(err error, c echo.Context) {
-	code := http.StatusInternalServerError
-	if he, ok := err.(*echo.HTTPError); ok {
-		code = he.Code
-	}
-
-	// Create a custom error response
-	errorResponse := map[string]interface{}{
-		"error": err.Error(),
-	}
-
-	// Send the custom error response
-	if !c.Response().Committed {
-		_ = c.JSON(code, errorResponse)
-	}
-
-	c.Logger().Error(err)
 }

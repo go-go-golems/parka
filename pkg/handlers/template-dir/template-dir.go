@@ -1,11 +1,11 @@
 package template_dir
 
 import (
-	"fmt"
 	"github.com/go-go-golems/glazed/pkg/cmds/loaders"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/server"
+	"github.com/pkg/errors"
 	"io/fs"
 	"path/filepath"
 	"strings"
@@ -60,7 +60,7 @@ func WithLocalDirectory(localPath string) TemplateDirHandlerOption {
 				return err
 			}
 			if len(p) == 0 {
-				return fmt.Errorf("invalid local path: %s", localPath)
+				return errors.Errorf("invalid local path: %s", localPath)
 			}
 			handler.fs, handler.LocalDirectory, err = loaders.FileNameToFsFilePath(p)
 			if err != nil {
@@ -112,7 +112,7 @@ func NewTemplateDirHandlerFromConfig(td *config.TemplateDir, options ...Template
 	err = templateLookup.Reload()
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to load local template: %w", err)
+		return nil, errors.Wrap(err, "failed to load local template")
 	}
 	rendererOptions := append(
 		handler.rendererOptions,
@@ -121,7 +121,7 @@ func NewTemplateDirHandlerFromConfig(td *config.TemplateDir, options ...Template
 	)
 	r, err := render.NewRenderer(rendererOptions...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load local template: %w", err)
+		return nil, errors.Wrap(err, "failed to load local template")
 	}
 	handler.renderer = r
 

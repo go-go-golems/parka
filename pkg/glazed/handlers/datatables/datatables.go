@@ -177,6 +177,9 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	// to template.JS or template.HTML before being sent to either
 	rowC := make(chan string, 100)
 
+	// buffered so that we don't hang on it when exiting
+	dt_.ErrorStream = make(chan string, 10)
+
 	// columnsC is the channel where the column names are sent to. Since the row.ColumnsChannelMiddleware
 	// instance that sends columns to this channel is running before the row firmware, we should be careful
 	// about not blocking. Potentially, this could be done by starting a goroutine in the middleware,
@@ -192,22 +195,47 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	)
 
 	if err != nil {
-		if dt_.JSStream != nil {
-			close(dt_.JSStream)
-		}
-		if dt_.HTMLStream != nil {
-			close(dt_.HTMLStream)
-		}
-		dt_.ErrorStream <- err.Error()
-		close(dt_.ErrorStream)
-		columnsC <- []types.FieldName{}
-		close(columnsC)
-		close(rowC)
-		err_ := qh.renderTemplate(parsedLayers, c.Response(), dt_, columnsC)
-		if err_ != nil {
-			return err_
-		}
-		return err_
+		log.Debug().Err(err).Msg("error executing middlewares")
+		g := &errgroup.Group{}
+		g.Go(func() error {
+			if dt_.JSStream != nil {
+				log.Debug().Msg("Closing JS stream")
+				close(dt_.JSStream)
+			}
+			if dt_.HTMLStream != nil {
+				log.Debug().Msg("Closing HTML stream")
+				close(dt_.HTMLStream)
+			}
+			if dt_.ErrorStream != nil {
+				v_ := err.Error()
+				log.Debug().Str("errorString", v_).Msg("Sending error to error stream")
+				select {
+				case dt_.ErrorStream <- v_:
+					log.Debug().Msg("Error sent to error stream")
+				default:
+					log.Debug().Msg("Error stream full")
+				}
+				log.Debug().Msg("Closing error stream")
+				close(dt_.ErrorStream)
+			}
+
+			return nil
+		})
+		g.Go(func() error {
+			log.Debug().Msg("Closing columns channel")
+			columnsC <- []types.FieldName{}
+			close(columnsC)
+			log.Debug().Msg("Closing row channel")
+			close(rowC)
+			log.Debug().Msg("Closing columns channel")
+			return nil
+		})
+		g.Go(func() error {
+			log.Debug().Msg("Rendering template")
+			return qh.renderTemplate(parsedLayers, c.Response(), dt_, columnsC)
+		})
+
+		return g.Wait()
 	}
 
 	// This needs to run after parsing the layers
@@ -219,8 +247,6 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	}
 
 	var of formatters.RowOutputFormatter
-	// buffered so that we don't hang on it when exiting
-	dt_.ErrorStream = make(chan string, 1)
 	if dt_.JSRendering {
 		of = json.NewOutputFormatter(json.WithOutputIndividualRows(true))
 		dt_.JSStream = make(chan template.JS, 100)
@@ -279,26 +305,42 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	// actually run the command
 	eg.Go(func() error {
 		defer func() {
-			close(rowC)
-			close(columnsC)
-			close(dt_.ErrorStream)
+			if dt_.ErrorStream != nil {
+				close(dt_.ErrorStream)
+				dt_.ErrorStream = nil
+			}
 			_ = cancel
 		}()
 
 		// NOTE(manuel, 2023-10-16) The GetAllParameterValues is a bit of a hack because really what we want is to only get those flags through the layers
 		err = qh.cmd.RunIntoGlazeProcessor(ctx3, parsedLayers, gp)
+
+		g := &errgroup.Group{}
 		if err != nil {
-			// make sure to render the ErrorStream at the bottom, because we would otherwise get into a deadlock with the streaming channels
-			dt_.ErrorStream <- err.Error()
-			return err
+			g.Go(func() error {
+				// make sure to render the ErrorStream at the bottom, because we would otherwise get into a deadlock with the streaming channels
+				// NOTE(manuel, 2024-05-14) I'm not sure if with the addition of goroutines this is actually still necessary
+				//
+				dt_.ErrorStream <- err.Error()
+				close(dt_.ErrorStream)
+				dt_.ErrorStream = nil
+				return nil
+			})
 		}
 
-		err = gp.Close(ctx3)
-		if err != nil {
-			return err
-		}
+		g.Go(func() error {
+			err = gp.Close(ctx3)
+			if err != nil {
+				return err
+			}
 
-		return nil
+			close(rowC)
+			close(columnsC)
+
+			return nil
+		})
+
+		return g.Wait()
 	})
 
 	eg.Go(func() error {

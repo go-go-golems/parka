@@ -178,7 +178,7 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	rowC := make(chan string, 100)
 
 	// buffered so that we don't hang on it when exiting
-	dt_.ErrorStream = make(chan string, 10)
+	dt_.ErrorStream = make(chan string, 1)
 
 	// columnsC is the channel where the column names are sent to. Since the row.ColumnsChannelMiddleware
 	// instance that sends columns to this channel is running before the row firmware, we should be careful
@@ -197,6 +197,7 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	if err != nil {
 		log.Debug().Err(err).Msg("error executing middlewares")
 		g := &safegroup.Group{}
+
 		g.Go(func() error {
 			if dt_.JSStream != nil {
 				log.Debug().Msg("Closing JS stream")
@@ -206,21 +207,19 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 				log.Debug().Msg("Closing HTML stream")
 				close(dt_.HTMLStream)
 			}
-			if dt_.ErrorStream != nil {
-				v_ := err.Error()
-				log.Debug().Str("errorString", v_).Msg("Sending error to error stream")
-				select {
-				case dt_.ErrorStream <- v_:
-					log.Debug().Msg("Error sent to error stream")
-				default:
-					log.Debug().Msg("Error stream full")
-				}
-				log.Debug().Msg("Closing error stream")
-				close(dt_.ErrorStream)
+			v_ := err.Error()
+			log.Debug().Str("errorString", v_).Msg("Sending error to error stream")
+			select {
+			case dt_.ErrorStream <- v_:
+				log.Debug().Msg("Error sent to error stream")
+			default:
+				log.Debug().Msg("Error stream full")
 			}
+			log.Debug().Msg("Closing error stream")
 
 			return nil
 		})
+
 		g.Go(func() error {
 			log.Debug().Msg("Closing columns channel")
 			columnsC <- []types.FieldName{}
@@ -230,6 +229,7 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 			log.Debug().Msg("Closing columns channel")
 			return nil
 		})
+
 		g.Go(func() error {
 			log.Debug().Msg("Rendering template")
 			return qh.renderTemplate(parsedLayers, c.Response(), dt_, columnsC)
@@ -271,8 +271,7 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	ctx2, cancel := context.WithCancel(ctx)
-	eg, ctx3 := safegroup.WithContext(ctx2)
+	eg, ctx3 := safegroup.WithContext(ctx)
 
 	// copy the json rows to the template stream
 	eg.Go(func() error {
@@ -304,34 +303,27 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 
 	// actually run the command
 	eg.Go(func() error {
-		defer func() {
-			if dt_.ErrorStream != nil {
-				close(dt_.ErrorStream)
-				dt_.ErrorStream = nil
-			}
-			_ = cancel
-		}()
-
 		// NOTE(manuel, 2023-10-16) The GetAllParameterValues is a bit of a hack because really what we want is to only get those flags through the layers
 		err = qh.cmd.RunIntoGlazeProcessor(ctx3, parsedLayers, gp)
 
 		g := &safegroup.Group{}
-		if err != nil {
-			g.Go(func() error {
-				// make sure to render the ErrorStream at the bottom, because we would otherwise get into a deadlock with the streaming channels
-				// NOTE(manuel, 2024-05-14) I'm not sure if with the addition of goroutines this is actually still necessary
-				//
-				if dt_.ErrorStream != nil {
-					dt_.ErrorStream <- err.Error()
-					close(dt_.ErrorStream)
-					dt_.ErrorStream = nil
-				}
-				return nil
-			})
-		}
+		err_ := err
+		g.Go(func() error {
+			log.Debug().Err(err_).Msg("error running command")
+			// make sure to render the ErrorStream at the bottom, because we would otherwise get into a deadlock with the streaming channels
+			// NOTE(manuel, 2024-05-14) I'm not sure if with the addition of goroutines this is actually still necessary
+			//
+			log.Debug().Msg("sending error to error stream")
+			if err_ != nil {
+				dt_.ErrorStream <- err_.Error()
+			}
+			close(dt_.ErrorStream)
+			return nil
+		})
 
 		g.Go(func() error {
-			err = gp.Close(ctx3)
+			err := gp.Close(ctx3)
+			log.Debug().Msg("closed gp")
 			if err != nil {
 				return err
 			}
@@ -351,7 +343,9 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 
 	eg.Go(func() error {
 		// if qh.Cmd implements cmds.CommandWithMetadata, get Metadata
+		log.Debug().Msg("rendering template")
 		err := qh.renderTemplate(parsedLayers, c.Response(), dt_, columnsC)
+		log.Debug().Msg("rendered template")
 		if err != nil {
 			return err
 		}

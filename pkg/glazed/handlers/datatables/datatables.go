@@ -420,6 +420,7 @@ func CreateDataTablesHandler(
 		err := handler.Handle(c)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			log.Error().Err(err).Msg("error handling query")
+			return err
 		}
 
 		return nil

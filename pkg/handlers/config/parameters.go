@@ -150,7 +150,12 @@ func (od *ParameterFilter) ComputeMiddlewares(stream bool) []middlewares.Middlew
 	}
 
 	if od.Overrides != nil {
-		ret = append(ret, middlewares.UpdateFromMap(od.Overrides.GetParameterMap(), parameters.WithParseStepSource("overrides")))
+		// TODO(manuel, 2024-05-14) Here we would ideally parse potential strings that map to non strings (for example when using _env: SQLETON_PORT where the result is a string, not an int)
+		// Currently, we migrated this to UpdateFromMap but it's not a great look
+		ret = append(ret, middlewares.UpdateFromMap(
+			od.Overrides.GetParameterMap(),
+			parameters.WithParseStepSource("overrides")),
+		)
 	}
 
 	if od.Whitelist != nil {

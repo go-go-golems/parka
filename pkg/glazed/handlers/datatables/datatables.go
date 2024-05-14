@@ -18,10 +18,10 @@ import (
 	parka_middlewares "github.com/go-go-golems/parka/pkg/glazed/middlewares"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/render/layout"
+	"github.com/kucherenkovova/safegroup"
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
-	"golang.org/x/sync/errgroup"
 	"html/template"
 	"io"
 	"time"
@@ -196,7 +196,7 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 
 	if err != nil {
 		log.Debug().Err(err).Msg("error executing middlewares")
-		g := &errgroup.Group{}
+		g := &safegroup.Group{}
 		g.Go(func() error {
 			if dt_.JSStream != nil {
 				log.Debug().Msg("Closing JS stream")
@@ -272,7 +272,7 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 
 	ctx := c.Request().Context()
 	ctx2, cancel := context.WithCancel(ctx)
-	eg, ctx3 := errgroup.WithContext(ctx2)
+	eg, ctx3 := safegroup.WithContext(ctx2)
 
 	// copy the json rows to the template stream
 	eg.Go(func() error {
@@ -315,15 +315,17 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 		// NOTE(manuel, 2023-10-16) The GetAllParameterValues is a bit of a hack because really what we want is to only get those flags through the layers
 		err = qh.cmd.RunIntoGlazeProcessor(ctx3, parsedLayers, gp)
 
-		g := &errgroup.Group{}
+		g := &safegroup.Group{}
 		if err != nil {
 			g.Go(func() error {
 				// make sure to render the ErrorStream at the bottom, because we would otherwise get into a deadlock with the streaming channels
 				// NOTE(manuel, 2024-05-14) I'm not sure if with the addition of goroutines this is actually still necessary
 				//
-				dt_.ErrorStream <- err.Error()
-				close(dt_.ErrorStream)
-				dt_.ErrorStream = nil
+				if dt_.ErrorStream != nil {
+					dt_.ErrorStream <- err.Error()
+					close(dt_.ErrorStream)
+					dt_.ErrorStream = nil
+				}
 				return nil
 			})
 		}
@@ -340,7 +342,11 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 			return nil
 		})
 
-		return g.Wait()
+		err := g.Wait()
+		if err != nil {
+			return err
+		}
+		return nil
 	})
 
 	eg.Go(func() error {
@@ -353,7 +359,12 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 		return nil
 	})
 
-	return eg.Wait()
+	err = eg.Wait()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (qh *QueryHandler) renderTemplate(

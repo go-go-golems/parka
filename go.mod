@@ -7,8 +7,8 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.26.1
 	github.com/aws/aws-sdk-go-v2/config v1.27.12
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.37.5
-	github.com/go-go-golems/clay v0.1.14
-	github.com/go-go-golems/glazed v0.5.15
+	github.com/go-go-golems/clay v0.1.15
+	github.com/go-go-golems/glazed v0.5.17
 	github.com/kucherenkovova/safegroup v1.0.2
 	github.com/labstack/echo/v4 v4.12.0
 	github.com/pkg/errors v0.9.1
@@ -50,7 +50,6 @@ require (
 	github.com/charmbracelet/glamour v0.6.1-0.20230531150759-6d5b52861a9d // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
-	github.com/frankban/quicktest v1.14.5 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-openapi/errors v0.22.0 // indirect
 	github.com/go-openapi/strfmt v0.23.0 // indirect

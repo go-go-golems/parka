@@ -4,6 +4,10 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"io/fs"
+	"net/http"
+	"time"
+
 	"github.com/go-go-golems/parka/pkg/render"
 	utils_fs "github.com/go-go-golems/parka/pkg/utils/fs"
 	"github.com/labstack/echo/v4"
@@ -12,9 +16,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/ziflex/lecho/v3"
 	"golang.org/x/sync/errgroup"
-	"io/fs"
-	"net/http"
-	"time"
 )
 
 //go:embed "web/src/templates/*"
@@ -24,13 +25,9 @@ var templateFS embed.FS
 var distFS embed.FS
 
 // Server is the main class that parka uses to serve static and templated content.
-// It is a wrapper around gin.Engine.
 //
 // It is meant to be quite flexible, allowing you to add static paths and template lookups
 // that can provide different fs and template backends.
-//
-// Router is the gin.Engine that is used to serve the content, and it is exposed so that you
-// can use it as just a gin.Engine if you want to.
 type Server struct {
 	Router *echo.Echo
 

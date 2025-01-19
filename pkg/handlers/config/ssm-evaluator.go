@@ -3,7 +3,6 @@ package config
 import (
 	"context"
 	"os"
-	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -27,57 +26,16 @@ func NewSsmEvaluator(ctx context.Context) (*SsmEvaluator, error) {
 		envRegion = os.Getenv("AWS_DEFAULT_REGION")
 	}
 
-	log.Debug().
-		Str("AWS_REGION", os.Getenv("AWS_REGION")).
-		Str("AWS_DEFAULT_REGION", os.Getenv("AWS_DEFAULT_REGION")).
-		Msg("AWS region environment variables")
-
 	var configOpts []func(*config.LoadOptions) error
 	if envRegion != "" {
-		log.Debug().Str("region", envRegion).Msg("Using region from environment")
 		configOpts = append(configOpts, config.WithRegion(envRegion))
 	} else {
-		log.Debug().Msg("No region found in environment, defaulting to us-east-1")
 		configOpts = append(configOpts, config.WithRegion("us-east-1"))
 	}
 
 	cfg, err := config.LoadDefaultConfig(ctx, configOpts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to load AWS SDK config")
-	}
-
-	// Get credentials for logging
-	creds, err := cfg.Credentials.Retrieve(ctx)
-	if err != nil {
-		log.Warn().Err(err).Msg("failed to retrieve AWS credentials for debug logging")
-	} else {
-		// Only show first 4 chars of access key
-		truncatedKey := creds.AccessKeyID
-		if len(truncatedKey) > 4 {
-			truncatedKey = truncatedKey[:4] + strings.Repeat("*", len(truncatedKey)-4)
-		}
-		log.Debug().
-			Str("access_key", truncatedKey).
-			Str("provider", string(creds.Source)).
-			Msg("AWS credentials loaded")
-	}
-
-	log.Debug().
-		Str("region", cfg.Region).
-		Str("retry_mode", string(cfg.RetryMode)).
-		Msg("AWS config loaded")
-
-	// Get caller identity for additional context
-	stsClient := sts.NewFromConfig(cfg)
-	identity, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
-	if err != nil {
-		log.Warn().Err(err).Msg("failed to get AWS caller identity")
-	} else {
-		log.Debug().
-			Str("account", *identity.Account).
-			Str("arn", *identity.Arn).
-			Str("user_id", *identity.UserId).
-			Msg("AWS caller identity")
 	}
 
 	return &SsmEvaluator{

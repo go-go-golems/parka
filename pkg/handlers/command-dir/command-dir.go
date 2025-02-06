@@ -84,8 +84,12 @@ func NewCommandDirHandlerFromConfig(
 		generic_command.WithIndexTemplateName(config_.IndexTemplateName),
 		generic_command.WithMergeAdditionalData(config_.AdditionalData, true),
 	}
+	genericHandler, err := generic_command.NewGenericCommandHandler(genericOptions...)
+	if err != nil {
+		return nil, err
+	}
 	cd := &CommandDirHandler{
-		GenericCommandHandler: *generic_command.NewGenericCommandHandler(genericOptions...),
+		GenericCommandHandler: *genericHandler,
 	}
 
 	cd.ParameterFilter.Overrides = config_.Overrides
@@ -125,7 +129,7 @@ func NewCommandDirHandlerFromConfig(
 		}
 	}
 
-	err := cd.TemplateLookup.Reload()
+	err = cd.TemplateLookup.Reload()
 	if err != nil {
 		return nil, err
 	}

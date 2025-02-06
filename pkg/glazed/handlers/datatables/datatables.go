@@ -4,6 +4,10 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"html/template"
+	"io"
+	"time"
+
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
@@ -22,9 +26,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
-	"html/template"
-	"io"
-	"time"
 )
 
 // DataTables describes the data passed to  the template displaying the results of a glazed command.
@@ -149,7 +150,11 @@ func WithTemplateLookup(lookup render.TemplateLookup) QueryHandlerOption {
 
 func WithTemplateName(templateName string) QueryHandlerOption {
 	return func(h *QueryHandler) {
-		h.templateName = templateName
+		if templateName == "" {
+			h.templateName = "data-tables.tmpl.html"
+		} else {
+			h.templateName = templateName
+		}
 	}
 }
 
@@ -186,14 +191,13 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	// since we have a context there, and there is no need to block the middleware processing.
 	columnsC := make(chan []types.FieldName, 10)
 
-	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers,
-		append(
-			qh.middlewares,
-			parka_middlewares.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
-			middlewares.SetFromDefaults(),
-		)...,
-	)
-
+	middlewares_ := []middlewares.Middleware{
+		parka_middlewares.UpdateFromQueryParameters(c,
+			parameters.WithParseStepSource("query")),
+	}
+	middlewares_ = append(middlewares_, qh.middlewares...)
+	middlewares_ = append(middlewares_, middlewares.SetFromDefaults())
+	err := middlewares.ExecuteMiddlewares(description.Layers.Clone(), parsedLayers, middlewares_...)
 	if err != nil {
 		log.Debug().Err(err).Msg("error executing middlewares")
 		g := &safegroup.Group{}
@@ -309,15 +313,18 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 		g := &safegroup.Group{}
 		err_ := err
 		g.Go(func() error {
-			log.Debug().Err(err_).Msg("error running command")
-			// make sure to render the ErrorStream at the bottom, because we would otherwise get into a deadlock with the streaming channels
-			// NOTE(manuel, 2024-05-14) I'm not sure if with the addition of goroutines this is actually still necessary
-			//
-			log.Debug().Msg("sending error to error stream")
+			defer close(dt_.ErrorStream)
+
 			if err_ != nil {
-				dt_.ErrorStream <- err_.Error()
+				log.Debug().Err(err_).Msg("error running command")
+				// make sure to render the ErrorStream at the bottom, because we would otherwise get into a deadlock with the streaming channels
+				// NOTE(manuel, 2024-05-14) I'm not sure if with the addition of goroutines this is actually still necessary
+				//
+				log.Debug().Msg("sending error to error stream")
+				if err_ != nil {
+					dt_.ErrorStream <- err_.Error()
+				}
 			}
-			close(dt_.ErrorStream)
 			return nil
 		})
 
@@ -372,6 +379,9 @@ func (qh *QueryHandler) renderTemplate(
 	// our own output formatter that renders into an HTML template.
 	var err error
 
+	if qh.lookup == nil {
+		qh.lookup = NewDataTablesLookupTemplate()
+	}
 	t, err := qh.lookup.Lookup(qh.templateName)
 	if err != nil {
 		return err

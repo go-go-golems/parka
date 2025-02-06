@@ -53,7 +53,25 @@ The handler can be configured using functional options:
 The handler is registered with a Parka server using the `Serve` method:
 
 ```go
-err := handler.Serve(server, "/static")
+// Create a new Parka server
+server, err := server.NewServer(
+    server.WithPort(8080),
+    server.WithAddress("localhost"),
+)
+if err != nil {
+    return err
+}
+
+// Create and configure the handler
+handler := NewStaticDirHandler(
+    WithLocalPath("./static"),
+)
+
+// Register the handler with a base path
+err = handler.Serve(server, "/static")
+if err != nil {
+    return err
+}
 ```
 
 This will serve all files from the configured directory under the `/static` URL path.
@@ -113,7 +131,25 @@ type StaticFileHandler struct {
 The handler is registered with a Parka server using the `Serve` method:
 
 ```go
-err := handler.Serve(server, "/assets/js/script.js")
+// Create a new Parka server
+server, err := server.NewServer(
+    server.WithPort(8080),
+    server.WithAddress("localhost"),
+)
+if err != nil {
+    return err
+}
+
+// Create and configure the handler
+handler := NewStaticFileHandler(
+    WithLocalPath("/path/to/specific/file.js"),
+)
+
+// Register the handler with a specific URL path
+err = handler.Serve(server, "/assets/js/script.js")
+if err != nil {
+    return err
+}
 ```
 
 ### Path Handling
@@ -164,7 +200,10 @@ var staticFS embed.FS
 handler := NewStaticDirHandler(
     WithDefaultFS(staticFS, "static"),
 )
-server.AddHandler(handler, "/assets")
+err = handler.Serve(server, "/assets")
+if err != nil {
+    return err
+}
 ```
 
 ### Serving a Local Directory
@@ -173,7 +212,10 @@ server.AddHandler(handler, "/assets")
 handler := NewStaticDirHandler(
     WithLocalPath("./static"),
 )
-server.AddHandler(handler, "/static")
+err = handler.Serve(server, "/static")
+if err != nil {
+    return err
+}
 ```
 
 ### Serving a Specific File
@@ -182,7 +224,10 @@ server.AddHandler(handler, "/static")
 handler := NewStaticFileHandler(
     WithLocalPath("./assets/main.js"),
 )
-server.AddHandler(handler, "/js/main.js")
+err = handler.Serve(server, "/js/main.js")
+if err != nil {
+    return err
+}
 ```
 
 ### Configuration-based Setup
@@ -192,7 +237,10 @@ config := &config.Static{
     LocalPath: "./static",
 }
 handler := NewStaticDirHandlerFromConfig(config)
-server.AddHandler(handler, "/assets")
+err = handler.Serve(server, "/assets")
+if err != nil {
+    return err
+}
 ```
 
 ## Error Handling
@@ -259,36 +307,32 @@ The handler can be configured using functional options:
    )
    ```
 
-3. `WithAppendRendererOptions(options ...render.RendererOption)`: Adds additional renderer options
-   ```go
-   handler := NewTemplateHandler("index.tmpl.html",
-       WithAppendRendererOptions(
-           render.WithMarkdownBaseTemplateName("base.tmpl.html"),
-       ),
-   )
-   ```
-
-### Creation Methods
-
-1. Basic creation with options:
-   ```go
-   handler := NewTemplateHandler("index.tmpl.html", options...)
-   ```
-
-2. Creation from configuration:
-   ```go
-   handler, err := NewTemplateHandlerFromConfig(templateConfig, options...)
-   ```
-
 ### Usage
 
 The handler is registered with a Parka server using the `Serve` method:
 
 ```go
-err := handler.Serve(server, "/page")
-```
+// Create a new Parka server
+server, err := server.NewServer(
+    server.WithPort(8080),
+    server.WithAddress("localhost"),
+)
+if err != nil {
+    return err
+}
 
-This will serve the template at the specified URL path.
+// Create and configure the handler
+handler := NewTemplateHandler("index.tmpl.html",
+    WithDefaultFS(embeddedFS),
+    WithAlwaysReload(true),
+)
+
+// Register the handler with a URL path
+err = handler.Serve(server, "/")
+if err != nil {
+    return err
+}
+```
 
 ## TemplateDirHandler
 
@@ -332,43 +376,35 @@ type TemplateDirHandler struct {
    )
    ```
 
-3. `WithAlwaysReload(alwaysReload bool)`: Enables template reloading for development
-   ```go
-   handler, err := NewTemplateDirHandler(
-       WithAlwaysReload(true),
-   )
-   ```
-
-4. `WithAppendRendererOptions(options ...render.RendererOption)`: Adds additional renderer options
-   ```go
-   handler, err := NewTemplateDirHandler(
-       WithAppendRendererOptions(
-           render.WithMarkdownBaseTemplateName("base.tmpl.html"),
-       ),
-   )
-   ```
-
-### Creation Methods
-
-1. Basic creation with options:
-   ```go
-   handler, err := NewTemplateDirHandler(options...)
-   ```
-
-2. Creation from configuration:
-   ```go
-   handler, err := NewTemplateDirHandlerFromConfig(templateDirConfig, options...)
-   ```
-
 ### Usage
 
 The handler is registered with a Parka server using the `Serve` method:
 
 ```go
-err := handler.Serve(server, "/docs")
-```
+// Create a new Parka server
+server, err := server.NewServer(
+    server.WithPort(8080),
+    server.WithAddress("localhost"),
+)
+if err != nil {
+    return err
+}
 
-This will serve all templates in the configured directory under the `/docs` URL path.
+// Create and configure the handler
+handler, err := NewTemplateDirHandler(
+    WithLocalDirectory("./templates"),
+    WithAlwaysReload(true),
+)
+if err != nil {
+    return err
+}
+
+// Register the handler with a base path
+err = handler.Serve(server, "/")
+if err != nil {
+    return err
+}
+```
 
 ### Template Discovery
 
@@ -419,9 +455,7 @@ The TemplateDirHandler automatically discovers and serves:
 ```go
 handler := NewTemplateHandler("index.tmpl.html",
     WithDefaultFS(embeddedFS),
-    WithAppendRendererOptions(
-        render.WithMarkdownBaseTemplateName("base.tmpl.html"),
-    ),
+    WithAlwaysReload(true),
 )
 server.AddHandler(handler, "/")
 ```
@@ -431,10 +465,7 @@ server.AddHandler(handler, "/")
 ```go
 handler, err := NewTemplateDirHandler(
     WithLocalDirectory("./docs"),
-    WithAppendRendererOptions(
-        render.WithMarkdownBaseTemplateName("_layouts/base.tmpl.html"),
-        render.WithIndexTemplateName("_layouts/index.tmpl.html"),
-    ),
+    WithAlwaysReload(true),
 )
 server.AddHandler(handler, "/docs")
 ```
@@ -452,17 +483,18 @@ server.AddHandler(handler, "/content")
 
 ## Error Handling
 
-Both handlers handle errors gracefully:
-- Template parsing errors return 500 Internal Server Error
-- Missing templates return 404 Not Found
-- Invalid template data returns 500 Internal Server Error
+All handlers handle errors gracefully and return appropriate error types that should be checked:
+- Invalid configuration returns initialization errors
+- Registration errors are returned by the Serve method
+- Runtime errors are handled through Echo's error handling system
 
 ## Integration with Echo
 
-Both handlers integrate with Echo's template rendering system:
+The handlers integrate with Echo's routing system:
 - Use Echo's context for request handling
-- Support middleware for template data injection
+- Support middleware for authentication and logging
 - Compatible with Echo's error handling
+- Support streaming responses
 
 ## Further Reading
 
@@ -489,6 +521,8 @@ type GenericCommandHandler struct {
     IndexTemplateName string
     TemplateLookup   render.TemplateLookup
     BasePath         string
+    preMiddlewares   []middlewares.Middleware
+    postMiddlewares  []middlewares.Middleware
     middlewares      []middlewares.Middleware
 }
 ```
@@ -500,7 +534,8 @@ type GenericCommandHandler struct {
 - `IndexTemplateName`: Template for rendering command indexes
 - `TemplateLookup`: Interface for finding templates
 - `BasePath`: Base URL path for the handler
-- `middlewares`: Middleware chain for command processing
+- `preMiddlewares`: Middleware chain to run before parameter filter middlewares
+- `postMiddlewares`: Middleware chain to run after parameter filter middlewares
 
 ### Endpoints
 
@@ -515,31 +550,26 @@ The handler provides several endpoints for different output formats:
 ### Configuration Options
 
 1. `WithTemplateName(name string)`: Sets the template for command output
-   ```go
-   handler := NewGenericCommandHandler(
-       WithTemplateName("command.tmpl.html"),
-   )
-   ```
-
 2. `WithParameterFilter(filter *config.ParameterFilter)`: Configures parameter handling
-   ```go
-   handler := NewGenericCommandHandler(
-       WithParameterFilter(&config.ParameterFilter{
-           Defaults: map[string]interface{}{
-               "limit": 100,
-           },
-       }),
-   )
-   ```
-
 3. `WithMergeAdditionalData(data map[string]interface{}, override bool)`: Adds template data
-   ```go
-   handler := NewGenericCommandHandler(
-       WithMergeAdditionalData(map[string]interface{}{
-           "title": "My Commands",
-       }, true),
-   )
-   ```
+4. `WithPreMiddlewares(middlewares ...middlewares.Middleware)`: Add middlewares to run before parameter filter middlewares
+5. `WithPostMiddlewares(middlewares ...middlewares.Middleware)`: Add middlewares to run after parameter filter middlewares
+
+Example:
+
+```go
+handler := NewGenericCommandHandler(
+    WithTemplateName("command.tmpl.html"),
+    WithParameterFilter(filter),
+    WithPreMiddlewares(myPreMiddleware1, myPreMiddleware2),
+    WithPostMiddlewares(myPostMiddleware1, myPostMiddleware2),
+)
+```
+
+The middlewares will be executed in this order:
+1. Pre-middlewares (in the order they were added)
+2. Parameter filter middlewares
+3. Post-middlewares (in the order they were added)
 
 ## CommandHandler
 
@@ -589,6 +619,37 @@ type CommandHandler struct {
    ```go
    handler, err := NewCommandHandlerFromConfig(config, loader, options...)
    ```
+
+### Usage
+
+```go
+// Create a new Parka server
+server, err := server.NewServer(
+    server.WithPort(8080),
+    server.WithAddress("localhost"),
+)
+if err != nil {
+    return err
+}
+
+// Create your command
+cmd := &MyCommand{}
+
+// Create and configure the handler
+handler := NewCommandHandler(cmd,
+    WithDevMode(true),
+    WithGenericCommandHandlerOptions(
+        WithTemplateName("command.tmpl.html"),
+        WithParameterFilter(filter),
+    ),
+)
+
+// Register the handler with a URL path
+err = handler.Serve(server, "/my-command")
+if err != nil {
+    return err
+}
+```
 
 ## CommandDirHandler
 
@@ -648,6 +709,43 @@ routes:
               - name
       additionalData:
         title: "My Commands"
+```
+
+### Usage
+
+```go
+// Create a new Parka server
+server, err := server.NewServer(
+    server.WithPort(8080),
+    server.WithAddress("localhost"),
+)
+if err != nil {
+    return err
+}
+
+// Create and configure your repository
+repo := repositories.NewRepository()
+repo.AddCommand(commands.NewHelloCommand())
+// Add more commands...
+
+// Create and configure the handler
+handler, err := NewCommandDirHandler(
+    WithRepository(repo),
+    WithDevMode(true),
+    WithGenericCommandHandlerOptions(
+        WithIndexTemplateName("commands/index.tmpl.html"),
+        WithTemplateName("commands/view.tmpl.html"),
+    ),
+)
+if err != nil {
+    return err
+}
+
+// Register the handler with a base path
+err = handler.Serve(server, "/commands")
+if err != nil {
+    return err
+}
 ```
 
 ## Best Practices
@@ -717,11 +815,10 @@ server.AddHandler(handler, "/api")
 
 ## Error Handling
 
-The handlers provide comprehensive error handling:
-- Command not found returns 404 Not Found
-- Ambiguous command paths return 404 with details
-- Parameter validation errors return 400 Bad Request
-- Command execution errors return 500 Internal Server Error
+All handlers handle errors gracefully and return appropriate error types that should be checked:
+- Invalid configuration returns initialization errors
+- Registration errors are returned by the Serve method
+- Runtime errors are handled through Echo's error handling system
 
 ## Integration with Echo
 

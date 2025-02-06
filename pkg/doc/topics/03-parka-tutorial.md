@@ -192,7 +192,10 @@ Let's add static file serving for CSS, JavaScript, and other assets:
 staticHandler := static_dir.NewStaticDirHandler(
     static_dir.WithLocalPath("./static"),
 )
-s.AddHandler(staticHandler, "/assets")
+err = staticHandler.Serve(s, "/assets")
+if err != nil {
+    return err
+}
 ```
 
 ## Template Support
@@ -228,7 +231,6 @@ Create a base layout (`templates/layouts/base.tmpl.html`):
 </html>
 ```
 
-
 ### Why Templates?
 - Separates HTML structure from logic
 - Enables dynamic content generation
@@ -251,7 +253,10 @@ templateHandler := template_dir.NewTemplateDirHandler(
     template_dir.WithLocalDirectory("./templates"),
     template_dir.WithAlwaysReload(true), // For development
 )
-s.AddHandler(templateHandler, "/")
+err = templateHandler.Serve(s, "/")
+if err != nil {
+    return err
+}
 ```
 
 ## Command System
@@ -386,7 +391,10 @@ cmdHandler, err := command_dir.NewCommandDirHandler(
 )
 cobra.CheckErr(err)
 
-s.AddHandler(cmdHandler, "/commands")
+err = cmdHandler.Serve(s, "/commands")
+if err != nil {
+    return err
+}
 ```
 
 ## Configuration System
@@ -480,7 +488,8 @@ cobra.CheckErr(err)
 for _, route := range cfg.Routes {
     handler, err := route.CreateHandler()
     cobra.CheckErr(err)
-    s.AddHandler(handler, route.Path)
+    err = handler.Serve(s, route.Path)
+    cobra.CheckErr(err)
 }
 ```
 
@@ -535,7 +544,6 @@ if dev {
 ## Error Handling and Logging
 
 Proper error handling and logging are crucial for maintaining and debugging applications.
-
 
 ```go
 // Create a custom error handler

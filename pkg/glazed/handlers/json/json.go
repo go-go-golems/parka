@@ -21,14 +21,17 @@ type QueryHandler struct {
 	middlewares []middlewares.Middleware
 	// useJSONBody determines whether to use JSON body parsing (POST) or query parameters (GET)
 	useJSONBody bool
+	// parseOptions are options passed to parameter parsing
+	parseOptions []parameters.ParseStepOption
 }
 
 type QueryHandlerOption func(*QueryHandler)
 
 func NewQueryHandler(cmd cmds.Command, options ...QueryHandlerOption) *QueryHandler {
 	h := &QueryHandler{
-		cmd:         cmd,
-		useJSONBody: false, // default to query parameters
+		cmd:          cmd,
+		useJSONBody:  false, // default to query parameters
+		parseOptions: []parameters.ParseStepOption{},
 	}
 
 	for _, option := range options {
@@ -51,6 +54,13 @@ func WithJSONBody() QueryHandlerOption {
 	}
 }
 
+// WithParseOptions adds parameter parse options to the handler
+func WithParseOptions(options ...parameters.ParseStepOption) QueryHandlerOption {
+	return func(handler *QueryHandler) {
+		handler.parseOptions = append(handler.parseOptions, options...)
+	}
+}
+
 var _ handlers.Handler = (*QueryHandler)(nil)
 
 func (h *QueryHandler) Handle(c echo.Context) error {
@@ -59,7 +69,7 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 
 	var jsonMiddleware *parka_middlewares.JSONBodyMiddleware
 	if h.useJSONBody {
-		jsonMiddleware = parka_middlewares.NewJSONBodyMiddleware(c, parameters.WithParseStepSource("json"))
+		jsonMiddleware = parka_middlewares.NewJSONBodyMiddleware(c, append(h.parseOptions, parameters.WithParseStepSource("json"))...)
 		defer func() {
 			if err := jsonMiddleware.Close(); err != nil {
 				// We can only log this error since we're in a defer
@@ -73,7 +83,7 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 	if h.useJSONBody {
 		middlewares_ = append(middlewares_, jsonMiddleware.Middleware())
 	} else {
-		middlewares_ = append(middlewares_, parka_middlewares.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")))
+		middlewares_ = append(middlewares_, parka_middlewares.UpdateFromQueryParameters(c, append(h.parseOptions, parameters.WithParseStepSource("query"))...))
 	}
 
 	middlewares_ = append(middlewares_, h.middlewares...)

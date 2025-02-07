@@ -122,7 +122,7 @@ func (m *JSONBodyMiddleware) Middleware() middlewares.Middleware {
 							}
 							defer f.Close()
 
-							parsed, err := p.ParseFromReader(f, filepath.Base(tmpPath))
+							parsed, err := p.ParseFromReader(f, filepath.Base(tmpPath), m.options...)
 							if err != nil {
 								return errors.Wrapf(err, "invalid value for parameter '%s'", p.Name)
 							}

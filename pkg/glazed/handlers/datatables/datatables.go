@@ -220,6 +220,7 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 				log.Debug().Msg("Error stream full")
 			}
 			log.Debug().Msg("Closing error stream")
+			close(dt_.ErrorStream)
 
 			return nil
 		})
@@ -236,7 +237,12 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 
 		g.Go(func() error {
 			log.Debug().Msg("Rendering template")
-			return qh.renderTemplate(parsedLayers, c.Response(), dt_, columnsC)
+			err := qh.renderTemplate(parsedLayers, c.Response(), dt_, columnsC)
+			log.Debug().Msg("Template rendered")
+			if err != nil {
+				return err
+			}
+			return nil
 		})
 
 		return g.Wait()

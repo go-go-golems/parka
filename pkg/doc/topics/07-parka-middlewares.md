@@ -1,13 +1,14 @@
 # Parka Middlewares for Parameter Extraction
 
-Parka provides powerful middlewares for extracting parameters from HTTP requests, specifically designed to work with Glazed commands. This guide explains how to use these middlewares to handle both URL query parameters and form data.
+Parka provides powerful middlewares for extracting parameters from HTTP requests, specifically designed to work with Glazed commands. This guide explains how to use these middlewares to handle URL query parameters, form data, and JSON POST requests.
 
 ## Overview
 
-The two main middlewares for parameter extraction are:
+The three main middlewares for parameter extraction are:
 
 1. `UpdateFromQueryParameters` - Extracts parameters from URL query strings
 2. `UpdateFromFormQuery` - Extracts parameters from form data, including file uploads
+3. `JSONBodyMiddleware` - Extracts parameters from JSON POST request bodies
 
 These middlewares are essential when exposing Glazed commands through HTTP endpoints, as they allow seamless translation of HTTP request data into Glazed command parameters.
 
@@ -155,14 +156,166 @@ func HandleFileUpload(c echo.Context) error {
 }
 ```
 
+## Using JSON Body Middleware
+
+The JSON body middleware handles parameters sent in JSON format via POST requests. It's particularly useful for complex parameter structures and file-like parameters that contain content directly in the request body.
+
+### Basic Usage
+
+```go
+import (
+    "github.com/go-go-golems/parka/pkg/glazed/middlewares"
+    "github.com/go-go-golems/glazed/pkg/cmds/parameters"
+)
+
+// Create a new JSON middleware instance
+jsonMiddleware := middlewares.NewJSONBodyMiddleware(c,
+    parameters.WithParseStepSource("json"))
+defer jsonMiddleware.Close() // Important: Always close to cleanup temporary files
+
+// Use in your middleware chain
+middlewares_ := []middlewares.Middleware{
+    jsonMiddleware.Middleware(),
+}
+```
+
+### Example with a Glazed Command
+
+Here's a complete example of using the JSON body middleware with a Glazed command:
+
+```go
+type MyCommand struct {
+    *cmds.CommandDescription
+}
+
+func NewMyCommand() (*MyCommand, error) {
+    return &MyCommand{
+        CommandDescription: cmds.NewCommandDescription(
+            "mycommand",
+            cmds.WithShort("A command with JSON parameters"),
+            cmds.WithFlags(
+                parameters.NewParameterDefinition(
+                    "content",
+                    parameters.ParameterTypeStringFromFile,
+                    parameters.WithHelp("Content to process"),
+                    parameters.WithRequired(true),
+                ),
+                parameters.NewParameterDefinition(
+                    "options",
+                    parameters.ParameterTypeObject,
+                    parameters.WithHelp("Processing options"),
+                ),
+            ),
+        ),
+    }, nil
+}
+
+// In your Echo handler
+func HandleMyCommand(c echo.Context) error {
+    cmd := NewMyCommand()
+    parsedLayers := layers.NewParsedLayers()
+    
+    jsonMiddleware := middlewares.NewJSONBodyMiddleware(c)
+    defer jsonMiddleware.Close()
+    
+    middlewares_ := []middlewares.Middleware{
+        jsonMiddleware.Middleware(),
+        middlewares.SetFromDefaults(),
+    }
+    
+    err := middlewares.ExecuteMiddlewares(
+        cmd.Description().Layers.Clone(),
+        parsedLayers,
+        middlewares_...,
+    )
+    if err != nil {
+        return err
+    }
+    
+    return cmd.RunIntoGlazeProcessor(c.Request().Context(), parsedLayers, processor)
+}
+```
+
+### Using with File-Like Parameters
+
+The JSON middleware can handle file-like parameters by creating temporary files from string content in the JSON:
+
+```json
+{
+    "content": "This will be written to a temp file\nAnd processed as a file parameter",
+    "options": {
+        "format": "text",
+        "encoding": "utf-8"
+    }
+}
+```
+
+The middleware will:
+1. Create a temporary file with the content
+2. Pass the file path to the parameter parser
+3. Clean up the temporary file when the middleware is closed
+
+### Using the JSON Handler
+
+Parka provides a convenient JSON handler that can work with both query parameters and JSON body:
+
+```go
+import (
+    "github.com/go-go-golems/parka/pkg/glazed/handlers/json"
+)
+
+// For query parameters (GET requests)
+handler := json.CreateJSONQueryHandler(cmd,
+    json.WithParseOptions(parameters.WithParseStepSource("query")))
+
+// For JSON body (POST requests)
+handler := json.CreateJSONBodyHandler(cmd,
+    json.WithParseOptions(parameters.WithParseStepSource("json")))
+
+// Register with Echo
+e.GET("/api/command", handler)
+e.POST("/api/command", handler)
+```
+
+The handler supports configuration through options:
+- `WithJSONBody()` - Use JSON body parsing instead of query parameters
+- `WithParseOptions()` - Add parameter parse options
+- `WithMiddlewares()` - Add additional middlewares to the chain
+
+### Best Practices
+
+1. **Always Close the Middleware**: Use `defer middleware.Close()` to ensure temporary files are cleaned up.
+
+2. **Error Handling**: The middleware provides detailed error messages for:
+   - Missing required parameters
+   - Invalid parameter types
+   - JSON parsing errors
+   - File handling errors
+
+3. **Parameter Types**: The middleware supports:
+   - Basic types (string, number, boolean)
+   - Arrays (for list parameters)
+   - File-like parameters (content provided as strings)
+   - Object parameters (nested JSON structures)
+
+4. **Thread Safety**: The middleware is thread-safe for temporary file management.
+
 ## Combining Middlewares
 
-You can combine both middlewares to handle both query parameters and form data:
+You can combine different middlewares to handle various parameter sources:
 
 ```go
 middlewares_ := []middlewares.Middleware{
+    // For GET requests
     parka_middlewares.UpdateFromQueryParameters(c),
+    
+    // For POST with form data
     parka_middlewares.UpdateFromFormQuery(c),
+    
+    // For POST with JSON
+    jsonMiddleware.Middleware(),
+    
+    // Always set defaults last
     middlewares.SetFromDefaults(),
 }
 ```
@@ -225,6 +378,50 @@ func HandleFormSubmission(c echo.Context) error {
     
     // Process the form submission
     return cmd.RunIntoGlazeProcessor(c.Request().Context(), parsedLayers, processor)
+}
+```
+
+### API Endpoint with JSON Body
+
+```go
+func HandleAPIEndpoint(c echo.Context) error {
+    cmd := NewAPICommand()
+    parsedLayers := layers.NewParsedLayers()
+    
+    jsonMiddleware := middlewares.NewJSONBodyMiddleware(c,
+        parameters.WithParseStepSource("json"))
+    defer jsonMiddleware.Close()
+    
+    err := middlewares.ExecuteMiddlewares(
+        cmd.Description().Layers.Clone(),
+        parsedLayers,
+        jsonMiddleware.Middleware(),
+        middlewares.SetFromDefaults(),
+    )
+    if err != nil {
+        return err
+    }
+    
+    // Process the command
+    return cmd.RunIntoGlazeProcessor(c.Request().Context(), parsedLayers, processor)
+}
+```
+
+### Flexible API Endpoint
+
+```go
+func HandleFlexibleEndpoint(c echo.Context) error {
+    cmd := NewFlexibleCommand()
+    
+    // Use the JSON handler which can handle both query and body
+    handler := json.NewQueryHandler(cmd,
+        json.WithParseOptions(parameters.WithParseStepSource("auto")))
+    
+    if c.Request().Method == "POST" {
+        handler.UseJSONBody = true
+    }
+    
+    return handler.Handle(c)
 }
 ```
 
@@ -454,6 +651,111 @@ Both middlewares implement comprehensive error handling:
    - Handle file open/read errors
    - Manage temporary file cleanup
    - Report file processing errors with context
+
+## Understanding the JSON Middleware Internals
+
+The JSON middleware (`JSONBodyMiddleware`) is designed to handle JSON POST requests and manage temporary files. Here's a detailed look at its internal workings:
+
+### Middleware Structure
+
+```go
+type JSONBodyMiddleware struct {
+    c       echo.Context
+    options []parameters.ParseStepOption
+    files   []string
+    mu      sync.Mutex
+}
+```
+
+1. **Context**: Stores the Echo context for accessing the request body
+2. **Options**: Parse step options for parameter processing
+3. **Files**: List of temporary files to clean up
+4. **Mutex**: Ensures thread-safe file management
+
+### Parameter Processing Flow
+
+1. **Body Reading**:
+   ```go
+   body, err := io.ReadAll(m.c.Request().Body)
+   var jsonData map[string]interface{}
+   if err := json.Unmarshal(body, &jsonData); err != nil {
+       return errors.Wrap(err, "could not parse JSON body")
+   }
+   ```
+   - Reads the entire request body
+   - Parses it as a JSON object
+
+2. **Parameter Extraction**:
+   ```go
+   value, exists := jsonData[p.Name]
+   if !exists {
+       if p.Required {
+           return errors.Errorf("required parameter '%s' is missing", p.Name)
+       }
+       return nil
+   }
+   ```
+   - Checks for parameter existence
+   - Handles required parameters
+
+3. **File Parameter Handling**:
+   ```go
+   if p.Type.NeedsFileContent("") {
+       switch v := value.(type) {
+       case string:
+           tmpPath, err := m.createTempFileFromString(v)
+           // ... process file ...
+       }
+   }
+   ```
+   - Creates temporary files for file-like parameters
+   - Manages file cleanup through the Close method
+
+4. **Type Conversion**:
+   ```go
+   switch v := value.(type) {
+   case string:
+       stringValue = v
+   case float64:
+       stringValue = fmt.Sprintf("%v", v)
+   case bool:
+       stringValue = fmt.Sprintf("%v", v)
+   case []interface{}:
+       // Handle arrays
+   }
+   ```
+   - Converts JSON values to appropriate parameter types
+   - Handles arrays and primitive types
+
+### Temporary File Management
+
+The middleware uses a thread-safe approach to manage temporary files:
+
+```go
+func (m *JSONBodyMiddleware) Close() error {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+
+    var errs []error
+    for _, f := range m.files {
+        if err := os.Remove(f); err != nil {
+            errs = append(errs, errors.Wrapf(err, "failed to remove temporary file %s", f))
+        }
+    }
+    m.files = m.files[:0]
+
+    if len(errs) > 0 {
+        return errors.Errorf("failed to clean up some temporary files: %v", errs)
+    }
+    return nil
+}
+```
+
+This ensures that:
+- All temporary files are properly tracked
+- Cleanup is thread-safe
+- Errors during cleanup are collected and reported
+- The files list is cleared after cleanup
 
 ## Further Reading
 

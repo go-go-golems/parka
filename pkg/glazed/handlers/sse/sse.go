@@ -4,6 +4,8 @@ package sse
 
 import (
 	"fmt"
+	"net/http"
+
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
@@ -14,7 +16,6 @@ import (
 	middlewares2 "github.com/go-go-golems/parka/pkg/glazed/middlewares"
 	"github.com/kucherenkovova/safegroup"
 	"github.com/labstack/echo/v4"
-	"net/http"
 )
 
 type QueryHandler struct {
@@ -42,17 +43,24 @@ func WithMiddlewares(middlewares ...middlewares.Middleware) QueryHandlerOption {
 	}
 }
 
+var _ handlers.Handler = (*QueryHandler)(nil)
+
 func (h *QueryHandler) Handle(c echo.Context) error {
 	description := h.cmd.Description()
 	parsedLayers := layers.NewParsedLayers()
 
-	middlewares_ := append([]middlewares.Middleware{
-		middlewares2.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
-	}, h.middlewares...)
+	middlewares_ := append(
+		[]middlewares.Middleware{
+			middlewares2.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
+		},
+		h.middlewares...,
+	)
+	middlewares_ = append(middlewares_, middlewares.SetFromDefaults())
 	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers, middlewares_...)
 	if err != nil {
 		return err
 	}
+
 	c.Response().Header().Set("Content-Type", "text/event-stream")
 	c.Response().Header().Set("Cache-Control", "no-cache")
 	c.Response().Header().Set("Connection", "keep-alive")
@@ -148,15 +156,14 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 	default:
 		return &handlers.UnsupportedCommandError{Command: h.cmd}
 	}
+
 	return nil
 }
 
 func CreateQueryHandler(
 	cmd cmds.Command,
-	middlewares_ ...middlewares.Middleware,
+	options ...QueryHandlerOption,
 ) echo.HandlerFunc {
-	handler := NewQueryHandler(cmd,
-		WithMiddlewares(middlewares_...),
-	)
+	handler := NewQueryHandler(cmd, options...)
 	return handler.Handle
 }

@@ -44,12 +44,16 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 	description := h.cmd.Description()
 	parsedLayers := layers.NewParsedLayers()
 
-	middlewares_ := append(h.middlewares,
-		parka_middlewares.UpdateFromQueryParameters(c,
-			parameters.WithParseStepSource("query"),
-		),
-		middlewares.SetFromDefaults(),
+	middlewares_ := append(
+		[]middlewares.Middleware{
+			parka_middlewares.UpdateFromQueryParameters(c,
+				parameters.WithParseStepSource("query"),
+			),
+		},
+		h.middlewares...,
 	)
+	middlewares_ = append(middlewares_, middlewares.SetFromDefaults())
+
 	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers, middlewares_...)
 	if err != nil {
 		return err
@@ -110,10 +114,8 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 
 func CreateQueryHandler(
 	cmd cmds.Command,
-	middlewares_ ...middlewares.Middleware,
+	options ...QueryHandlerOption,
 ) echo.HandlerFunc {
-	handler := NewQueryHandler(cmd,
-		WithMiddlewares(middlewares_...),
-	)
+	handler := NewQueryHandler(cmd, options...)
 	return handler.Handle
 }

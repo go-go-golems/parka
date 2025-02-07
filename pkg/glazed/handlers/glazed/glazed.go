@@ -1,6 +1,8 @@
 package glazed
 
 import (
+	"net/http"
+
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
@@ -10,7 +12,6 @@ import (
 	middlewares2 "github.com/go-go-golems/parka/pkg/glazed/middlewares"
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
-	"net/http"
 )
 
 type QueryHandler struct {
@@ -44,16 +45,20 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 	description := h.cmd.Description()
 	parsedLayers := layers.NewParsedLayers()
 
-	middlewares_ := append(h.middlewares,
-		middlewares2.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
-		middlewares.SetFromDefaults(),
+	middlewares_ := append(
+		[]middlewares.Middleware{
+			middlewares2.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
+		},
+		h.middlewares...,
 	)
+	middlewares_ = append(middlewares_, middlewares.SetFromDefaults())
+
 	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers, middlewares_...)
 	if err != nil {
 		return err
 	}
 
-	glazedLayer, ok := parsedLayers.Get("glazed")
+	glazedLayer, ok := parsedLayers.Get(settings.GlazedSlug)
 	if !ok {
 		return errors.New("glazed layer not found")
 	}

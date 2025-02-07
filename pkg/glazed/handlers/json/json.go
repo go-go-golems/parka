@@ -47,10 +47,13 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 	parsedLayers := layers.NewParsedLayers()
 
 	middlewares_ := append(
-		h.middlewares,
-		middlewares2.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
-		middlewares.SetFromDefaults(),
+		[]middlewares.Middleware{
+			middlewares2.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
+		},
+		h.middlewares...,
 	)
+	middlewares_ = append(middlewares_, middlewares.SetFromDefaults())
+
 	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers, middlewares_...)
 	if err != nil {
 		return err

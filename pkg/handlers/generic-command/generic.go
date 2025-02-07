@@ -322,37 +322,76 @@ func (gch *GenericCommandHandler) ServeRepository(server *parka.Server, basePath
 	return nil
 }
 
+// computeDataTablesOptions returns the options used for DataTables handlers
+func (gch *GenericCommandHandler) computeDataTablesOptions() []datatables.QueryHandlerOption {
+	return []datatables.QueryHandlerOption{
+		datatables.WithMiddlewares(gch.preMiddlewares...),
+		datatables.WithMiddlewares(gch.middlewares...),
+		datatables.WithMiddlewares(gch.postMiddlewares...),
+		datatables.WithTemplateLookup(gch.TemplateLookup),
+		datatables.WithTemplateName(gch.TemplateName),
+		datatables.WithAdditionalData(gch.AdditionalData),
+		datatables.WithStreamRows(gch.Stream),
+	}
+}
+
+// computeJSONOptions returns the options used for JSON handlers
+func (gch *GenericCommandHandler) computeJSONOptions() []json.QueryHandlerOption {
+	return []json.QueryHandlerOption{
+		json.WithMiddlewares(gch.preMiddlewares...),
+		json.WithMiddlewares(gch.middlewares...),
+		json.WithMiddlewares(gch.postMiddlewares...),
+	}
+}
+
+// computeTextOptions returns the options used for text handlers
+func (gch *GenericCommandHandler) computeTextOptions() []text.QueryHandlerOption {
+	return []text.QueryHandlerOption{
+		text.WithMiddlewares(gch.preMiddlewares...),
+		text.WithMiddlewares(gch.middlewares...),
+		text.WithMiddlewares(gch.postMiddlewares...),
+	}
+}
+
+// computeSSEOptions returns the options used for SSE handlers
+func (gch *GenericCommandHandler) computeSSEOptions() []sse.QueryHandlerOption {
+	return []sse.QueryHandlerOption{
+		sse.WithMiddlewares(gch.preMiddlewares...),
+		sse.WithMiddlewares(gch.middlewares...),
+		sse.WithMiddlewares(gch.postMiddlewares...),
+	}
+}
+
+// computeOutputFileOptions returns the options used for output file handlers
+func (gch *GenericCommandHandler) computeOutputFileOptions() []output_file.QueryHandlerOption {
+	return []output_file.QueryHandlerOption{
+		output_file.WithMiddlewares(gch.preMiddlewares...),
+		output_file.WithMiddlewares(gch.middlewares...),
+		output_file.WithMiddlewares(gch.postMiddlewares...),
+	}
+}
+
 func (gch *GenericCommandHandler) ServeData(c echo.Context, command cmds.Command) error {
 	switch v := command.(type) {
 	case cmds.GlazeCommand:
-		return json.CreateJSONQueryHandler(v, json.WithMiddlewares(gch.middlewares...))(c)
+		return json.CreateJSONQueryHandler(v, gch.computeJSONOptions()...)(c)
 	default:
-		return text.CreateQueryHandler(v)(c)
+		return text.CreateQueryHandler(v, gch.computeTextOptions()...)(c)
 	}
 }
 
 func (gch *GenericCommandHandler) ServeText(c echo.Context, command cmds.Command) error {
-	return text.CreateQueryHandler(command, gch.middlewares...)(c)
+	return text.CreateQueryHandler(command, gch.computeTextOptions()...)(c)
 }
 
 func (gch *GenericCommandHandler) ServeStreaming(c echo.Context, command cmds.Command) error {
-	return sse.CreateQueryHandler(command, gch.middlewares...)(c)
+	return sse.CreateQueryHandler(command, gch.computeSSEOptions()...)(c)
 }
 
 func (gch *GenericCommandHandler) ServeDataTables(c echo.Context, command cmds.Command, downloadPath string) error {
 	switch v := command.(type) {
 	case cmds.GlazeCommand:
-		options := []datatables.QueryHandlerOption{
-			datatables.WithMiddlewares(gch.preMiddlewares...),
-			datatables.WithMiddlewares(gch.middlewares...),
-			datatables.WithMiddlewares(gch.postMiddlewares...),
-			datatables.WithTemplateLookup(gch.TemplateLookup),
-			datatables.WithTemplateName(gch.TemplateName),
-			datatables.WithAdditionalData(gch.AdditionalData),
-			datatables.WithStreamRows(gch.Stream),
-		}
-
-		return datatables.CreateDataTablesHandler(v, gch.BasePath, downloadPath, options...)(c)
+		return datatables.CreateDataTablesHandler(v, gch.BasePath, downloadPath, gch.computeDataTablesOptions()...)(c)
 	default:
 		return c.JSON(http.StatusInternalServerError, utils.H{"error": "command is not a glazed command"})
 	}
@@ -374,7 +413,7 @@ func (gch *GenericCommandHandler) ServeDownload(c echo.Context, command cmds.Com
 		return output_file.CreateGlazedFileHandler(
 			v,
 			fileName,
-			gch.middlewares...,
+			gch.computeOutputFileOptions()...,
 		)(c)
 
 	case cmds.WriterCommand:
@@ -393,7 +432,6 @@ func (gch *GenericCommandHandler) ServeDownload(c echo.Context, command cmds.Com
 	default:
 		return c.JSON(http.StatusInternalServerError, utils.H{"error": "command is not a glazed/writer command"})
 	}
-
 }
 
 // getRepositoryCommand lookups a command in the given repository and return success as bool and the given command,

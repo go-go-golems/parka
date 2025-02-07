@@ -1,6 +1,9 @@
 package command
 
 import (
+	"os"
+	"strings"
+
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/alias"
 	"github.com/go-go-golems/glazed/pkg/cmds/loaders"
@@ -10,8 +13,6 @@ import (
 	"github.com/go-go-golems/parka/pkg/render"
 	parka "github.com/go-go-golems/parka/pkg/server"
 	"github.com/pkg/errors"
-	"os"
-	"strings"
 )
 
 type CommandHandler struct {
@@ -41,9 +42,13 @@ func WithGenericCommandHandlerOptions(options ...generic_command.GenericCommandH
 func NewCommandHandler(
 	command cmds.Command,
 	options ...CommandHandlerOption,
-) *CommandHandler {
+) (*CommandHandler, error) {
+	genericHandler, err := generic_command.NewGenericCommandHandler()
+	if err != nil {
+		return nil, err
+	}
 	c := &CommandHandler{
-		GenericCommandHandler: *generic_command.NewGenericCommandHandler(),
+		GenericCommandHandler: *genericHandler,
 		Command:               command,
 	}
 
@@ -51,7 +56,7 @@ func NewCommandHandler(
 		opt(c)
 	}
 
-	return c
+	return c, nil
 }
 
 func LoadCommandFromFile(path string, loader loaders.CommandLoader) (cmds.Command, error) {
@@ -114,7 +119,10 @@ func NewCommandHandlerFromConfig(
 		return nil, err
 	}
 
-	c := NewCommandHandler(cmd, WithGenericCommandHandlerOptions(genericOptions...))
+	c, err := NewCommandHandler(cmd, WithGenericCommandHandlerOptions(genericOptions...))
+	if err != nil {
+		return nil, err
+	}
 	// TODO(manuel, 2024-05-09) Handle devmode
 	c.Command = cmd
 

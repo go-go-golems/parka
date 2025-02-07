@@ -2,6 +2,10 @@ package generic_command
 
 import (
 	"fmt"
+	"net/http"
+	"path/filepath"
+	"strings"
+
 	"github.com/go-go-golems/clay/pkg/repositories"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
@@ -17,9 +21,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
-	"net/http"
-	"path/filepath"
-	"strings"
 )
 
 type GenericCommandHandler struct {
@@ -49,20 +50,42 @@ type GenericCommandHandler struct {
 	// path under which the command handler is served
 	BasePath string
 
+	// preMiddlewares are run before the parameter filter middlewares
+	preMiddlewares []middlewares.Middleware
+	// postMiddlewares are run after the parameter filter middlewares
+	postMiddlewares []middlewares.Middleware
+	// middlewares contains all middlewares in order: pre + parameter filter + post
 	middlewares []middlewares.Middleware
 }
 
-func NewGenericCommandHandler(options ...GenericCommandHandlerOption) *GenericCommandHandler {
+func NewGenericCommandHandler(options ...GenericCommandHandlerOption) (*GenericCommandHandler, error) {
 	handler := &GenericCommandHandler{
 		AdditionalData:  map[string]interface{}{},
+		TemplateLookup:  datatables.NewDataTablesLookupTemplate(),
 		ParameterFilter: &config.ParameterFilter{},
+		preMiddlewares:  []middlewares.Middleware{},
+		postMiddlewares: []middlewares.Middleware{},
 	}
 
 	for _, opt := range options {
 		opt(handler)
 	}
 
-	return handler
+	// Compute the final middleware chain
+	parameterMiddlewares := handler.ParameterFilter.ComputeMiddlewares(handler.Stream)
+	handler.middlewares = append(handler.preMiddlewares, parameterMiddlewares...)
+	handler.middlewares = append(handler.middlewares, handler.postMiddlewares...)
+
+	if handler.TemplateLookup == nil {
+		handler.TemplateLookup = datatables.NewDataTablesLookupTemplate()
+	}
+
+	err := handler.TemplateLookup.Reload()
+	if err != nil {
+		return nil, err
+	}
+
+	return handler, nil
 }
 
 type GenericCommandHandlerOption func(handler *GenericCommandHandler)
@@ -131,10 +154,21 @@ func WithTemplateLookup(lookup render.TemplateLookup) GenericCommandHandlerOptio
 	}
 }
 
+func WithPreMiddlewares(middlewares ...middlewares.Middleware) GenericCommandHandlerOption {
+	return func(handler *GenericCommandHandler) {
+		handler.preMiddlewares = append(handler.preMiddlewares, middlewares...)
+	}
+}
+
+func WithPostMiddlewares(middlewares ...middlewares.Middleware) GenericCommandHandlerOption {
+	return func(handler *GenericCommandHandler) {
+		handler.postMiddlewares = append(handler.postMiddlewares, middlewares...)
+	}
+}
+
 func (gch *GenericCommandHandler) ServeSingleCommand(server *parka.Server, basePath string, command cmds.Command) error {
 	gch.BasePath = basePath
 
-	gch.middlewares = gch.ParameterFilter.ComputeMiddlewares(gch.Stream)
 	server.Router.GET(basePath+"/data", func(c echo.Context) error {
 		return gch.ServeData(c, command)
 	})
@@ -158,8 +192,6 @@ func (gch *GenericCommandHandler) ServeSingleCommand(server *parka.Server, baseP
 func (gch *GenericCommandHandler) ServeRepository(server *parka.Server, basePath string, repository *repositories.Repository) error {
 	basePath = strings.TrimSuffix(basePath, "/")
 	gch.BasePath = basePath
-
-	gch.middlewares = gch.ParameterFilter.ComputeMiddlewares(gch.Stream)
 
 	server.Router.GET(basePath+"/data/*", func(c echo.Context) error {
 		commandPath := c.Param("*")
@@ -311,7 +343,9 @@ func (gch *GenericCommandHandler) ServeDataTables(c echo.Context, command cmds.C
 	switch v := command.(type) {
 	case cmds.GlazeCommand:
 		options := []datatables.QueryHandlerOption{
+			datatables.WithMiddlewares(gch.preMiddlewares...),
 			datatables.WithMiddlewares(gch.middlewares...),
+			datatables.WithMiddlewares(gch.postMiddlewares...),
 			datatables.WithTemplateLookup(gch.TemplateLookup),
 			datatables.WithTemplateName(gch.TemplateName),
 			datatables.WithAdditionalData(gch.AdditionalData),

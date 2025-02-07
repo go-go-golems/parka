@@ -1,10 +1,10 @@
 package config
 
 import (
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"os"
+
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
-	"os"
 )
 
 func expandPath(path string) string {
@@ -46,76 +46,6 @@ type TemplateLookupConfig struct {
 	// Patterns is a list of glob patterns that will be used to match files in the directories.
 	// If the list is empty, the default of **/*.tmpl.md and **/*.tmpl.html will be used
 	Patterns []string `yaml:"patterns,omitempty"`
-}
-
-// ParameterFilterList are used to configure whitelists and blacklists.
-// Entire layers as well as individual flags and arguments can be whitelisted or blacklisted.
-// Params is used for the default layer.
-type ParameterFilterList struct {
-	Layers          []string            `yaml:"layers,omitempty"`
-	LayerParameters map[string][]string `yaml:"layerParameters,omitempty"`
-	Parameters      []string            `yaml:"parameters,omitempty"`
-}
-
-func (p *ParameterFilterList) GetAllLayerParameters() map[string][]string {
-	ret := map[string][]string{}
-	for layer, params := range p.LayerParameters {
-		ret[layer] = params
-	}
-	if _, ok := ret[layers.DefaultSlug]; !ok {
-		ret[layers.DefaultSlug] = []string{}
-	}
-	ret[layers.DefaultSlug] = append(ret[layers.DefaultSlug], p.Parameters...)
-	return ret
-}
-
-type LayerParameters struct {
-	Layers     map[string]map[string]interface{} `yaml:"layers,omitempty"`
-	Parameters map[string]interface{}            `yaml:"parameters,omitempty"`
-}
-
-func NewLayerParameters() *LayerParameters {
-	return &LayerParameters{
-		Layers:     map[string]map[string]interface{}{},
-		Parameters: map[string]interface{}{},
-	}
-}
-
-// Merge merges the two LayerParameters, with the overrides taking precedence.
-// It merges all the layers, flags, and arguments. For each layer, the layer flags are merged as well,
-// overrides taking precedence.
-func (p *LayerParameters) Merge(overrides *LayerParameters) {
-	for k, v := range overrides.Layers {
-		if _, ok := p.Layers[k]; !ok {
-			p.Layers[k] = map[string]interface{}{}
-		}
-		for k2, v2 := range v {
-			p.Layers[k][k2] = v2
-		}
-	}
-
-	for k, v := range overrides.Parameters {
-		p.Parameters[k] = v
-	}
-}
-
-func (p *LayerParameters) Clone() *LayerParameters {
-	ret := NewLayerParameters()
-	ret.Merge(p)
-	return ret
-}
-
-func (p *LayerParameters) GetParameterMap() map[string]map[string]interface{} {
-	r := p.Clone()
-	ret := r.Layers
-	if _, ok := ret[layers.DefaultSlug]; !ok {
-		ret[layers.DefaultSlug] = map[string]interface{}{}
-	}
-	for k, v := range r.Parameters {
-		ret[layers.DefaultSlug][k] = v
-	}
-
-	return ret
 }
 
 // Defaults controls the default renderer and which embedded static files to serve.

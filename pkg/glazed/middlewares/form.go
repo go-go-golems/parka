@@ -2,6 +2,10 @@ package middlewares
 
 import (
 	"fmt"
+	"io"
+	"os"
+	"sync"
+
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
@@ -10,16 +14,76 @@ import (
 	"github.com/pkg/errors"
 )
 
-func getListParameterFromForm(c echo.Context, p *parameters.ParameterDefinition, options ...parameters.ParseStepOption) (*parameters.ParsedParameter, error) {
+// FormMiddleware is a struct-based middleware that handles form data and file uploads
+// and manages temporary files created during processing.
+type FormMiddleware struct {
+	c       echo.Context
+	options []parameters.ParseStepOption
+	files   []string
+	mu      sync.Mutex
+}
+
+// NewFormMiddleware creates a new FormMiddleware instance
+func NewFormMiddleware(c echo.Context, options ...parameters.ParseStepOption) *FormMiddleware {
+	return &FormMiddleware{
+		c:       c,
+		options: options,
+		files:   make([]string, 0),
+	}
+}
+
+// Close cleans up any temporary files created during processing
+func (m *FormMiddleware) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var errs []error
+	for _, f := range m.files {
+		if err := os.Remove(f); err != nil {
+			errs = append(errs, errors.Wrapf(err, "failed to remove temporary file %s", f))
+		}
+	}
+	m.files = m.files[:0] // Clear the files list
+
+	if len(errs) > 0 {
+		return errors.Errorf("failed to clean up some temporary files: %v", errs)
+	}
+	return nil
+}
+
+// addFile adds a temporary file to be cleaned up later
+func (m *FormMiddleware) addFile(path string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.files = append(m.files, path)
+}
+
+// createTempFileFromReader creates a temporary file from a reader
+func (m *FormMiddleware) createTempFileFromReader(r io.Reader) (string, error) {
+	tmpFile, err := os.CreateTemp("", "parka-form-*")
+	if err != nil {
+		return "", errors.Wrap(err, "could not create temporary file")
+	}
+	defer tmpFile.Close()
+
+	_, err = io.Copy(tmpFile, r)
+	if err != nil {
+		return "", errors.Wrap(err, "could not write to temporary file")
+	}
+
+	return tmpFile.Name(), nil
+}
+
+func (m *FormMiddleware) getListParameterFromForm(p *parameters.ParameterDefinition) (*parameters.ParsedParameter, error) {
 	if p.Type.IsList() {
 		// check p.Name[] parameter
-		values_, err := c.FormParams()
+		values_, err := m.c.FormParams()
 		if err != nil {
 			return nil, err
 		}
 		values, ok := values_[fmt.Sprintf("%s[]", p.Name)]
 		if ok {
-			pValue, err := p.ParseParameter(values, options...)
+			pValue, err := p.ParseParameter(values, m.options...)
 			if err != nil {
 				return nil, errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, values)
 			}
@@ -32,8 +96,8 @@ func getListParameterFromForm(c echo.Context, p *parameters.ParameterDefinition,
 	}
 }
 
-func getFileParameterFromForm(c echo.Context, p *parameters.ParameterDefinition) (interface{}, error) {
-	form, err := c.MultipartForm()
+func (m *FormMiddleware) getFileParameterFromForm(p *parameters.ParameterDefinition) (interface{}, error) {
+	form, err := m.c.MultipartForm()
 	if err != nil {
 		return nil, err
 	}
@@ -53,11 +117,21 @@ func getFileParameterFromForm(c echo.Context, p *parameters.ParameterDefinition)
 			if err != nil {
 				return err
 			}
-			defer func() {
-				_ = f.Close()
-			}()
+			defer f.Close()
 
-			v, err := p.ParseFromReader(f, h.Filename)
+			// For ParameterTypeFile, we need to create a temporary file
+			if p.Type == parameters.ParameterTypeFile || p.Type == parameters.ParameterTypeFileList {
+				tmpPath, err := m.createTempFileFromReader(f)
+				if err != nil {
+					return err
+				}
+				m.addFile(tmpPath)
+				values = append(values, tmpPath)
+				return nil
+			}
+
+			// For other file-like parameters, parse the content
+			v, err := p.ParseFromReader(f, h.Filename, m.options...)
 			if err != nil {
 				return errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, h.Filename)
 			}
@@ -75,6 +149,15 @@ func getFileParameterFromForm(c echo.Context, p *parameters.ParameterDefinition)
 
 	//exhaustive:ignore
 	switch {
+	case p.Type == parameters.ParameterTypeFile:
+		if len(values) == 0 {
+			return nil, nil
+		}
+		v = values[0]
+
+	case p.Type == parameters.ParameterTypeFileList:
+		v = values
+
 	case p.Type.IsList():
 		vs := []interface{}{}
 		for _, v_ := range values {
@@ -96,7 +179,6 @@ func getFileParameterFromForm(c echo.Context, p *parameters.ParameterDefinition)
 			}
 			s += ss
 		}
-
 		v = s
 
 	case p.Type == parameters.ParameterTypeObjectFromFile:
@@ -109,7 +191,8 @@ func getFileParameterFromForm(c echo.Context, p *parameters.ParameterDefinition)
 	return v, nil
 }
 
-func UpdateFromFormQuery(c echo.Context, options ...parameters.ParseStepOption) middlewares.Middleware {
+// Middleware returns the actual middleware function
+func (m *FormMiddleware) Middleware() middlewares.Middleware {
 	return func(next middlewares.HandlerFunc) middlewares.HandlerFunc {
 		return func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
 			err := layers_.ForEachE(func(_ string, l layers.ParameterLayer) error {
@@ -117,14 +200,14 @@ func UpdateFromFormQuery(c echo.Context, options ...parameters.ParseStepOption) 
 
 				pds := l.GetParameterDefinitions()
 				err := pds.ForEachE(func(p *parameters.ParameterDefinition) error {
-					if p.Type.NeedsFileContent("") {
-						v, err := getFileParameterFromForm(c, p)
+					if p.Type.NeedsFileContent("") || p.Type == parameters.ParameterTypeFile || p.Type == parameters.ParameterTypeFileList {
+						v, err := m.getFileParameterFromForm(p)
 						if err != nil {
 							return err
 						}
 
 						if v != nil {
-							parsedLayer.Parameters.UpdateValue(p.Name, p, v, options...)
+							parsedLayer.Parameters.UpdateValue(p.Name, p, v, m.options...)
 						}
 
 						return nil
@@ -132,7 +215,7 @@ func UpdateFromFormQuery(c echo.Context, options ...parameters.ParseStepOption) 
 
 					// parse arrays
 					if p.Type.IsList() {
-						v, err := getListParameterFromForm(c, p, options...)
+						v, err := m.getListParameterFromForm(p)
 						if err != nil {
 							return err
 						}
@@ -145,8 +228,7 @@ func UpdateFromFormQuery(c echo.Context, options ...parameters.ParseStepOption) 
 						return nil
 					}
 
-					value := c.FormValue(p.Name)
-					// TODO(manuel, 2023-02-28) is this enough to check if a file is missing?
+					value := m.c.FormValue(p.Name)
 					if value == "" {
 						if p.Required {
 							return errors.Errorf("required parameter '%s' is missing", p.Name)
@@ -155,7 +237,7 @@ func UpdateFromFormQuery(c echo.Context, options ...parameters.ParseStepOption) 
 					}
 
 					v := []string{value}
-					parsedParameter, err := p.ParseParameter(v, options...)
+					parsedParameter, err := p.ParseParameter(v, m.options...)
 					if err != nil {
 						return errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, value)
 					}
@@ -174,7 +256,14 @@ func UpdateFromFormQuery(c echo.Context, options ...parameters.ParseStepOption) 
 				return err
 			}
 
-			return nil
+			return next(layers_, parsedLayers)
 		}
 	}
+}
+
+// UpdateFromFormQuery is a convenience function that creates a FormMiddleware and returns its middleware function
+func UpdateFromFormQuery(c echo.Context, options ...parameters.ParseStepOption) middlewares.Middleware {
+	m := NewFormMiddleware(c, options...)
+	defer m.Close()
+	return m.Middleware()
 }

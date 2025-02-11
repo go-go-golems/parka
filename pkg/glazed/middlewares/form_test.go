@@ -2,13 +2,15 @@ package middlewares
 
 import (
 	_ "embed"
-	"github.com/go-go-golems/parka/pkg/utils"
-	"github.com/labstack/echo/v4"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-go-golems/parka/pkg/utils"
+	"github.com/labstack/echo/v4"
+
 	"github.com/go-go-golems/glazed/pkg/cmds/helpers"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/helpers/yaml"
 
 	"github.com/stretchr/testify/assert"
@@ -45,12 +47,14 @@ func TestUpdateFromFormQuery(t *testing.T) {
 
 			resp := httptest.NewRecorder()
 			e := echo.New()
-
 			c := e.NewContext(req, resp)
 
-			// Create the middleware and execute it
-			middleware := UpdateFromFormQuery(c)
-			err = middleware(func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
+			// Create the middleware instance
+			middleware := NewFormMiddleware(c)
+			defer middleware.Close()
+
+			// Execute the middleware
+			err = middleware.Middleware()(func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
 				return nil
 			})(layers_, parsedLayers)
 
@@ -64,4 +68,155 @@ func TestUpdateFromFormQuery(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestFormMiddlewareCleanup tests that temporary files are properly cleaned up
+func TestFormMiddlewareCleanup(t *testing.T) {
+	// Create a test file
+	content := []byte("test content")
+
+	// Create a multipart form with the test file
+	form := utils.MultipartForm{
+		Files: map[string][]utils.File{
+			"file": {
+				{
+					Name:    "test.txt",
+					Content: string(content),
+				},
+			},
+		},
+	}
+
+	req, err := utils.NewRequestWithMultipartForm(form)
+	require.NoError(t, err)
+
+	resp := httptest.NewRecorder()
+	e := echo.New()
+	c := e.NewContext(req, resp)
+
+	// Create the middleware instance
+	middleware := NewFormMiddleware(c)
+
+	// Execute the middleware
+	err = middleware.Middleware()(func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
+
+		return nil
+	})(layers.NewParameterLayers(), layers.NewParsedLayers())
+	require.NoError(t, err)
+
+	// Close the middleware (this should clean up files)
+	err = middleware.Close()
+	require.NoError(t, err)
+}
+
+// TestFormMiddlewareErrorHandling tests error handling in the form middleware
+func TestFormMiddlewareErrorHandling(t *testing.T) {
+	// Create a test file that will be deleted before processing
+	content := []byte("test content")
+
+	// Create a multipart form with the non-existent file
+	form := utils.MultipartForm{
+		Files: map[string][]utils.File{
+			"file": {
+				{
+					Name:    "test.txt",
+					Content: string(content),
+				},
+			},
+		},
+	}
+
+	req, err := utils.NewRequestWithMultipartForm(form)
+	require.NoError(t, err)
+
+	resp := httptest.NewRecorder()
+	e := echo.New()
+	c := e.NewContext(req, resp)
+
+	// Create the middleware instance
+	middleware := NewFormMiddleware(c)
+	defer middleware.Close()
+
+	// Execute the middleware
+	err = middleware.Middleware()(func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
+		return nil
+	})(layers.NewParameterLayers(), layers.NewParsedLayers())
+	require.NoError(t, err)
+}
+
+// TestFormMiddlewareWithDefaultLayer tests that the form middleware correctly processes
+// form data and updates the parsed layers with a default parameter layer.
+func TestFormMiddlewareWithDefaultLayer(t *testing.T) {
+	// Create a default parameter layer with some test parameters
+	layer, err := layers.NewParameterLayer("config", "Configuration",
+		layers.WithDescription("Configuration options for testing"),
+		layers.WithParameterDefinitions(
+			parameters.NewParameterDefinition(
+				"name",
+				parameters.ParameterTypeString,
+				parameters.WithHelp("Test name parameter"),
+				parameters.WithRequired(true),
+			),
+			parameters.NewParameterDefinition(
+				"count",
+				parameters.ParameterTypeInteger,
+				parameters.WithHelp("Test count parameter"),
+				parameters.WithDefault(42),
+			),
+			parameters.NewParameterDefinition(
+				"enabled",
+				parameters.ParameterTypeBool,
+				parameters.WithHelp("Test boolean parameter"),
+				parameters.WithDefault(false),
+			),
+		),
+	)
+	require.NoError(t, err)
+
+	// Create test form data
+	form := utils.MultipartForm{
+		Fields: []utils.Field{
+			{Name: "name", Value: "test-value"},
+			{Name: "count", Value: "123"},
+			{Name: "enabled", Value: "true"},
+		},
+	}
+
+	// Create the request with form data
+	req, err := utils.NewRequestWithMultipartForm(form)
+	require.NoError(t, err)
+
+	// Setup Echo context
+	e := echo.New()
+	resp := httptest.NewRecorder()
+	c := e.NewContext(req, resp)
+
+	// Create parameter layers and parsed layers
+	layers_ := layers.NewParameterLayers(layers.WithLayers(layer))
+	parsedLayers := layers.NewParsedLayers()
+
+	// Create and execute the middleware
+	middleware := NewFormMiddleware(c)
+	defer middleware.Close()
+
+	err = middleware.Middleware()(func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
+		return nil
+	})(layers_, parsedLayers)
+	require.NoError(t, err)
+
+	// Verify the parsed values
+	// Check string parameter
+	nameParam, ok := parsedLayers.GetParameter("config", "name")
+	require.True(t, ok)
+	assert.Equal(t, "test-value", nameParam.Value)
+
+	// Check integer parameter
+	countParam, ok := parsedLayers.GetParameter("config", "count")
+	require.True(t, ok)
+	assert.Equal(t, 123, countParam.Value)
+
+	// Check boolean parameter
+	enabledParam, ok := parsedLayers.GetParameter("config", "enabled")
+	require.True(t, ok)
+	assert.Equal(t, true, enabledParam.Value)
 }

@@ -1,3 +1,30 @@
+---
+Title: Building a Parka Server Tutorial
+Slug: parka-tutorial
+Short: A comprehensive tutorial on building a Parka server from scratch, covering basic setup to advanced features
+Topics:
+- tutorial
+- server
+- handlers
+- templates
+- commands
+- web development
+Commands:
+- NewServer
+- NewStaticDirHandler
+- NewTemplateHandler
+- NewCommandHandler
+Flags:
+- WithPort
+- WithAddress
+- WithGzip
+- WithLocalPath
+IsTopLevel: true
+IsTemplate: false
+ShowPerDefault: true
+SectionType: Tutorial
+---
+
 # Building a Parka Server: A Comprehensive Tutorial
 
 This tutorial will guide you through building a Parka server from scratch, covering everything from basic setup to advanced features. We'll create a complete application that demonstrates the various capabilities of Parka.

@@ -1,3 +1,26 @@
+---
+Title: Configuring Parka Servers with Config Files
+Slug: config-file
+Short: Learn how to configure Parka servers using YAML configuration files to define routes, handlers, and their settings
+Topics:
+- configuration
+- yaml
+- routes
+- handlers
+- server
+Commands:
+- NewConfigFileHandler
+- ParseConfig
+Flags:
+- WithDevMode
+- WithRepositoryFactory
+- WithAppendCommandDirHandlerOptions
+IsTopLevel: true
+IsTemplate: false
+ShowPerDefault: true
+SectionType: GeneralTopic
+---
+
 # Configuring Parka Servers with Config Files
 
 Parka servers can be configured using YAML configuration files that define routes, handlers, and their settings. This document explains how to use config files to set up your Parka server, with a focus on integrating Glazed commands and other handlers.

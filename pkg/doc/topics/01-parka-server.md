@@ -1,3 +1,28 @@
+---
+Title: Parka Server
+Slug: parka-server
+Short: Learn about the core concepts of the Parka server, its configuration options, and how to extend it with custom routes and middleware
+Topics:
+- server
+- configuration
+- routing
+- middleware
+- web server
+Commands:
+- NewServer
+- Run
+Flags:
+- WithPort
+- WithAddress
+- WithGzip
+- WithDefaultParkaRenderer
+- WithDefaultParkaStaticPaths
+IsTopLevel: true
+IsTemplate: false
+ShowPerDefault: true
+SectionType: GeneralTopic
+---
+
 # Parka Server Documentation
 
 The Parka server is a flexible HTTP server built on top of the Echo web framework that provides both static file serving and dynamic template rendering capabilities. This document explains how the server works and how to extend it.

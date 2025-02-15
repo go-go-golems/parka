@@ -1,3 +1,30 @@
+---
+Title: Command Handler Parameter Filtering
+Slug: command-handler-parameter-filtering
+Short: Learn how to configure and use parameter filtering in Parka command handlers to control parameter handling, defaults, overrides, and filtering
+Topics:
+- handlers
+- commands
+- parameter filtering
+- configuration
+Commands:
+- NewParameterFilter
+- WithOverrideParameter
+- WithDefaultParameter
+- WithWhitelistParameters
+- WithBlacklistParameters
+Flags:
+- WithParameterFilter
+- WithOverrides
+- WithDefaults
+- WithWhitelist
+- WithBlacklist
+IsTopLevel: true
+IsTemplate: false
+ShowPerDefault: true
+SectionType: GeneralTopic
+---
+
 # Command Handler Parameter Filtering
 
 This document describes the parameter filtering options available for command handlers in Parka. These options allow you to control how parameters are handled, including setting defaults, overrides, and filtering which parameters are exposed.

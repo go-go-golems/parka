@@ -1,3 +1,31 @@
+---
+Title: Parka Handlers Documentation
+Slug: handlers
+Short: Learn about Parka's specialized handlers for serving static content, templates, and commands
+Topics:
+- handlers
+- static files
+- templates
+- commands
+- web server
+Commands:
+- NewStaticDirHandler
+- NewStaticFileHandler
+- NewTemplateHandler
+- NewTemplateDirHandler
+- NewCommandHandler
+- NewCommandDirHandler
+Flags:
+- WithDefaultFS
+- WithLocalPath
+- WithTemplateName
+- WithDevMode
+IsTopLevel: true
+IsTemplate: false
+ShowPerDefault: true
+SectionType: GeneralTopic
+---
+
 # Parka Static Handlers Documentation
 
 Parka provides two specialized handlers for serving static content: `StaticDirHandler` and `StaticFileHandler`. These handlers are designed to serve static files from either the filesystem or embedded files, with different strategies for path handling and file organization.

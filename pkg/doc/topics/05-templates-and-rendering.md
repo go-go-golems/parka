@@ -1,3 +1,30 @@
+---
+Title: Template Rendering in Parka
+Slug: template-rendering
+Short: Learn about Parka's flexible template rendering system for HTML and Markdown templates with features like template lookup, reloading, and directory-based serving
+Topics:
+- templates
+- rendering
+- html
+- markdown
+- web server
+Commands:
+- NewLookupTemplateFromFile
+- NewLookupTemplateFromDirectory
+- NewLookupTemplateFromFS
+- NewRenderer
+Flags:
+- WithFS
+- WithBaseDir
+- WithPatterns
+- WithAlwaysReload
+- WithMarkdownBaseTemplateName
+IsTopLevel: true
+IsTemplate: false
+ShowPerDefault: true
+SectionType: GeneralTopic
+---
+
 # Template Rendering in Parka
 
 Parka provides a flexible and powerful template rendering system that supports both HTML and Markdown templates, with features like template lookup, reloading, and directory-based serving. This document explains how the template system works and how to use it effectively.

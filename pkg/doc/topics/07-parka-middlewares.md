@@ -1,3 +1,28 @@
+---
+Title: Parka Middlewares for Parameter Extraction
+Slug: parka-middlewares
+Short: Learn about Parka's powerful middlewares for extracting parameters from HTTP requests, including query parameters, form data, and JSON POST requests
+Topics:
+- middlewares
+- parameters
+- http
+- forms
+- json
+Commands:
+- UpdateFromQueryParameters
+- UpdateFromFormQuery
+- NewJSONBodyMiddleware
+Flags:
+- WithParseStepSource
+- WithRequired
+- WithHelp
+- WithDefault
+IsTopLevel: true
+IsTemplate: false
+ShowPerDefault: true
+SectionType: GeneralTopic
+---
+
 # Parka Middlewares for Parameter Extraction
 
 Parka provides powerful middlewares for extracting parameters from HTTP requests, specifically designed to work with Glazed commands. This guide explains how to use these middlewares to handle URL query parameters, form data, and JSON POST requests.

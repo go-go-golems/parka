@@ -75,10 +75,10 @@ github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHk
 github.com/frankban/quicktest v1.14.6/go.mod h1:4ptaffx2x8+WTWXmUCuVU6aPUX1/Mz7zb5vbUoiM6w0=
 github.com/fsnotify/fsnotify v1.7.0 h1:8JEhPFa5W2WU7YfeZzPNqzMP6Lwt7L2715Ggo0nosvA=
 github.com/fsnotify/fsnotify v1.7.0/go.mod h1:40Bi/Hjc2AVfZrqy+aj+yEI+/bRxZnMJyTJwOpGvigM=
-github.com/go-go-golems/clay v0.1.20 h1:KUTbDBA/Q7vgG22B9uBnwDpacwG2+bMavQS8SDwolks=
-github.com/go-go-golems/clay v0.1.20/go.mod h1:hyQirWoEICmaSTcAiPRy7If1n5JEncPi4WVM6tivjoY=
-github.com/go-go-golems/glazed v0.5.26 h1:/Y+Sq6An0IyRVRG1shjV+FZmcOplJ6NvzbQ1edYw3QU=
-github.com/go-go-golems/glazed v0.5.26/go.mod h1:/ZgeDXELDOcAkD505fijARmbF6x5Ev7oewNV4V6Andk=
+github.com/go-go-golems/clay v0.1.29 h1:x692aMA2brGTezKMlBa515X9Fqu2q7ZWFGPqtz3SL/w=
+github.com/go-go-golems/clay v0.1.29/go.mod h1:ROrykmjsR0ACUOS1Bbjp4UGiEbMMeCMFvvcu5rBdMmk=
+github.com/go-go-golems/glazed v0.5.30 h1:CuNNd40343hjAwiK++U3vY+j2hb09qCnYj7BhY5fSAo=
+github.com/go-go-golems/glazed v0.5.30/go.mod h1:/ZgeDXELDOcAkD505fijARmbF6x5Ev7oewNV4V6Andk=
 github.com/go-openapi/errors v0.22.0 h1:c4xY/OLxUBSTiepAg3j/MHuAv5mJhnf53LLMWFB+u/w=
 github.com/go-openapi/errors v0.22.0/go.mod h1:J3DmZScxCDufmIMsdOuDHxJbdOGC0xtUynjIx092vXE=
 github.com/go-openapi/strfmt v0.23.0 h1:nlUS6BCqcnAk0pyhi9Y+kdDVZdZMHfEKQiS4HaMgO/c=
@@ -86,8 +86,8 @@ github.com/go-openapi/strfmt v0.23.0/go.mod h1:NrtIpfKtWIygRkKVsxh7XQMDQW5HKQl6S
 github.com/godbus/dbus/v5 v5.0.4/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
 github.com/golang-jwt/jwt v3.2.2+incompatible h1:IfV12K8xAKAnZqdXVzCZ+TOjboZ2keLg81eXfW3O+oY=
 github.com/golang-jwt/jwt v3.2.2+incompatible/go.mod h1:8pz2t5EyA70fFQQSrl6XZXzqecmYZeUEB8OUGHkxJ+I=
-github.com/google/go-cmp v0.5.9 h1:O2Tfq5qg4qc4AmwVlvv0oLiVAGB7enBSJ2x2DqQFi38=
-github.com/google/go-cmp v0.5.9/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
+github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
+github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/gorilla/css v1.0.1 h1:ntNaBIghp6JmvWnxbZKANoLyuXTPZ4cAMlo6RyhlbO8=

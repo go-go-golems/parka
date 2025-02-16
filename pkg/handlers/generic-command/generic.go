@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-go-golems/clay/pkg/repositories"
+	"github.com/go-go-golems/clay/pkg/repositories/trie"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
@@ -301,7 +302,7 @@ func (gch *GenericCommandHandler) ServeRepository(server *parka.Server, basePath
 			return err
 		}
 
-		var nodes []*repositories.RenderNode
+		var nodes []*trie.RenderNode
 
 		if renderNode.Command != nil {
 			nodes = append(nodes, renderNode)

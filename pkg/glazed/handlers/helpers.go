@@ -13,13 +13,19 @@ func CreateTableProcessorWithOutput(parsedLayers *layers.ParsedLayers, outputTyp
 		return middlewares.NewTableProcessor(), nil
 	}
 
-	glazedLayer.Parameters.UpdateExistingValue(
+	_, err := glazedLayer.Parameters.UpdateExistingValue(
 		"output", outputType,
 		parameters.WithParseStepSource("parka-handlers"),
 	)
-	glazedLayer.Parameters.UpdateExistingValue("table-format", tableFormat,
+	if err != nil {
+		return nil, err
+	}
+	_, err = glazedLayer.Parameters.UpdateExistingValue("table-format", tableFormat,
 		parameters.WithParseStepSource("parka-handlers"),
 	)
+	if err != nil {
+		return nil, err
+	}
 	gp, err := settings.SetupTableProcessor(glazedLayer)
 	if err != nil {
 		return nil, err

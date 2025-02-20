@@ -127,7 +127,10 @@ func (m *JSONBodyMiddleware) Middleware() middlewares.Middleware {
 								return errors.Wrapf(err, "invalid value for parameter '%s'", p.Name)
 							}
 
-							parsedLayer.Parameters.UpdateValue(p.Name, p, parsed.Value, m.options...)
+							err = parsedLayer.Parameters.UpdateValue(p.Name, p, parsed.Value, m.options...)
+							if err != nil {
+								return err
+							}
 							return nil
 						default:
 							return errors.Errorf("invalid type for file parameter '%s': expected string", p.Name)

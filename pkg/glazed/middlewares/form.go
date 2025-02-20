@@ -207,7 +207,10 @@ func (m *FormMiddleware) Middleware() middlewares.Middleware {
 						}
 
 						if v != nil {
-							parsedLayer.Parameters.UpdateValue(p.Name, p, v, m.options...)
+							err := parsedLayer.Parameters.UpdateValue(p.Name, p, v, m.options...)
+							if err != nil {
+								return err
+							}
 						}
 
 						return nil

@@ -21,6 +21,8 @@ import (
 type QueryHandler struct {
 	cmd         cmds.Command
 	middlewares []middlewares.Middleware
+	// whitelistedLayers contains the list of layers that are allowed to be modified through query parameters
+	whitelistedLayers []string
 }
 
 type QueryHandlerOption func(*QueryHandler)
@@ -43,15 +45,26 @@ func WithMiddlewares(middlewares ...middlewares.Middleware) QueryHandlerOption {
 	}
 }
 
+func WithWhitelistedLayers(layers ...string) QueryHandlerOption {
+	return func(handler *QueryHandler) {
+		handler.whitelistedLayers = layers
+	}
+}
+
 var _ handlers.Handler = (*QueryHandler)(nil)
 
 func (h *QueryHandler) Handle(c echo.Context) error {
 	description := h.cmd.Description()
 	parsedLayers := layers.NewParsedLayers()
 
+	queryMiddleware := middlewares2.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query"))
+	if len(h.whitelistedLayers) > 0 {
+		queryMiddleware = middlewares.WrapWithWhitelistedLayers(h.whitelistedLayers, queryMiddleware)
+	}
+
 	middlewares_ := append(
 		[]middlewares.Middleware{
-			middlewares2.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
+			queryMiddleware,
 		},
 		h.middlewares...,
 	)

@@ -23,6 +23,8 @@ type QueryHandler struct {
 	useJSONBody bool
 	// parseOptions are options passed to parameter parsing
 	parseOptions []parameters.ParseStepOption
+	// whitelistedLayers contains the list of layers that are allowed to be modified through query parameters
+	whitelistedLayers []string
 }
 
 type QueryHandlerOption func(*QueryHandler)
@@ -61,6 +63,12 @@ func WithParseOptions(options ...parameters.ParseStepOption) QueryHandlerOption 
 	}
 }
 
+func WithWhitelistedLayers(layers ...string) QueryHandlerOption {
+	return func(handler *QueryHandler) {
+		handler.whitelistedLayers = layers
+	}
+}
+
 var _ handlers.Handler = (*QueryHandler)(nil)
 
 func (h *QueryHandler) Handle(c echo.Context) error {
@@ -83,7 +91,11 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 	if h.useJSONBody {
 		middlewares_ = append(middlewares_, jsonMiddleware.Middleware())
 	} else {
-		middlewares_ = append(middlewares_, parka_middlewares.UpdateFromQueryParameters(c, append(h.parseOptions, parameters.WithParseStepSource("query"))...))
+		queryMiddleware := parka_middlewares.UpdateFromQueryParameters(c, append(h.parseOptions, parameters.WithParseStepSource("query"))...)
+		if len(h.whitelistedLayers) > 0 {
+			queryMiddleware = middlewares.WrapWithWhitelistedLayers(h.whitelistedLayers, queryMiddleware)
+		}
+		middlewares_ = append(middlewares_, queryMiddleware)
 	}
 
 	middlewares_ = append(middlewares_, h.middlewares...)

@@ -107,6 +107,8 @@ type QueryHandler struct {
 	templateName string
 	lookup       render.TemplateLookup
 
+	whitelistedLayers []string
+
 	dt *DataTables
 }
 
@@ -128,6 +130,12 @@ func NewQueryHandler(
 	}
 
 	return qh
+}
+
+func WithWhitelistedLayers(layers ...string) QueryHandlerOption {
+	return func(qh *QueryHandler) {
+		qh.whitelistedLayers = layers
+	}
 }
 
 func WithDataTables(dt *DataTables) QueryHandlerOption {
@@ -191,10 +199,14 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	// since we have a context there, and there is no need to block the middleware processing.
 	columnsC := make(chan []types.FieldName, 10)
 
-	middlewares_ := []middlewares.Middleware{
-		parka_middlewares.UpdateFromQueryParameters(c,
-			parameters.WithParseStepSource("query")),
+	queryMiddleware := parka_middlewares.UpdateFromQueryParameters(c,
+		parameters.WithParseStepSource("query"),
+	)
+	if len(qh.whitelistedLayers) > 0 {
+		queryMiddleware = middlewares.WrapWithWhitelistedLayers(qh.whitelistedLayers, queryMiddleware)
 	}
+
+	middlewares_ := []middlewares.Middleware{queryMiddleware}
 	middlewares_ = append(middlewares_, qh.middlewares...)
 	middlewares_ = append(middlewares_, middlewares.SetFromDefaults())
 	err := middlewares.ExecuteMiddlewares(description.Layers.Clone(), parsedLayers, middlewares_...)

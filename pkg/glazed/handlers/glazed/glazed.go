@@ -15,8 +15,9 @@ import (
 )
 
 type QueryHandler struct {
-	cmd         cmds.GlazeCommand
-	middlewares []middlewares.Middleware
+	cmd               cmds.GlazeCommand
+	middlewares       []middlewares.Middleware
+	whitelistedLayers []string
 }
 
 type QueryHandlerOption func(*QueryHandler)
@@ -24,6 +25,12 @@ type QueryHandlerOption func(*QueryHandler)
 func WithMiddlewares(middlewares ...middlewares.Middleware) QueryHandlerOption {
 	return func(handler *QueryHandler) {
 		handler.middlewares = middlewares
+	}
+}
+
+func WithWhitelistedLayers(layers ...string) QueryHandlerOption {
+	return func(handler *QueryHandler) {
+		handler.whitelistedLayers = layers
 	}
 }
 
@@ -45,9 +52,14 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 	description := h.cmd.Description()
 	parsedLayers := layers.NewParsedLayers()
 
+	queryMiddleware := middlewares2.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query"))
+	if len(h.whitelistedLayers) > 0 {
+		queryMiddleware = middlewares.WrapWithWhitelistedLayers(h.whitelistedLayers, queryMiddleware)
+	}
+
 	middlewares_ := append(
 		[]middlewares.Middleware{
-			middlewares2.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query")),
+			queryMiddleware,
 		},
 		h.middlewares...,
 	)

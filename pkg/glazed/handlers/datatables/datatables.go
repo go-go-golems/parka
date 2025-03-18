@@ -107,6 +107,8 @@ type QueryHandler struct {
 	templateName string
 	lookup       render.TemplateLookup
 
+	whitelistedLayers []string
+
 	dt *DataTables
 }
 
@@ -128,6 +130,12 @@ func NewQueryHandler(
 	}
 
 	return qh
+}
+
+func WithWhitelistedLayers(layers ...string) QueryHandlerOption {
+	return func(qh *QueryHandler) {
+		qh.whitelistedLayers = layers
+	}
 }
 
 func WithDataTables(dt *DataTables) QueryHandlerOption {
@@ -191,10 +199,14 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	// since we have a context there, and there is no need to block the middleware processing.
 	columnsC := make(chan []types.FieldName, 10)
 
-	middlewares_ := []middlewares.Middleware{
-		parka_middlewares.UpdateFromQueryParameters(c,
-			parameters.WithParseStepSource("query")),
+	queryMiddleware := parka_middlewares.UpdateFromQueryParameters(c,
+		parameters.WithParseStepSource("query"),
+	)
+	if len(qh.whitelistedLayers) > 0 {
+		queryMiddleware = middlewares.WrapWithWhitelistedLayers(qh.whitelistedLayers, queryMiddleware)
 	}
+
+	middlewares_ := []middlewares.Middleware{queryMiddleware}
 	middlewares_ = append(middlewares_, qh.middlewares...)
 	middlewares_ = append(middlewares_, middlewares.SetFromDefaults())
 	err := middlewares.ExecuteMiddlewares(description.Layers.Clone(), parsedLayers, middlewares_...)
@@ -314,9 +326,11 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	// actually run the command
 	eg.Go(func() error {
 		// NOTE(manuel, 2023-10-16) The GetAllParameterValues is a bit of a hack because really what we want is to only get those flags through the layers
+		log.Debug().Msg("running command")
 		err = qh.cmd.RunIntoGlazeProcessor(ctx3, parsedLayers, gp)
 
-		g := &safegroup.Group{}
+		g, ctx := safegroup.WithContext(ctx3)
+
 		err_ := err
 		g.Go(func() error {
 			defer close(dt_.ErrorStream)
@@ -335,7 +349,7 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 		})
 
 		g.Go(func() error {
-			err := gp.Close(ctx3)
+			err := gp.Close(ctx)
 			log.Debug().Msg("closed gp")
 			if err != nil {
 				return err

@@ -34,14 +34,16 @@ package command_dir
 
 import (
 	"context"
+	"os"
+
 	"github.com/go-go-golems/clay/pkg/repositories"
+	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
-	"github.com/go-go-golems/parka/pkg/handlers/generic-command"
+	generic_command "github.com/go-go-golems/parka/pkg/handlers/generic-command"
 	"github.com/go-go-golems/parka/pkg/render"
 	parka "github.com/go-go-golems/parka/pkg/server"
 	"github.com/pkg/errors"
-	"os"
 )
 
 type CommandDirHandler struct {
@@ -83,6 +85,7 @@ func NewCommandDirHandlerFromConfig(
 		generic_command.WithTemplateName(config_.TemplateName),
 		generic_command.WithIndexTemplateName(config_.IndexTemplateName),
 		generic_command.WithMergeAdditionalData(config_.AdditionalData, true),
+		generic_command.WithWhitelistedLayers(layers.DefaultSlug),
 	}
 	genericHandler, err := generic_command.NewGenericCommandHandler(genericOptions...)
 	if err != nil {

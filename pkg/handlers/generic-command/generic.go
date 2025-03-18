@@ -51,6 +51,10 @@ type GenericCommandHandler struct {
 	// path under which the command handler is served
 	BasePath string
 
+	// WhitelistedLayers contains the list of layers that are allowed to be modified through query parameters.
+	// If empty, all layers are allowed.
+	WhitelistedLayers []string
+
 	// preMiddlewares are run before the parameter filter middlewares
 	preMiddlewares []middlewares.Middleware
 	// postMiddlewares are run after the parameter filter middlewares
@@ -164,6 +168,12 @@ func WithPreMiddlewares(middlewares ...middlewares.Middleware) GenericCommandHan
 func WithPostMiddlewares(middlewares ...middlewares.Middleware) GenericCommandHandlerOption {
 	return func(handler *GenericCommandHandler) {
 		handler.postMiddlewares = append(handler.postMiddlewares, middlewares...)
+	}
+}
+
+func WithWhitelistedLayers(layers ...string) GenericCommandHandlerOption {
+	return func(handler *GenericCommandHandler) {
+		handler.WhitelistedLayers = layers
 	}
 }
 
@@ -281,6 +291,38 @@ func (gch *GenericCommandHandler) ServeRepository(server *parka.Server, basePath
 		return gch.ServeDownload(c, command)
 	})
 
+	server.Router.GET(basePath+"/", func(c echo.Context) error {
+		renderNode, ok := repository.GetRenderNode([]string{})
+		if !ok {
+			return errors.Errorf("command root not found")
+		}
+		templateName := gch.IndexTemplateName
+		if gch.IndexTemplateName == "" {
+			templateName = "commands.tmpl.html"
+		}
+		templ, err := gch.TemplateLookup.Lookup(templateName)
+		if err != nil {
+			return err
+		}
+
+		var nodes []*trie.RenderNode
+
+		if renderNode.Command != nil {
+			nodes = append(nodes, renderNode)
+		} else {
+			nodes = append(nodes, renderNode.Children...)
+		}
+		err = templ.Execute(c.Response(), utils.H{
+			"nodes": nodes,
+			"path":  basePath,
+		})
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
 	server.Router.GET(basePath+"/commands/*", func(c echo.Context) error {
 		path_ := c.Param("*")
 		path_ = strings.TrimPrefix(path_, "/")
@@ -333,6 +375,7 @@ func (gch *GenericCommandHandler) computeDataTablesOptions() []datatables.QueryH
 		datatables.WithTemplateName(gch.TemplateName),
 		datatables.WithAdditionalData(gch.AdditionalData),
 		datatables.WithStreamRows(gch.Stream),
+		datatables.WithWhitelistedLayers(gch.WhitelistedLayers...),
 	}
 }
 
@@ -342,6 +385,7 @@ func (gch *GenericCommandHandler) computeJSONOptions() []json.QueryHandlerOption
 		json.WithMiddlewares(gch.preMiddlewares...),
 		json.WithMiddlewares(gch.middlewares...),
 		json.WithMiddlewares(gch.postMiddlewares...),
+		json.WithWhitelistedLayers(gch.WhitelistedLayers...),
 	}
 }
 
@@ -351,6 +395,7 @@ func (gch *GenericCommandHandler) computeTextOptions() []text.QueryHandlerOption
 		text.WithMiddlewares(gch.preMiddlewares...),
 		text.WithMiddlewares(gch.middlewares...),
 		text.WithMiddlewares(gch.postMiddlewares...),
+		text.WithWhitelistedLayers(gch.WhitelistedLayers...),
 	}
 }
 
@@ -360,6 +405,7 @@ func (gch *GenericCommandHandler) computeSSEOptions() []sse.QueryHandlerOption {
 		sse.WithMiddlewares(gch.preMiddlewares...),
 		sse.WithMiddlewares(gch.middlewares...),
 		sse.WithMiddlewares(gch.postMiddlewares...),
+		sse.WithWhitelistedLayers(gch.WhitelistedLayers...),
 	}
 }
 
@@ -369,6 +415,7 @@ func (gch *GenericCommandHandler) computeOutputFileOptions() []output_file.Query
 		output_file.WithMiddlewares(gch.preMiddlewares...),
 		output_file.WithMiddlewares(gch.middlewares...),
 		output_file.WithMiddlewares(gch.postMiddlewares...),
+		output_file.WithWhitelistedLayers(gch.WhitelistedLayers...),
 	}
 }
 

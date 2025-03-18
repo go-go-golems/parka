@@ -14,6 +14,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/glazed"
+	parka_middlewares "github.com/go-go-golems/parka/pkg/glazed/middlewares"
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 )
@@ -22,6 +23,8 @@ type QueryHandler struct {
 	cmd         cmds.GlazeCommand
 	fileName    string
 	middlewares []middlewares.Middleware
+	// whitelistedLayers contains the list of layers that are allowed to be modified through query parameters
+	whitelistedLayers []string
 }
 
 type QueryHandlerOption func(*QueryHandler)
@@ -45,7 +48,18 @@ func WithMiddlewares(middlewares ...middlewares.Middleware) QueryHandlerOption {
 	}
 }
 
+func WithWhitelistedLayers(layers ...string) QueryHandlerOption {
+	return func(handler *QueryHandler) {
+		handler.whitelistedLayers = layers
+	}
+}
+
 func (h *QueryHandler) Handle(c echo.Context) error {
+	queryMiddleware := parka_middlewares.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query"))
+	if len(h.whitelistedLayers) > 0 {
+		queryMiddleware = middlewares.WrapWithWhitelistedLayers(h.whitelistedLayers, queryMiddleware)
+	}
+
 	glazedOverrides := map[string]interface{}{}
 	needsRealFileOutput := false
 
@@ -88,10 +102,12 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 
 	middlewares_ := append(
 		[]middlewares.Middleware{
+			queryMiddleware,
 			glazedOverride,
 		},
 		h.middlewares...,
 	)
+	middlewares_ = append(middlewares_, middlewares.SetFromDefaults())
 
 	handler := glazed.NewQueryHandler(h.cmd,
 		glazed.WithMiddlewares(middlewares_...),

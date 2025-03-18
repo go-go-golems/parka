@@ -75,8 +75,6 @@ github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHk
 github.com/frankban/quicktest v1.14.6/go.mod h1:4ptaffx2x8+WTWXmUCuVU6aPUX1/Mz7zb5vbUoiM6w0=
 github.com/fsnotify/fsnotify v1.7.0 h1:8JEhPFa5W2WU7YfeZzPNqzMP6Lwt7L2715Ggo0nosvA=
 github.com/fsnotify/fsnotify v1.7.0/go.mod h1:40Bi/Hjc2AVfZrqy+aj+yEI+/bRxZnMJyTJwOpGvigM=
-github.com/go-go-golems/clay v0.1.32 h1:UoE1HiTMx54zjEjl9UpWwtDeaOHi4GJc7ETJKGIkkB8=
-github.com/go-go-golems/clay v0.1.32/go.mod h1:GbMmN/SGYHg5joiyp+7LdXp0oafbZpsQeXPSvkRGngI=
 github.com/go-go-golems/clay v0.1.33 h1:jeSLJ8QEIyekWvtGn6X60emTHtFxaVDo+e8dujAL4ao=
 github.com/go-go-golems/clay v0.1.33/go.mod h1:GbMmN/SGYHg5joiyp+7LdXp0oafbZpsQeXPSvkRGngI=
 github.com/go-go-golems/glazed v0.5.37 h1:pb+0dJ1IYU9guf5zas4RaaOtE16H3NPFm1mmY0rnuVs=

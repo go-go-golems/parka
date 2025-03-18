@@ -326,9 +326,11 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	// actually run the command
 	eg.Go(func() error {
 		// NOTE(manuel, 2023-10-16) The GetAllParameterValues is a bit of a hack because really what we want is to only get those flags through the layers
+		log.Debug().Msg("running command")
 		err = qh.cmd.RunIntoGlazeProcessor(ctx3, parsedLayers, gp)
 
-		g := &safegroup.Group{}
+		g, ctx := safegroup.WithContext(ctx3)
+
 		err_ := err
 		g.Go(func() error {
 			defer close(dt_.ErrorStream)
@@ -347,7 +349,7 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 		})
 
 		g.Go(func() error {
-			err := gp.Close(ctx3)
+			err := gp.Close(ctx)
 			log.Debug().Msg("closed gp")
 			if err != nil {
 				return err

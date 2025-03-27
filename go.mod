@@ -2,7 +2,7 @@ module github.com/go-go-golems/parka
 
 go 1.23
 
-toolchain go1.23.3
+toolchain go1.23.7
 
 require (
 	github.com/alecthomas/chroma/v2 v2.14.0
@@ -10,8 +10,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.29.6
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.56.7
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.14
-	github.com/go-go-golems/clay v0.1.33
-	github.com/go-go-golems/glazed v0.5.37
+	github.com/go-go-golems/clay v0.1.34
+	github.com/go-go-golems/glazed v0.5.39
 	github.com/kucherenkovova/safegroup v1.0.2
 	github.com/labstack/echo/v4 v4.13.3
 	github.com/pkg/errors v0.9.1
@@ -22,7 +22,7 @@ require (
 	github.com/yuin/goldmark v1.7.8
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20220924101305-151362477c87
 	github.com/ziflex/lecho/v3 v3.6.0
-	golang.org/x/sync v0.10.0
+	golang.org/x/sync v0.11.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -79,7 +79,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
-	github.com/muesli/termenv v0.15.3-0.20240618155329-98d742f6907a // indirect
+	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
@@ -108,7 +108,7 @@ require (
 	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/net v0.33.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
 	gopkg.in/errgo.v2 v2.1.0 // indirect

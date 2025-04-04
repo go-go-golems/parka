@@ -244,8 +244,8 @@ github.com/yuin/goldmark-highlighting/v2 v2.0.0-20220924101305-151362477c87 h1:P
 github.com/yuin/goldmark-highlighting/v2 v2.0.0-20220924101305-151362477c87/go.mod h1:ovIvrum6DQJA4QsJSovrkC4saKHQVs7TvcaeO8AIl5I=
 github.com/zenizh/go-capturer v0.0.0-20211219060012-52ea6c8fed04 h1:qXafrlZL1WsJW5OokjraLLRURHiw0OzKHD/RNdspp4w=
 github.com/zenizh/go-capturer v0.0.0-20211219060012-52ea6c8fed04/go.mod h1:FiwNQxz6hGoNFBC4nIx+CxZhI3nne5RmIOlT/MXcSD4=
-github.com/ziflex/lecho/v3 v3.6.0 h1:QtIG3fdygsLHclPYuIIHKqVwkOAOvX3qUzsvbAo8NkI=
-github.com/ziflex/lecho/v3 v3.6.0/go.mod h1:LBlLsyIwa0MFxtJ2WU5WzHfuMR/jnq26TXddWfJ+s/0=
+github.com/ziflex/lecho/v3 v3.7.0 h1:MSzYINEHtAaCx2XpbdF1A85aSyXitNJxF4T9dG6jzRQ=
+github.com/ziflex/lecho/v3 v3.7.0/go.mod h1:LBlLsyIwa0MFxtJ2WU5WzHfuMR/jnq26TXddWfJ+s/0=
 go.mongodb.org/mongo-driver v1.14.0 h1:P98w8egYRjYe3XDjxhYJagTokP/H6HzlsnojRgZRd80=
 go.mongodb.org/mongo-driver v1.14.0/go.mod h1:Vzb0Mk/pa7e6cWw85R4F/endUC3u0U9jGcNU603k65c=
 go.uber.org/multierr v1.11.0 h1:blXXJkSxSSfBVBlC76pxqeO+LN3aDfLQo+309xJstO0=

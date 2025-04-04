@@ -1,13 +1,14 @@
 package render
 
 import (
+	"html/template"
+	"net/http"
+	"strings"
+
 	"github.com/go-go-golems/parka/pkg/utils"
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
-	"html/template"
-	"net/http"
-	"strings"
 )
 
 // Renderer is a struct that is able to lookup a page name and render it.
@@ -217,7 +218,7 @@ func (r *Renderer) Render(
 		err = baseTemplate.Execute(
 			c.Response(),
 			map[string]interface{}{
-				"markdown": template.HTML(markdown),
+				"markdown": template.HTML(markdown), // #nosec G203
 			})
 		if err != nil {
 			return errors.Wrap(err, "error executing base template")

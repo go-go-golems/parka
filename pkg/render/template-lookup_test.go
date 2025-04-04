@@ -3,11 +3,12 @@ package render
 import (
 	"bytes"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"io"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func ExampleLookupTemplateFromDirectory() {
@@ -108,13 +109,17 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer srcFile.Close()
+	defer func() {
+		_ = srcFile.Close()
+	}()
 
 	dstFile, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer dstFile.Close()
+	defer func() {
+		_ = dstFile.Close()
+	}()
 
 	_, err = io.Copy(dstFile, srcFile)
 	if err != nil {

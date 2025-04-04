@@ -65,7 +65,9 @@ func (m *JSONBodyMiddleware) createTempFileFromString(content string) (string, e
 	if err != nil {
 		return "", errors.Wrap(err, "could not create temporary file")
 	}
-	defer tmpFile.Close()
+	defer func() {
+		_ = tmpFile.Close()
+	}()
 
 	_, err = tmpFile.WriteString(content)
 	if err != nil {
@@ -120,7 +122,9 @@ func (m *JSONBodyMiddleware) Middleware() middlewares.Middleware {
 							if err != nil {
 								return errors.Wrapf(err, "could not open temporary file for parameter '%s'", p.Name)
 							}
-							defer f.Close()
+							defer func() {
+								_ = f.Close()
+							}()
 
 							parsed, err := p.ParseFromReader(f, filepath.Base(tmpPath), m.options...)
 							if err != nil {

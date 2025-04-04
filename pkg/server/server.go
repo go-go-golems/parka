@@ -228,8 +228,9 @@ func (s *Server) Run(ctx context.Context) error {
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
 
 	srv := &http.Server{
-		Addr:    addr,
-		Handler: s.Router,
+		Addr:              addr,
+		Handler:           s.Router,
+		ReadHeaderTimeout: 20 * time.Second, // Add timeout to mitigate Slowloris attacks
 	}
 
 	eg := errgroup.Group{}

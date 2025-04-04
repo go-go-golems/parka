@@ -51,7 +51,9 @@ func TestUpdateFromFormQuery(t *testing.T) {
 
 			// Create the middleware instance
 			middleware := NewFormMiddleware(c)
-			defer middleware.Close()
+			defer func() {
+				_ = middleware.Close()
+			}()
 
 			// Execute the middleware
 			err = middleware.Middleware()(func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
@@ -135,7 +137,9 @@ func TestFormMiddlewareErrorHandling(t *testing.T) {
 
 	// Create the middleware instance
 	middleware := NewFormMiddleware(c)
-	defer middleware.Close()
+	defer func() {
+		_ = middleware.Close()
+	}()
 
 	// Execute the middleware
 	err = middleware.Middleware()(func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
@@ -197,7 +201,9 @@ func TestFormMiddlewareWithDefaultLayer(t *testing.T) {
 
 	// Create and execute the middleware
 	middleware := NewFormMiddleware(c)
-	defer middleware.Close()
+	defer func() {
+		_ = middleware.Close()
+	}()
 
 	err = middleware.Middleware()(func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
 		return nil

@@ -149,5 +149,5 @@ func (cd *CommandDirHandler) Serve(server *parka.Server, basePath string) error 
 		return errors.New("no repository configured")
 	}
 
-	return cd.GenericCommandHandler.ServeRepository(server, basePath, cd.Repository)
+	return cd.ServeRepository(server, basePath, cd.Repository)
 }

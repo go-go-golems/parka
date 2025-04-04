@@ -182,5 +182,5 @@ func NewCommandHandlerFromConfig(
 func (ch *CommandHandler) Serve(server *parka.Server, path string) error {
 	path = strings.TrimSuffix(path, "/")
 
-	return ch.GenericCommandHandler.ServeSingleCommand(server, path, ch.Command)
+	return ch.ServeSingleCommand(server, path, ch.Command)
 }

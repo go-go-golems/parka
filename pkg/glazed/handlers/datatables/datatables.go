@@ -315,9 +315,9 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 				}
 
 				if dt_.JSRendering {
-					dt_.JSStream <- template.JS(row_)
+					dt_.JSStream <- template.JS(row_) // #nosec G203
 				} else {
-					dt_.HTMLStream <- template.HTML(row_)
+					dt_.HTMLStream <- template.HTML(row_) // #nosec G203
 				}
 			}
 		}
@@ -420,7 +420,7 @@ func (qh *QueryHandler) renderTemplate(
 	}
 
 	dt_.Layout = layout_
-	dt_.LongDescription = template.HTML(longHTML)
+	dt_.LongDescription = template.HTML(longHTML) // #nosec G203
 	dt_.Command = description
 
 	// Wait for the column names to be sent to the channel. This will only

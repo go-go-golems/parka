@@ -64,7 +64,9 @@ func (m *FormMiddleware) createTempFileFromReader(r io.Reader) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "could not create temporary file")
 	}
-	defer tmpFile.Close()
+	defer func() {
+		_ = tmpFile.Close()
+	}()
 
 	_, err = io.Copy(tmpFile, r)
 	if err != nil {
@@ -117,7 +119,9 @@ func (m *FormMiddleware) getFileParameterFromForm(p *parameters.ParameterDefinit
 			if err != nil {
 				return err
 			}
-			defer f.Close()
+			defer func() {
+				_ = f.Close()
+			}()
 
 			// For ParameterTypeFile, we need to create a temporary file
 			if p.Type == parameters.ParameterTypeFile || p.Type == parameters.ParameterTypeFileList {
@@ -267,6 +271,8 @@ func (m *FormMiddleware) Middleware() middlewares.Middleware {
 // UpdateFromFormQuery is a convenience function that creates a FormMiddleware and returns its middleware function
 func UpdateFromFormQuery(c echo.Context, options ...parameters.ParseStepOption) middlewares.Middleware {
 	m := NewFormMiddleware(c, options...)
-	defer m.Close()
+	defer func() {
+		_ = m.Close()
+	}()
 	return m.Middleware()
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -231,4 +232,62 @@ func TestLookupTemplateFromFS_SimpleDirectoryWithReload(t *testing.T) {
 	err = tmpl.Execute(buf, nil)
 	require.Nil(t, err)
 	assert.Equal(t, "foo foo", buf.String())
+}
+
+func TestLookupTemplateFromDirectory_PathTraversal(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "template-lookup-test")
+	require.NoError(t, err)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("Failed to remove temporary directory: %v", err)
+		}
+	}()
+
+	// Create a test template file
+	testTemplateContent := "<html>{{.Title}}</html>"
+	err = os.WriteFile(filepath.Join(tempDir, "test.html"), []byte(testTemplateContent), 0644)
+	require.NoError(t, err)
+
+	// Create a "secret" file outside of the template directory that should not be accessible
+	secretDir, err := os.MkdirTemp("", "secret-dir")
+	require.NoError(t, err)
+	defer func() {
+		if err := os.RemoveAll(secretDir); err != nil {
+			t.Logf("Failed to remove secret directory: %v", err)
+		}
+	}()
+
+	secretContent := "SECRET_DATA"
+	secretFilePath := filepath.Join(secretDir, "secret.txt")
+	err = os.WriteFile(secretFilePath, []byte(secretContent), 0644)
+	require.NoError(t, err)
+
+	// Create the lookup
+	lookup := NewLookupTemplateFromDirectory(tempDir)
+
+	// Test legitimate template access
+	tmpl, err := lookup.Lookup("test.html")
+	require.NoError(t, err)
+	require.NotNil(t, tmpl)
+
+	// Test path traversal attempts should fail
+	traversalTests := []string{
+		"../secret.txt",
+		"../../secret.txt",
+		"../secret-dir/secret.txt",
+		"test.html/../../secret.txt",
+		filepath.Join("..", filepath.Base(secretDir), "secret.txt"),
+		filepath.Join("..", "..", "tmp", filepath.Base(secretDir), "secret.txt"),
+	}
+
+	for _, testPath := range traversalTests {
+		t.Run(fmt.Sprintf("TestPathTraversal_%s", testPath), func(t *testing.T) {
+			tmpl, err := lookup.Lookup(testPath)
+			// Either it returns an error or nil template, but should never succeed
+			if err == nil {
+				require.Nil(t, tmpl, "Path traversal should not return a valid template")
+			}
+		})
+	}
 }

@@ -4,13 +4,15 @@
 package render
 
 import (
-	"github.com/go-go-golems/glazed/pkg/helpers/templating"
-	"github.com/pkg/errors"
 	"html/template"
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
+
+	"github.com/go-go-golems/glazed/pkg/helpers/templating"
+	"github.com/pkg/errors"
 )
 
 // TemplateLookup is an interface for objects that can lookup a template by name.
@@ -98,12 +100,39 @@ func (l *LookupTemplateFromDirectory) Lookup(name ...string) (*template.Template
 	if !strings.HasSuffix(dir, "/") {
 		dir += "/"
 	}
+
+	// Get the absolute path of the directory for validation
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, err
+	}
+	// Ensure the directory ends with separator for proper path prefix checking
+	if !strings.HasSuffix(absDir, string(filepath.Separator)) {
+		absDir += string(filepath.Separator)
+	}
+
 	for _, n := range name {
-		fileName := dir + n
-		// lookup in s.devTemplateDir
-		_, err := os.Stat(fileName)
+		// Validate the name doesn't contain path traversal sequences
+		if strings.Contains(n, "..") || strings.Contains(n, "\\") {
+			continue // Skip this name as it's potentially malicious
+		}
+
+		// Clean and get the absolute path
+		fileName := filepath.Join(dir, n)
+		absFileName, err := filepath.Abs(fileName)
+		if err != nil {
+			continue
+		}
+
+		// Ensure the resulting path is still within the intended directory
+		if !strings.HasPrefix(absFileName, absDir) {
+			continue // Skip this name as it escapes the directory
+		}
+
+		// Now it's safe to check if the file exists
+		_, err = os.Stat(absFileName)
 		if err == nil {
-			b, err := os.ReadFile(fileName)
+			b, err := os.ReadFile(absFileName)
 			if err != nil {
 				return nil, err
 			}

@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.29.6
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.58.1
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.14
-	github.com/go-go-golems/clay v0.1.36
+	github.com/go-go-golems/clay v0.1.37
 	github.com/go-go-golems/glazed v0.5.43
 	github.com/kucherenkovova/safegroup v1.0.2
 	github.com/labstack/echo/v4 v4.13.3

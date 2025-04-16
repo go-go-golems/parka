@@ -1,30 +1,30 @@
-package server_test
+package server
 
 import (
 	"encoding/json"
-	json2 "github.com/go-go-golems/parka/pkg/glazed/handlers/json"
-	"github.com/go-go-golems/parka/pkg/server"
-	"github.com/go-go-golems/parka/pkg/utils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	json2 "github.com/go-go-golems/parka/pkg/glazed/handlers/json"
+	"github.com/go-go-golems/parka/pkg/utils"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRunGlazedCommand(t *testing.T) {
 	tc, err := utils.NewTestGlazedCommand()
 	require.NoError(t, err)
 
-	s, err := server.NewServer()
+	s, err := NewServer()
 	require.NoError(t, err)
 
 	handler := json2.CreateJSONQueryHandler(tc)
 
-	s.Router.GET("/test", handler)
+	s.Group.GET("/test", handler)
 
-	server := httptest.NewServer(s.Router)
+	server := httptest.NewServer(s.router)
 	defer server.Close()
 
 	t.Run("test-simple-command", func(t *testing.T) {

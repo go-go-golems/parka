@@ -1,10 +1,11 @@
 package template
 
 import (
+	"io/fs"
+
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	"github.com/go-go-golems/parka/pkg/render"
 	"github.com/go-go-golems/parka/pkg/server"
-	"io/fs"
 )
 
 type TemplateHandler struct {
@@ -79,7 +80,7 @@ func NewTemplateHandlerFromConfig(t *config.Template, options ...TemplateHandler
 }
 
 func (t *TemplateHandler) Serve(server_ *server.Server, path string) error {
-	server_.Router.GET(path, t.renderer.WithTemplateHandler(t.TemplateFile, nil))
+	server_.Group.GET(path, t.renderer.WithTemplateHandler(t.TemplateFile, nil))
 
 	return nil
 }

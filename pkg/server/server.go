@@ -29,7 +29,9 @@ var distFS embed.FS
 // It is meant to be quite flexible, allowing you to add static paths and template lookups
 // that can provide different fs and template backends.
 type Server struct {
-	Router *echo.Echo
+	router   *echo.Echo
+	Group    *echo.Group
+	RootPath string
 
 	// TODO(manuel, 2023-06-05) This should become a standard Static handler to be added to the Routes
 	StaticPaths []utils_fs.StaticPath
@@ -76,6 +78,14 @@ func WithPort(port uint16) ServerOption {
 func WithAddress(address string) ServerOption {
 	return func(s *Server) error {
 		s.Address = address
+		return nil
+	}
+}
+
+// WithRootPath sets the URL root under which to mount all routes.
+func WithRootPath(root string) ServerOption {
+	return func(s *Server) error {
+		s.RootPath = root
 		return nil
 	}
 }
@@ -161,7 +171,7 @@ func WithDefaultParkaStaticPaths() ServerOption {
 
 func WithGzip() ServerOption {
 	return func(s *Server) error {
-		s.Router.Use(middleware.Gzip())
+		s.router.Use(middleware.Gzip())
 		return nil
 	}
 }
@@ -198,7 +208,7 @@ func NewServer(options ...ServerOption) (*Server, error) {
 	router.HTTPErrorHandler = CustomHTTPErrorHandler
 
 	s := &Server{
-		Router:      router,
+		router:      router,
 		StaticPaths: []utils_fs.StaticPath{},
 	}
 
@@ -209,27 +219,30 @@ func NewServer(options ...ServerOption) (*Server, error) {
 		}
 	}
 
+	// Mount all handlers and static paths under the configured root prefix
+	s.Group = s.router.Group(s.RootPath)
+
 	return s, nil
 }
 
 // Run will start the server and listen on the given address and port.
 func (s *Server) Run(ctx context.Context) error {
 	for _, path := range s.StaticPaths {
-		s.Router.StaticFS(path.UrlPath, path.FS)
+		s.Group.StaticFS(path.UrlPath, path.FS)
 	}
 
 	// match all remaining paths to the templates
 	if s.DefaultRenderer != nil {
 		// TODO(manuel, 2024-05-08) I don't think we even need the explicit index mapping
-		//s.Router.GET("/", s.DefaultRenderer.WithTemplateHandler("index", nil))
-		s.Router.GET("/*", s.DefaultRenderer.WithTemplateDirHandler(nil))
+		//s.Group.GET("/", s.DefaultRenderer.WithTemplateHandler("index", nil))
+		s.Group.GET("/*", s.DefaultRenderer.WithTemplateDirHandler(nil))
 	}
 
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
 
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           s.Router,
+		Handler:           s.router,
 		ReadHeaderTimeout: 20 * time.Second, // Add timeout to mitigate Slowloris attacks
 	}
 

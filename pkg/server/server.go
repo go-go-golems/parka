@@ -225,6 +225,10 @@ func NewServer(options ...ServerOption) (*Server, error) {
 	return s, nil
 }
 
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.router.ServeHTTP(w, r)
+}
+
 // Run will start the server and listen on the given address and port.
 func (s *Server) Run(ctx context.Context) error {
 	for _, path := range s.StaticPaths {

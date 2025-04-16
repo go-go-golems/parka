@@ -24,7 +24,7 @@ func TestRunGlazedCommand(t *testing.T) {
 
 	s.Group.GET("/test", handler)
 
-	server := httptest.NewServer(s.router)
+	server := httptest.NewServer(s)
 	defer server.Close()
 
 	t.Run("test-simple-command", func(t *testing.T) {

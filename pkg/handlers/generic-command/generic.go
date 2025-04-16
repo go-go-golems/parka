@@ -180,20 +180,20 @@ func WithWhitelistedLayers(layers ...string) GenericCommandHandlerOption {
 func (gch *GenericCommandHandler) ServeSingleCommand(server *parka.Server, basePath string, command cmds.Command) error {
 	gch.BasePath = basePath
 
-	server.Router.GET(basePath+"/data", func(c echo.Context) error {
+	server.Group.GET(basePath+"/data", func(c echo.Context) error {
 		return gch.ServeData(c, command)
 	})
-	server.Router.GET(basePath+"/text", func(c echo.Context) error {
+	server.Group.GET(basePath+"/text", func(c echo.Context) error {
 		return gch.ServeText(c, command)
 	})
-	server.Router.GET(basePath+"/stream", func(c echo.Context) error {
+	server.Group.GET(basePath+"/stream", func(c echo.Context) error {
 		return gch.ServeStreaming(c, command)
 	})
-	server.Router.GET(basePath+"/download/*", func(c echo.Context) error {
+	server.Group.GET(basePath+"/download/*", func(c echo.Context) error {
 		return gch.ServeDownload(c, command)
 	})
 	// don't use a specific datatables path here
-	server.Router.GET(basePath, func(c echo.Context) error {
+	server.Group.GET(basePath, func(c echo.Context) error {
 		return gch.ServeDataTables(c, command, basePath+"/download")
 	})
 
@@ -204,7 +204,7 @@ func (gch *GenericCommandHandler) ServeRepository(server *parka.Server, basePath
 	basePath = strings.TrimSuffix(basePath, "/")
 	gch.BasePath = basePath
 
-	server.Router.GET(basePath+"/data/*", func(c echo.Context) error {
+	server.Group.GET(basePath+"/data/*", func(c echo.Context) error {
 		commandPath := c.Param("*")
 		commandPath = strings.TrimPrefix(commandPath, "/")
 		command, err := getRepositoryCommand(repository, commandPath)
@@ -219,7 +219,7 @@ func (gch *GenericCommandHandler) ServeRepository(server *parka.Server, basePath
 		return gch.ServeData(c, command)
 	})
 
-	server.Router.GET(basePath+"/text/*", func(c echo.Context) error {
+	server.Group.GET(basePath+"/text/*", func(c echo.Context) error {
 		commandPath := c.Param("*")
 		commandPath = strings.TrimPrefix(commandPath, "/")
 		command, err := getRepositoryCommand(repository, commandPath)
@@ -234,7 +234,7 @@ func (gch *GenericCommandHandler) ServeRepository(server *parka.Server, basePath
 		return gch.ServeText(c, command)
 	})
 
-	server.Router.GET(basePath+"/streaming/*", func(c echo.Context) error {
+	server.Group.GET(basePath+"/streaming/*", func(c echo.Context) error {
 		commandPath := c.Param("*")
 		commandPath = strings.TrimPrefix(commandPath, "/")
 		command, err := getRepositoryCommand(repository, commandPath)
@@ -249,7 +249,7 @@ func (gch *GenericCommandHandler) ServeRepository(server *parka.Server, basePath
 		return gch.ServeStreaming(c, command)
 	})
 
-	server.Router.GET(basePath+"/datatables/*", func(c echo.Context) error {
+	server.Group.GET(basePath+"/datatables/*", func(c echo.Context) error {
 		commandPath := c.Param("*")
 		commandPath = strings.TrimPrefix(commandPath, "/")
 
@@ -266,7 +266,7 @@ func (gch *GenericCommandHandler) ServeRepository(server *parka.Server, basePath
 		return gch.ServeDataTables(c, command, basePath+"/download/"+commandPath)
 	})
 
-	server.Router.GET(basePath+"/download/*", func(c echo.Context) error {
+	server.Group.GET(basePath+"/download/*", func(c echo.Context) error {
 		commandPath := c.Param("*")
 		commandPath = strings.TrimPrefix(commandPath, "/")
 		// strip file name from path
@@ -291,7 +291,7 @@ func (gch *GenericCommandHandler) ServeRepository(server *parka.Server, basePath
 		return gch.ServeDownload(c, command)
 	})
 
-	server.Router.GET(basePath+"/", func(c echo.Context) error {
+	server.Group.GET(basePath+"/", func(c echo.Context) error {
 		renderNode, ok := repository.GetRenderNode([]string{})
 		if !ok {
 			return errors.Errorf("command root not found")
@@ -323,7 +323,7 @@ func (gch *GenericCommandHandler) ServeRepository(server *parka.Server, basePath
 		return nil
 	})
 
-	server.Router.GET(basePath+"/commands/*", func(c echo.Context) error {
+	server.Group.GET(basePath+"/commands/*", func(c echo.Context) error {
 		path_ := c.Param("*")
 		path_ = strings.TrimPrefix(path_, "/")
 		path_ = strings.TrimSuffix(path_, "/")

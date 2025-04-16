@@ -2,11 +2,12 @@ package server
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/pprof"
+
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
-	"net/http"
-	"net/http/pprof"
 )
 
 type stackTracer interface {
@@ -66,6 +67,6 @@ func (s *Server) RegisterDebugRoutes() {
 	for route, handler := range handlers_ {
 		route_ := route
 		handler_ := handler
-		s.Router.GET(route_, echo.WrapHandler(handler_))
+		s.Group.GET(route_, echo.WrapHandler(handler_))
 	}
 }

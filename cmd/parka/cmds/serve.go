@@ -71,9 +71,9 @@ var ServeCmd = &cobra.Command{
 
 		// NOTE(manuel, 2023-05-26) This could also be done with a simple Command config file struct once
 		// implemented as part of sqleton serve
-		s.Router.GET("/api/example", json2.CreateJSONQueryHandler(NewExampleCommand()))
-		s.Router.GET("/example", datatables.CreateDataTablesHandler(NewExampleCommand(), "", "example"))
-		s.Router.GET("/download/example.csv", output_file.CreateGlazedFileHandler(NewExampleCommand(), "example.csv"))
+		s.Group.GET("/api/example", json2.CreateJSONQueryHandler(NewExampleCommand()))
+		s.Group.GET("/example", datatables.CreateDataTablesHandler(NewExampleCommand(), "", "example"))
+		s.Group.GET("/download/example.csv", output_file.CreateGlazedFileHandler(NewExampleCommand(), "example.csv"))
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()

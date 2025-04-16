@@ -56,6 +56,6 @@ func NewStaticFileHandlerFromConfig(shf *config.StaticFile, options ...StaticFil
 }
 
 func (s *StaticFileHandler) Serve(server *server.Server, path string) error {
-	server.Router.StaticFS(path, echo.MustSubFS(s.fs, s.localPath))
+	server.Group.StaticFS(path, echo.MustSubFS(s.fs, s.localPath))
 	return nil
 }

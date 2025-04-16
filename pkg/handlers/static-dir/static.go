@@ -62,6 +62,6 @@ func (s *StaticDirHandler) Serve(server *server.Server, path string) error {
 	if s.localPath != "" {
 		fs_ = fs2.NewAddPrefixPathFS(s.fs, s.localPath)
 	}
-	server.Router.StaticFS(path, fs_)
+	server.Group.StaticFS(path, fs_)
 	return nil
 }

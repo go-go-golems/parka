@@ -6,7 +6,7 @@ require (
 	github.com/alecthomas/chroma/v2 v2.16.0
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.6
-	github.com/aws/aws-sdk-go-v2/service/ssm v1.58.1
+	github.com/aws/aws-sdk-go-v2/service/ssm v1.59.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.14
 	github.com/go-go-golems/clay v0.1.39
 	github.com/go-go-golems/glazed v0.5.48

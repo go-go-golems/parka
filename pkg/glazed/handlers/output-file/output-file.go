@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/sources"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/glazed"
 	parka_middlewares "github.com/go-go-golems/parka/pkg/glazed/middlewares"
@@ -22,7 +22,7 @@ import (
 type QueryHandler struct {
 	cmd         cmds.GlazeCommand
 	fileName    string
-	middlewares []middlewares.Middleware
+	middlewares []sources.Middleware
 	// whitelistedLayers contains the list of layers that are allowed to be modified through query parameters
 	whitelistedLayers []string
 }
@@ -42,7 +42,7 @@ func NewQueryHandler(cmd cmds.GlazeCommand, fileName string, options ...QueryHan
 	return h
 }
 
-func WithMiddlewares(middlewares ...middlewares.Middleware) QueryHandlerOption {
+func WithMiddlewares(middlewares ...sources.Middleware) QueryHandlerOption {
 	return func(handler *QueryHandler) {
 		handler.middlewares = middlewares
 	}
@@ -55,9 +55,9 @@ func WithWhitelistedLayers(layers ...string) QueryHandlerOption {
 }
 
 func (h *QueryHandler) Handle(c echo.Context) error {
-	queryMiddleware := parka_middlewares.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query"))
+	queryMiddleware := parka_middlewares.UpdateFromQueryParameters(c, fields.WithSource("query"))
 	if len(h.whitelistedLayers) > 0 {
-		queryMiddleware = middlewares.WrapWithWhitelistedLayers(h.whitelistedLayers, queryMiddleware)
+		queryMiddleware = sources.WrapWithWhitelistedSections(h.whitelistedLayers, queryMiddleware)
 	}
 
 	glazedOverrides := map[string]interface{}{}
@@ -93,21 +93,21 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 	var tmpFile *os.File
 	var err error
 
-	glazedOverride := middlewares.UpdateFromMap(
+	glazedOverride := sources.FromMap(
 		map[string]map[string]interface{}{
 			settings.GlazedSlug: glazedOverrides,
 		},
-		parameters.WithParseStepSource("output-file-glazed-override"),
+		fields.WithSource("output-file-glazed-override"),
 	)
 
 	middlewares_ := append(
-		[]middlewares.Middleware{
+		[]sources.Middleware{
 			queryMiddleware,
 			glazedOverride,
 		},
 		h.middlewares...,
 	)
-	middlewares_ = append(middlewares_, middlewares.SetFromDefaults())
+	middlewares_ = append(middlewares_, sources.FromDefaults())
 
 	handler := glazed.NewQueryHandler(h.cmd,
 		glazed.WithMiddlewares(middlewares_...),

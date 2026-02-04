@@ -6,9 +6,9 @@ import (
 	"net/http"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/sources"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	json2 "github.com/go-go-golems/glazed/pkg/formatters/json"
 	"github.com/go-go-golems/glazed/pkg/middlewares/row"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
@@ -18,11 +18,11 @@ import (
 
 type QueryHandler struct {
 	cmd         cmds.Command
-	middlewares []middlewares.Middleware
+	middlewares []sources.Middleware
 	// useJSONBody determines whether to use JSON body parsing (POST) or query parameters (GET)
 	useJSONBody bool
 	// parseOptions are options passed to parameter parsing
-	parseOptions []parameters.ParseStepOption
+	parseOptions []fields.ParseOption
 	// whitelistedLayers contains the list of layers that are allowed to be modified through query parameters
 	whitelistedLayers []string
 }
@@ -33,7 +33,7 @@ func NewQueryHandler(cmd cmds.Command, options ...QueryHandlerOption) *QueryHand
 	h := &QueryHandler{
 		cmd:          cmd,
 		useJSONBody:  false, // default to query parameters
-		parseOptions: []parameters.ParseStepOption{},
+		parseOptions: []fields.ParseOption{},
 	}
 
 	for _, option := range options {
@@ -43,7 +43,7 @@ func NewQueryHandler(cmd cmds.Command, options ...QueryHandlerOption) *QueryHand
 	return h
 }
 
-func WithMiddlewares(middlewares ...middlewares.Middleware) QueryHandlerOption {
+func WithMiddlewares(middlewares ...sources.Middleware) QueryHandlerOption {
 	return func(handler *QueryHandler) {
 		handler.middlewares = middlewares
 	}
@@ -57,7 +57,7 @@ func WithJSONBody() QueryHandlerOption {
 }
 
 // WithParseOptions adds parameter parse options to the handler
-func WithParseOptions(options ...parameters.ParseStepOption) QueryHandlerOption {
+func WithParseOptions(options ...fields.ParseOption) QueryHandlerOption {
 	return func(handler *QueryHandler) {
 		handler.parseOptions = append(handler.parseOptions, options...)
 	}
@@ -73,11 +73,11 @@ var _ handlers.Handler = (*QueryHandler)(nil)
 
 func (h *QueryHandler) Handle(c echo.Context) error {
 	description := h.cmd.Description()
-	parsedLayers := layers.NewParsedLayers()
+	parsedValues := values.New()
 
 	var jsonMiddleware *parka_middlewares.JSONBodyMiddleware
 	if h.useJSONBody {
-		jsonMiddleware = parka_middlewares.NewJSONBodyMiddleware(c, append(h.parseOptions, parameters.WithParseStepSource("json"))...)
+		jsonMiddleware = parka_middlewares.NewJSONBodyMiddleware(c, append(h.parseOptions, fields.WithSource("json"))...)
 		defer func() {
 			if err := jsonMiddleware.Close(); err != nil {
 				// We can only log this error since we're in a defer
@@ -87,21 +87,21 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 	}
 
 	// Build the middleware chain
-	middlewares_ := make([]middlewares.Middleware, 0)
+	middlewares_ := make([]sources.Middleware, 0)
 	if h.useJSONBody {
 		middlewares_ = append(middlewares_, jsonMiddleware.Middleware())
 	} else {
-		queryMiddleware := parka_middlewares.UpdateFromQueryParameters(c, append(h.parseOptions, parameters.WithParseStepSource("query"))...)
+		queryMiddleware := parka_middlewares.UpdateFromQueryParameters(c, append(h.parseOptions, fields.WithSource("query"))...)
 		if len(h.whitelistedLayers) > 0 {
-			queryMiddleware = middlewares.WrapWithWhitelistedLayers(h.whitelistedLayers, queryMiddleware)
+			queryMiddleware = sources.WrapWithWhitelistedSections(h.whitelistedLayers, queryMiddleware)
 		}
 		middlewares_ = append(middlewares_, queryMiddleware)
 	}
 
 	middlewares_ = append(middlewares_, h.middlewares...)
-	middlewares_ = append(middlewares_, middlewares.SetFromDefaults())
+	middlewares_ = append(middlewares_, sources.FromDefaults())
 
-	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers, middlewares_...)
+	err := sources.Execute(description.Schema.Clone(), parsedValues, middlewares_...)
 	if err != nil {
 		return err
 	}
@@ -113,7 +113,7 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 	switch cmd := h.cmd.(type) {
 	case cmds.WriterCommand:
 		buf := bytes.Buffer{}
-		err := cmd.RunIntoWriter(ctx, parsedLayers, &buf)
+		err := cmd.RunIntoWriter(ctx, parsedValues, &buf)
 		if err != nil {
 			return err
 		}
@@ -131,7 +131,7 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 		}
 
 	case cmds.GlazeCommand:
-		gp, err := handlers.CreateTableProcessorWithOutput(parsedLayers, "json", "")
+		gp, err := handlers.CreateTableProcessorWithOutput(parsedValues, "json", "")
 		if err != nil {
 			return err
 		}
@@ -144,7 +144,7 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 			return err
 		}
 
-		err = cmd.RunIntoGlazeProcessor(ctx, parsedLayers, gp)
+		err = cmd.RunIntoGlazeProcessor(ctx, parsedValues, gp)
 		if err != nil {
 			return err
 		}
@@ -155,7 +155,7 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 		}
 
 	case cmds.BareCommand:
-		err := cmd.Run(ctx, parsedLayers)
+		err := cmd.Run(ctx, parsedValues)
 		if err != nil {
 			return err
 		}

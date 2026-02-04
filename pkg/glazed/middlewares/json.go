@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sync"
 
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
+	"github.com/go-go-golems/glazed/pkg/cmds/sources"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 )
@@ -19,13 +19,13 @@ import (
 // and manages temporary files created during processing.
 type JSONBodyMiddleware struct {
 	c       echo.Context
-	options []parameters.ParseStepOption
+	options []fields.ParseOption
 	files   []string
 	mu      sync.Mutex
 }
 
 // NewJSONBodyMiddleware creates a new JSONBodyMiddleware instance
-func NewJSONBodyMiddleware(c echo.Context, options ...parameters.ParseStepOption) *JSONBodyMiddleware {
+func NewJSONBodyMiddleware(c echo.Context, options ...fields.ParseOption) *JSONBodyMiddleware {
 	return &JSONBodyMiddleware{
 		c:       c,
 		options: options,
@@ -78,9 +78,9 @@ func (m *JSONBodyMiddleware) createTempFileFromString(content string) (string, e
 }
 
 // Middleware returns the actual middleware function
-func (m *JSONBodyMiddleware) Middleware() middlewares.Middleware {
-	return func(next middlewares.HandlerFunc) middlewares.HandlerFunc {
-		return func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
+func (m *JSONBodyMiddleware) Middleware() sources.Middleware {
+	return func(next sources.HandlerFunc) sources.HandlerFunc {
+		return func(schema_ *schema.Schema, parsedValues *values.Values) error {
 			// Read the request body
 			body, err := io.ReadAll(m.c.Request().Body)
 			if err != nil {
@@ -93,11 +93,10 @@ func (m *JSONBodyMiddleware) Middleware() middlewares.Middleware {
 				return errors.Wrap(err, "could not parse JSON body")
 			}
 
-			err = layers_.ForEachE(func(_ string, l layers.ParameterLayer) error {
-				parsedLayer := parsedLayers.GetOrCreate(l)
-
-				pds := l.GetParameterDefinitions()
-				err := pds.ForEachE(func(p *parameters.ParameterDefinition) error {
+			err = schema_.ForEachE(func(_ string, section schema.Section) error {
+				sectionValues := parsedValues.GetOrCreate(section)
+				defs := section.GetDefinitions()
+				err := defs.ForEachE(func(p *fields.Definition) error {
 					value, exists := jsonData[p.Name]
 					if !exists {
 						if p.Required {
@@ -110,31 +109,17 @@ func (m *JSONBodyMiddleware) Middleware() middlewares.Middleware {
 					if p.Type.NeedsFileContent("") {
 						switch v := value.(type) {
 						case string:
-							// Create a temporary file with the content
 							tmpPath, err := m.createTempFileFromString(v)
 							if err != nil {
 								return err
 							}
 							m.addFile(tmpPath)
 
-							// Parse the file content
-							f, err := os.Open(tmpPath)
-							if err != nil {
-								return errors.Wrapf(err, "could not open temporary file for parameter '%s'", p.Name)
-							}
-							defer func() {
-								_ = f.Close()
-							}()
-
-							parsed, err := p.ParseFromReader(f, filepath.Base(tmpPath), m.options...)
+							parsedField, err := p.ParseField([]string{tmpPath}, m.options...)
 							if err != nil {
 								return errors.Wrapf(err, "invalid value for parameter '%s'", p.Name)
 							}
-
-							err = parsedLayer.Parameters.UpdateValue(p.Name, p, parsed.Value, m.options...)
-							if err != nil {
-								return err
-							}
+							sectionValues.Fields.Update(p.Name, parsedField)
 							return nil
 						default:
 							return errors.Errorf("invalid type for file parameter '%s': expected string", p.Name)
@@ -142,38 +127,44 @@ func (m *JSONBodyMiddleware) Middleware() middlewares.Middleware {
 					}
 
 					// Handle regular parameters
-					var stringValue string
 					switch v := value.(type) {
 					case string:
-						stringValue = v
+						parsedField, err := p.ParseField([]string{v}, m.options...)
+						if err != nil {
+							return errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, v)
+						}
+						sectionValues.Fields.Update(p.Name, parsedField)
 					case float64:
-						stringValue = fmt.Sprintf("%v", v)
+						stringValue := fmt.Sprintf("%v", v)
+						parsedField, err := p.ParseField([]string{stringValue}, m.options...)
+						if err != nil {
+							return errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, stringValue)
+						}
+						sectionValues.Fields.Update(p.Name, parsedField)
 					case bool:
-						stringValue = fmt.Sprintf("%v", v)
+						stringValue := fmt.Sprintf("%v", v)
+						parsedField, err := p.ParseField([]string{stringValue}, m.options...)
+						if err != nil {
+							return errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, stringValue)
+						}
+						sectionValues.Fields.Update(p.Name, parsedField)
 					case []interface{}:
-						// Handle array parameters
 						if p.Type.IsList() {
 							strValues := make([]string, len(v))
 							for i, item := range v {
 								strValues[i] = fmt.Sprintf("%v", item)
 							}
-							parsedParam, err := p.ParseParameter(strValues, m.options...)
+							parsedField, err := p.ParseField(strValues, m.options...)
 							if err != nil {
 								return errors.Wrapf(err, "invalid value for parameter '%s'", p.Name)
 							}
-							parsedLayer.Parameters.Update(p.Name, parsedParam)
+							sectionValues.Fields.Update(p.Name, parsedField)
 							return nil
 						}
 						return errors.Errorf("received array for non-array parameter '%s'", p.Name)
 					default:
 						return errors.Errorf("unsupported type for parameter '%s'", p.Name)
 					}
-
-					parsedParam, err := p.ParseParameter([]string{stringValue}, m.options...)
-					if err != nil {
-						return errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, stringValue)
-					}
-					parsedLayer.Parameters.Update(p.Name, parsedParam)
 
 					return nil
 				})
@@ -188,7 +179,7 @@ func (m *JSONBodyMiddleware) Middleware() middlewares.Middleware {
 				return err
 			}
 
-			return next(layers_, parsedLayers)
+			return next(schema_, parsedValues)
 		}
 	}
 }

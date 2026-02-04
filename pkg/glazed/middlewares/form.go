@@ -6,10 +6,10 @@ import (
 	"os"
 	"sync"
 
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
-	"github.com/go-go-golems/glazed/pkg/helpers/cast"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
+	"github.com/go-go-golems/glazed/pkg/cmds/sources"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 )
@@ -18,13 +18,13 @@ import (
 // and manages temporary files created during processing.
 type FormMiddleware struct {
 	c       echo.Context
-	options []parameters.ParseStepOption
+	options []fields.ParseOption
 	files   []string
 	mu      sync.Mutex
 }
 
 // NewFormMiddleware creates a new FormMiddleware instance
-func NewFormMiddleware(c echo.Context, options ...parameters.ParseStepOption) *FormMiddleware {
+func NewFormMiddleware(c echo.Context, options ...fields.ParseOption) *FormMiddleware {
 	return &FormMiddleware{
 		c:       c,
 		options: options,
@@ -76,43 +76,17 @@ func (m *FormMiddleware) createTempFileFromReader(r io.Reader) (string, error) {
 	return tmpFile.Name(), nil
 }
 
-func (m *FormMiddleware) getListParameterFromForm(p *parameters.ParameterDefinition) (*parameters.ParsedParameter, error) {
-	if p.Type.IsList() {
-		// check p.Name[] parameter
-		values_, err := m.c.FormParams()
-		if err != nil {
-			return nil, err
-		}
-		values, ok := values_[fmt.Sprintf("%s[]", p.Name)]
-		if ok {
-			pValue, err := p.ParseParameter(values, m.options...)
-			if err != nil {
-				return nil, errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, values)
-			}
-			return pValue, nil
-		}
-
-		return nil, nil
-	} else {
-		return nil, errors.Errorf("parameter '%s' is not a list parameter", p.Name)
-	}
-}
-
-func (m *FormMiddleware) getFileParameterFromForm(p *parameters.ParameterDefinition) (interface{}, error) {
+func (m *FormMiddleware) getFilePathsFromForm(p *fields.Definition) ([]string, error) {
 	form, err := m.c.MultipartForm()
 	if err != nil {
 		return nil, err
 	}
 	headers := form.File[p.Name]
 	if len(headers) == 0 {
-		if p.Required {
-			return nil, errors.Errorf("required parameter '%s' is missing", p.Name)
-		}
-
 		return nil, nil
 	}
 
-	values := []interface{}{}
+	paths := []string{}
 	for _, h := range headers {
 		err = func() error {
 			f, err := h.Open()
@@ -123,24 +97,12 @@ func (m *FormMiddleware) getFileParameterFromForm(p *parameters.ParameterDefinit
 				_ = f.Close()
 			}()
 
-			// For ParameterTypeFile, we need to create a temporary file
-			if p.Type == parameters.ParameterTypeFile || p.Type == parameters.ParameterTypeFileList {
-				tmpPath, err := m.createTempFileFromReader(f)
-				if err != nil {
-					return err
-				}
-				m.addFile(tmpPath)
-				values = append(values, tmpPath)
-				return nil
-			}
-
-			// For other file-like parameters, parse the content
-			v, err := p.ParseFromReader(f, h.Filename, m.options...)
+			tmpPath, err := m.createTempFileFromReader(f)
 			if err != nil {
-				return errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, h.Filename)
+				return err
 			}
-
-			values = append(values, v.Value)
+			m.addFile(tmpPath)
+			paths = append(paths, tmpPath)
 			return nil
 		}()
 
@@ -149,89 +111,64 @@ func (m *FormMiddleware) getFileParameterFromForm(p *parameters.ParameterDefinit
 		}
 	}
 
-	var v interface{}
-
-	//exhaustive:ignore
-	switch {
-	case p.Type == parameters.ParameterTypeFile:
-		if len(values) == 0 {
-			return nil, nil
-		}
-		v = values[0]
-
-	case p.Type == parameters.ParameterTypeFileList:
-		v = values
-
-	case p.Type.IsList():
-		vs := []interface{}{}
-		for _, v_ := range values {
-			vss, err := cast.CastListToInterfaceList(v_)
-			if err != nil {
-				return nil, err
-			}
-			vs = append(vs, vss...)
-		}
-		v = vs
-
-	case p.Type == parameters.ParameterTypeStringFromFile,
-		p.Type == parameters.ParameterTypeStringFromFiles:
-		s := ""
-		for _, v_ := range values {
-			ss, ok := v_.(string)
-			if !ok {
-				return nil, errors.Errorf("invalid value for parameter '%s': (%v) %s", p.Name, v_, "expected string")
-			}
-			s += ss
-		}
-		v = s
-
-	case p.Type == parameters.ParameterTypeObjectFromFile:
-		v = values[0]
-
-	default:
-		return nil, errors.Errorf("invalid type for parameter '%s': (%v) %s", p.Name, p.Type, "expected string or list")
-	}
-
-	return v, nil
+	return paths, nil
 }
 
 // Middleware returns the actual middleware function
-func (m *FormMiddleware) Middleware() middlewares.Middleware {
-	return func(next middlewares.HandlerFunc) middlewares.HandlerFunc {
-		return func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
-			err := layers_.ForEachE(func(_ string, l layers.ParameterLayer) error {
-				parsedLayer := parsedLayers.GetOrCreate(l)
+func (m *FormMiddleware) Middleware() sources.Middleware {
+	return func(next sources.HandlerFunc) sources.HandlerFunc {
+		return func(schema_ *schema.Schema, parsedValues *values.Values) error {
+			err := schema_.ForEachE(func(_ string, section schema.Section) error {
+				sectionValues := parsedValues.GetOrCreate(section)
 
-				pds := l.GetParameterDefinitions()
-				err := pds.ForEachE(func(p *parameters.ParameterDefinition) error {
-					if p.Type.NeedsFileContent("") || p.Type == parameters.ParameterTypeFile || p.Type == parameters.ParameterTypeFileList {
-						v, err := m.getFileParameterFromForm(p)
+				defs := section.GetDefinitions()
+				err := defs.ForEachE(func(p *fields.Definition) error {
+					if p.Type.NeedsFileContent("") || p.Type.IsFile() {
+						paths, err := m.getFilePathsFromForm(p)
 						if err != nil {
 							return err
 						}
 
-						if v != nil {
-							err := parsedLayer.Parameters.UpdateValue(p.Name, p, v, m.options...)
-							if err != nil {
-								return err
+						if len(paths) == 0 {
+							if p.Required {
+								return errors.Errorf("required parameter '%s' is missing", p.Name)
 							}
+							return nil
 						}
 
+						parsedField, err := p.ParseField(paths, m.options...)
+						if err != nil {
+							return errors.Wrapf(err, "invalid value for parameter '%s'", p.Name)
+						}
+						sectionValues.Fields.Update(p.Name, parsedField)
 						return nil
 					}
 
-					// parse arrays
 					if p.Type.IsList() {
-						v, err := m.getListParameterFromForm(p)
+						values_, err := m.c.FormParams()
 						if err != nil {
 							return err
 						}
-						if v != nil {
-							parsedLayer.Parameters.Update(p.Name, v)
-						} else if p.Required {
-							return errors.Errorf("required parameter '%s' is missing", p.Name)
+						if values, ok := values_[fmt.Sprintf("%s[]", p.Name)]; ok {
+							parsedField, err := p.ParseField(values, m.options...)
+							if err != nil {
+								return errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, values)
+							}
+							sectionValues.Fields.Update(p.Name, parsedField)
+							return nil
 						}
-
+						value := m.c.FormValue(p.Name)
+						if value == "" {
+							if p.Required {
+								return errors.Errorf("required parameter '%s' is missing", p.Name)
+							}
+							return nil
+						}
+						parsedField, err := p.ParseField([]string{value}, m.options...)
+						if err != nil {
+							return errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, value)
+						}
+						sectionValues.Fields.Update(p.Name, parsedField)
 						return nil
 					}
 
@@ -243,12 +180,11 @@ func (m *FormMiddleware) Middleware() middlewares.Middleware {
 						return nil
 					}
 
-					v := []string{value}
-					parsedParameter, err := p.ParseParameter(v, m.options...)
+					parsedField, err := p.ParseField([]string{value}, m.options...)
 					if err != nil {
 						return errors.Wrapf(err, "invalid value for parameter '%s': %s", p.Name, value)
 					}
-					parsedLayer.Parameters.Update(p.Name, parsedParameter)
+					sectionValues.Fields.Update(p.Name, parsedField)
 
 					return nil
 				})
@@ -263,13 +199,13 @@ func (m *FormMiddleware) Middleware() middlewares.Middleware {
 				return err
 			}
 
-			return next(layers_, parsedLayers)
+			return next(schema_, parsedValues)
 		}
 	}
 }
 
 // UpdateFromFormQuery is a convenience function that creates a FormMiddleware and returns its middleware function
-func UpdateFromFormQuery(c echo.Context, options ...parameters.ParseStepOption) middlewares.Middleware {
+func UpdateFromFormQuery(c echo.Context, options ...fields.ParseOption) sources.Middleware {
 	m := NewFormMiddleware(c, options...)
 	defer func() {
 		_ = m.Close()

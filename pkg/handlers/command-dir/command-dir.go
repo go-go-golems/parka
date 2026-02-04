@@ -37,7 +37,7 @@ import (
 	"os"
 
 	"github.com/go-go-golems/clay/pkg/repositories"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
 	"github.com/go-go-golems/parka/pkg/handlers/config"
 	generic_command "github.com/go-go-golems/parka/pkg/handlers/generic-command"
@@ -85,7 +85,7 @@ func NewCommandDirHandlerFromConfig(
 		generic_command.WithTemplateName(config_.TemplateName),
 		generic_command.WithIndexTemplateName(config_.IndexTemplateName),
 		generic_command.WithMergeAdditionalData(config_.AdditionalData, true),
-		generic_command.WithWhitelistedLayers(layers.DefaultSlug),
+		generic_command.WithWhitelistedLayers(schema.DefaultSlug),
 	}
 	genericHandler, err := generic_command.NewGenericCommandHandler(genericOptions...)
 	if err != nil {

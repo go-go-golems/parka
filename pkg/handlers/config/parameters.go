@@ -1,9 +1,9 @@
 package config
 
 import (
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
+	"github.com/go-go-golems/glazed/pkg/cmds/sources"
 )
 
 // ParameterFilterList are used to configure whitelists and blacklists.
@@ -20,10 +20,10 @@ func (p *ParameterFilterList) GetAllLayerParameters() map[string][]string {
 	for layer, params := range p.LayerParameters {
 		ret[layer] = params
 	}
-	if _, ok := ret[layers.DefaultSlug]; !ok {
-		ret[layers.DefaultSlug] = []string{}
+	if _, ok := ret[schema.DefaultSlug]; !ok {
+		ret[schema.DefaultSlug] = []string{}
 	}
-	ret[layers.DefaultSlug] = append(ret[layers.DefaultSlug], p.Parameters...)
+	ret[schema.DefaultSlug] = append(ret[schema.DefaultSlug], p.Parameters...)
 	return ret
 }
 
@@ -66,11 +66,11 @@ func (p *LayerParameters) Clone() *LayerParameters {
 func (p *LayerParameters) GetParameterMap() map[string]map[string]interface{} {
 	r := p.Clone()
 	ret := r.Layers
-	if _, ok := ret[layers.DefaultSlug]; !ok {
-		ret[layers.DefaultSlug] = map[string]interface{}{}
+	if _, ok := ret[schema.DefaultSlug]; !ok {
+		ret[schema.DefaultSlug] = map[string]interface{}{}
 	}
 	for k, v := range r.Parameters {
-		ret[layers.DefaultSlug][k] = v
+		ret[schema.DefaultSlug][k] = v
 	}
 
 	return ret
@@ -309,34 +309,34 @@ func NewParameterFilter(options ...ParameterFilterOption) *ParameterFilter {
 	return ret
 }
 
-func (od *ParameterFilter) ComputeMiddlewares(stream bool) []middlewares.Middleware {
-	ret := []middlewares.Middleware{}
+func (od *ParameterFilter) ComputeMiddlewares(stream bool) []sources.Middleware {
+	ret := []sources.Middleware{}
 
 	// in reverse order of applications. This means that ultimately, the defaults are run first,
 	// then overrides, then whitelist, then blacklist, and then finally the query handlers.
 
 	if od.Blacklist != nil {
-		ret = append(ret, middlewares.BlacklistLayers(od.Blacklist.Layers))
-		ret = append(ret, middlewares.BlacklistLayerParameters(od.Blacklist.GetAllLayerParameters()))
+		ret = append(ret, sources.BlacklistSections(od.Blacklist.Layers))
+		ret = append(ret, sources.BlacklistSectionFields(od.Blacklist.GetAllLayerParameters()))
 	}
 
 	if od.Whitelist != nil {
-		ret = append(ret, middlewares.WhitelistLayers(od.Whitelist.Layers))
-		ret = append(ret, middlewares.WhitelistLayerParameters(od.Whitelist.GetAllLayerParameters()))
+		ret = append(ret, sources.WhitelistSections(od.Whitelist.Layers))
+		ret = append(ret, sources.WhitelistSectionFields(od.Whitelist.GetAllLayerParameters()))
 	}
 
 	if od.Overrides != nil {
 		// TODO(manuel, 2024-05-14) Here we would ideally parse potential strings that map to non strings (for example when using _env: SQLETON_PORT where the result is a string, not an int)
 		// Currently, we migrated this to UpdateFromMap but it's not a great look
-		ret = append(ret, middlewares.UpdateFromMap(
+		ret = append(ret, sources.FromMap(
 			od.Overrides.GetParameterMap(),
-			parameters.WithParseStepSource("overrides")),
+			fields.WithSource("overrides")),
 		)
 	}
 
 	if od.Defaults != nil {
 		// this needs to override the defaults set by the underlying handler...
-		ret = append(ret, middlewares.UpdateFromMapAsDefaultFirst(od.Defaults.GetParameterMap(), parameters.WithParseStepSource("defaults")))
+		ret = append(ret, sources.FromMapAsDefaultFirst(od.Defaults.GetParameterMap(), fields.WithSource("defaults")))
 	}
 
 	return ret

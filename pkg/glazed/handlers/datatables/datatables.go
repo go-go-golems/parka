@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/sources"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/formatters"
 	"github.com/go-go-golems/glazed/pkg/formatters/json"
 	table_formatter "github.com/go-go-golems/glazed/pkg/formatters/table"
@@ -102,7 +102,7 @@ func (dt *DataTables) Clone() *DataTables {
 
 type QueryHandler struct {
 	cmd         cmds.GlazeCommand
-	middlewares []middlewares.Middleware
+	middlewares []sources.Middleware
 
 	templateName string
 	lookup       render.TemplateLookup
@@ -144,7 +144,7 @@ func WithDataTables(dt *DataTables) QueryHandlerOption {
 	}
 }
 
-func WithMiddlewares(middlewares ...middlewares.Middleware) QueryHandlerOption {
+func WithMiddlewares(middlewares ...sources.Middleware) QueryHandlerOption {
 	return func(qh *QueryHandler) {
 		qh.middlewares = middlewares
 	}
@@ -183,7 +183,7 @@ var _ echo.HandlerFunc = (&QueryHandler{}).Handle
 
 func (qh *QueryHandler) Handle(c echo.Context) error {
 	description := qh.cmd.Description()
-	parsedLayers := layers.NewParsedLayers()
+	parsedValues := values.New()
 
 	dt_ := qh.dt.Clone()
 	// rowC is the channel where the rows are sent to. They will need to get converted
@@ -200,16 +200,16 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	columnsC := make(chan []types.FieldName, 10)
 
 	queryMiddleware := parka_middlewares.UpdateFromQueryParameters(c,
-		parameters.WithParseStepSource("query"),
+		fields.WithSource("query"),
 	)
 	if len(qh.whitelistedLayers) > 0 {
-		queryMiddleware = middlewares.WrapWithWhitelistedLayers(qh.whitelistedLayers, queryMiddleware)
+		queryMiddleware = sources.WrapWithWhitelistedSections(qh.whitelistedLayers, queryMiddleware)
 	}
 
-	middlewares_ := []middlewares.Middleware{queryMiddleware}
+	middlewares_ := []sources.Middleware{queryMiddleware}
 	middlewares_ = append(middlewares_, qh.middlewares...)
-	middlewares_ = append(middlewares_, middlewares.SetFromDefaults())
-	err := middlewares.ExecuteMiddlewares(description.Layers.Clone(), parsedLayers, middlewares_...)
+	middlewares_ = append(middlewares_, sources.FromDefaults())
+	err := sources.Execute(description.Schema.Clone(), parsedValues, middlewares_...)
 	if err != nil {
 		log.Debug().Err(err).Msg("error executing middlewares")
 		g := &safegroup.Group{}
@@ -249,7 +249,7 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 
 		g.Go(func() error {
 			log.Debug().Msg("Rendering template")
-			err := qh.renderTemplate(parsedLayers, c.Response(), dt_, columnsC)
+			err := qh.renderTemplate(parsedValues, c.Response(), dt_, columnsC)
 			log.Debug().Msg("Template rendered")
 			if err != nil {
 				return err
@@ -262,7 +262,7 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 
 	// This needs to run after parsing the layers
 	if cm_, ok := qh.cmd.(cmds.CommandWithMetadata); ok {
-		dt_.CommandMetadata, err = cm_.Metadata(c.Request().Context(), parsedLayers)
+		dt_.CommandMetadata, err = cm_.Metadata(c.Request().Context(), parsedValues)
 		if err != nil {
 			return err
 		}
@@ -278,7 +278,7 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	}
 
 	// manually create a streaming output TableProcessor
-	gp, err := handlers.CreateTableProcessorWithOutput(parsedLayers, "table", "ascii")
+	gp, err := handlers.CreateTableProcessorWithOutput(parsedValues, "table", "ascii")
 	if err != nil {
 		return err
 	}
@@ -327,7 +327,7 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	eg.Go(func() error {
 		// NOTE(manuel, 2023-10-16) The GetAllParameterValues is a bit of a hack because really what we want is to only get those flags through the layers
 		log.Debug().Msg("running command")
-		err = qh.cmd.RunIntoGlazeProcessor(ctx3, parsedLayers, gp)
+		err = qh.cmd.RunIntoGlazeProcessor(ctx3, parsedValues, gp)
 
 		g, ctx := safegroup.WithContext(ctx3)
 
@@ -371,7 +371,7 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 	eg.Go(func() error {
 		// if qh.Cmd implements cmds.CommandWithMetadata, get Metadata
 		log.Debug().Msg("rendering template")
-		err := qh.renderTemplate(parsedLayers, c.Response(), dt_, columnsC)
+		err := qh.renderTemplate(parsedValues, c.Response(), dt_, columnsC)
 		log.Debug().Msg("rendered template")
 		if err != nil {
 			return err
@@ -389,7 +389,7 @@ func (qh *QueryHandler) Handle(c echo.Context) error {
 }
 
 func (qh *QueryHandler) renderTemplate(
-	parsedLayers *layers.ParsedLayers,
+	parsedValues *values.Values,
 	w io.Writer,
 	dt_ *DataTables,
 	columnsC chan []types.FieldName,
@@ -407,7 +407,7 @@ func (qh *QueryHandler) renderTemplate(
 		return err
 	}
 
-	layout_, err := layout.ComputeLayout(qh.cmd, parsedLayers)
+	layout_, err := layout.ComputeLayout(qh.cmd, parsedValues)
 	if err != nil {
 		return err
 	}

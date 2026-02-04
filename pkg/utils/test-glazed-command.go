@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
@@ -17,12 +18,12 @@ type TestGlazedCommand struct {
 }
 
 func NewTestGlazedCommand(options ...cmds.CommandDescriptionOption) (*TestGlazedCommand, error) {
-	glazedLayer, err := settings.NewGlazedParameterLayers()
+	glazedLayer, err := settings.NewGlazedSection()
 	if err != nil {
 		return nil, err
 	}
 
-	options = append(options, cmds.WithLayersList(glazedLayer))
+	options = append(options, cmds.WithSections(glazedLayer))
 
 	description := cmds.NewCommandDescription("test-glazed-command", options...)
 	return &TestGlazedCommand{
@@ -40,14 +41,12 @@ func (t *TestGlazedCommand) ToYAML(w io.Writer) error {
 
 func (t *TestGlazedCommand) RunIntoGlazeProcessor(
 	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
+	parsedValues *values.Values,
 	gp middlewares.Processor,
 ) error {
-	m := parameters.NewParsedParameters()
-
-	v, ok := parsedLayers.Get(layers.DefaultSlug)
-	if ok {
-		m = v.Parameters
+	var sectionValues *values.SectionValues
+	if v, ok := parsedValues.Get(schema.DefaultSlug); ok {
+		sectionValues = v
 	}
 
 	for i := 0; i < 3; i++ {
@@ -56,10 +55,11 @@ func (t *TestGlazedCommand) RunIntoGlazeProcessor(
 			types.MRP("test2", fmt.Sprintf("test-%d", i)),
 			types.MRP("test3", fmt.Sprintf("test3-%d", i)),
 		)
-		m.ForEach(func(_ string, p *parameters.ParsedParameter) {
-			row.Set(p.ParameterDefinition.Name, p.Value)
-
-		})
+		if sectionValues != nil {
+			sectionValues.Fields.ForEach(func(_ string, f *fields.FieldValue) {
+				row.Set(f.Definition.Name, f.Value)
+			})
+		}
 		err := gp.AddRow(ctx,
 			row,
 		)

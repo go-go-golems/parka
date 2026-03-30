@@ -3,7 +3,8 @@ package middlewares
 import (
 	_ "embed"
 	"github.com/go-go-golems/glazed/pkg/cmds/helpers"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/helpers/yaml"
 	"github.com/go-go-golems/parka/pkg/utils"
 	"github.com/labstack/echo/v4"
@@ -15,14 +16,14 @@ import (
 )
 
 type UpdateFromQueryParametersTest struct {
-	Name            string                       `yaml:"name"`
-	Description     string                       `yaml:"description"`
-	ParameterLayers []helpers.TestParameterLayer `yaml:"parameterLayers"`
-	ParsedLayers    []helpers.TestParsedLayer    `yaml:"parsedLayers"`
-	QueryParameters []utils.QueryParameter       `yaml:"queryParameters"`
-	ExpectedLayers  []helpers.TestExpectedLayer  `yaml:"expectedLayers"`
-	ExpectedError   bool                         `yaml:"expectedError"`
-	ErrorString     string                       `yaml:"errorString,omitempty"`
+	Name             string                        `yaml:"name"`
+	Description      string                        `yaml:"description"`
+	Sections         []helpers.TestSection         `yaml:"sections"`
+	Values           []helpers.TestSectionValues   `yaml:"values"`
+	QueryParameters  []utils.QueryParameter        `yaml:"queryParameters"`
+	ExpectedSections []helpers.TestExpectedSection `yaml:"expectedSections"`
+	ExpectedError    bool                          `yaml:"expectedError"`
+	ErrorString      string                        `yaml:"errorString,omitempty"`
 }
 
 //go:embed test-data/update-from-query-parameters.yaml
@@ -37,9 +38,8 @@ func TestUpdateFromQueryParameters(t *testing.T) {
 		t.Run(tt.Name, func(t *testing.T) {
 			req := utils.NewRequestWithQueryParameters(tt.QueryParameters)
 
-			// Create ParameterLayers and ParsedLayers from test definitions
-			layers_ := helpers.NewTestParameterLayers(tt.ParameterLayers)
-			parsedLayers := helpers.NewTestParsedLayers(layers_, tt.ParsedLayers...)
+			schema_ := helpers.NewTestSchema(tt.Sections)
+			parsedValues := helpers.NewTestValues(schema_, tt.Values...)
 
 			resp := httptest.NewRecorder()
 			e := echo.New()
@@ -48,9 +48,9 @@ func TestUpdateFromQueryParameters(t *testing.T) {
 
 			// Create the middleware and execute it
 			middleware := UpdateFromQueryParameters(c)
-			err := middleware(func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
+			err := middleware(func(schema_ *schema.Schema, parsedValues *values.Values) error {
 				return nil
-			})(layers_, parsedLayers)
+			})(schema_, parsedValues)
 
 			// Check for expected error
 			if tt.ExpectedError {
@@ -60,8 +60,7 @@ func TestUpdateFromQueryParameters(t *testing.T) {
 				}
 			} else {
 				require.NoError(t, err)
-				// Check expected outputs
-				helpers.TestExpectedOutputs(t, tt.ExpectedLayers, parsedLayers)
+				helpers.TestExpectedOutputs(t, tt.ExpectedSections, parsedValues)
 			}
 		})
 	}

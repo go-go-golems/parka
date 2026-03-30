@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
@@ -58,9 +59,15 @@ func (m *FormMiddleware) addFile(path string) {
 	m.files = append(m.files, path)
 }
 
-// createTempFileFromReader creates a temporary file from a reader
-func (m *FormMiddleware) createTempFileFromReader(r io.Reader) (string, error) {
-	tmpFile, err := os.CreateTemp("", "parka-form-*")
+// createTempFileFromReader creates a temporary file from a reader while preserving
+// the original file extension so Glazed can still infer typed file formats.
+func (m *FormMiddleware) createTempFileFromReader(r io.Reader, originalName string) (string, error) {
+	pattern := "parka-form-*"
+	if ext := filepath.Ext(originalName); ext != "" {
+		pattern += ext
+	}
+
+	tmpFile, err := os.CreateTemp("", pattern)
 	if err != nil {
 		return "", errors.Wrap(err, "could not create temporary file")
 	}
@@ -97,7 +104,7 @@ func (m *FormMiddleware) getFilePathsFromForm(p *fields.Definition) ([]string, e
 				_ = f.Close()
 			}()
 
-			tmpPath, err := m.createTempFileFromReader(f)
+			tmpPath, err := m.createTempFileFromReader(f, h.Filename)
 			if err != nil {
 				return err
 			}

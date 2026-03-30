@@ -5,12 +5,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/parka/pkg/utils"
 	"github.com/labstack/echo/v4"
 
 	"github.com/go-go-golems/glazed/pkg/cmds/helpers"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/helpers/yaml"
 
 	"github.com/stretchr/testify/assert"
@@ -19,13 +20,13 @@ import (
 
 // UpdateFromFormQueryTest represents a single test case for UpdateFromFormQuery.
 type UpdateFromFormQueryTest struct {
-	Name            string                       `yaml:"name"`
-	Description     string                       `yaml:"description"`
-	ParameterLayers []helpers.TestParameterLayer `yaml:"parameterLayers"`
-	ParsedLayers    []helpers.TestParsedLayer    `yaml:"parsedLayers"`
-	Form            utils.MultipartForm          `yaml:"form"`
-	ExpectedLayers  []helpers.TestExpectedLayer  `yaml:"expectedLayers"`
-	ExpectedError   bool                         `yaml:"expectedError"`
+	Name             string                        `yaml:"name"`
+	Description      string                        `yaml:"description"`
+	Sections         []helpers.TestSection         `yaml:"sections"`
+	Values           []helpers.TestSectionValues   `yaml:"values"`
+	Form             utils.MultipartForm           `yaml:"form"`
+	ExpectedSections []helpers.TestExpectedSection `yaml:"expectedSections"`
+	ExpectedError    bool                          `yaml:"expectedError"`
 }
 
 //go:embed test-data/update-from-form-query.yaml
@@ -41,9 +42,8 @@ func TestUpdateFromFormQuery(t *testing.T) {
 			req, err := utils.NewRequestWithMultipartForm(tt.Form)
 			require.NoError(t, err)
 
-			// Create ParameterLayers and ParsedLayers from test definitions
-			layers_ := helpers.NewTestParameterLayers(tt.ParameterLayers)
-			parsedLayers := helpers.NewTestParsedLayers(layers_, tt.ParsedLayers...)
+			schema_ := helpers.NewTestSchema(tt.Sections)
+			parsedValues := helpers.NewTestValues(schema_, tt.Values...)
 
 			resp := httptest.NewRecorder()
 			e := echo.New()
@@ -56,17 +56,16 @@ func TestUpdateFromFormQuery(t *testing.T) {
 			}()
 
 			// Execute the middleware
-			err = middleware.Middleware()(func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
+			err = middleware.Middleware()(func(schema_ *schema.Schema, parsedValues *values.Values) error {
 				return nil
-			})(layers_, parsedLayers)
+			})(schema_, parsedValues)
 
 			// Check for expected error
 			if tt.ExpectedError {
 				assert.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				// Check expected outputs
-				helpers.TestExpectedOutputs(t, tt.ExpectedLayers, parsedLayers)
+				helpers.TestExpectedOutputs(t, tt.ExpectedSections, parsedValues)
 			}
 		})
 	}
@@ -100,10 +99,10 @@ func TestFormMiddlewareCleanup(t *testing.T) {
 	middleware := NewFormMiddleware(c)
 
 	// Execute the middleware
-	err = middleware.Middleware()(func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
+	err = middleware.Middleware()(func(schema_ *schema.Schema, parsedValues *values.Values) error {
 
 		return nil
-	})(layers.NewParameterLayers(), layers.NewParsedLayers())
+	})(schema.NewSchema(), values.New())
 	require.NoError(t, err)
 
 	// Close the middleware (this should clean up files)
@@ -142,36 +141,35 @@ func TestFormMiddlewareErrorHandling(t *testing.T) {
 	}()
 
 	// Execute the middleware
-	err = middleware.Middleware()(func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
+	err = middleware.Middleware()(func(schema_ *schema.Schema, parsedValues *values.Values) error {
 		return nil
-	})(layers.NewParameterLayers(), layers.NewParsedLayers())
+	})(schema.NewSchema(), values.New())
 	require.NoError(t, err)
 }
 
 // TestFormMiddlewareWithDefaultLayer tests that the form middleware correctly processes
-// form data and updates the parsed layers with a default parameter layer.
+// form data and updates the parsed values for a configuration section.
 func TestFormMiddlewareWithDefaultLayer(t *testing.T) {
-	// Create a default parameter layer with some test parameters
-	layer, err := layers.NewParameterLayer("config", "Configuration",
-		layers.WithDescription("Configuration options for testing"),
-		layers.WithParameterDefinitions(
-			parameters.NewParameterDefinition(
+	section, err := schema.NewSection("config", "Configuration",
+		schema.WithDescription("Configuration options for testing"),
+		schema.WithFields(
+			fields.New(
 				"name",
-				parameters.ParameterTypeString,
-				parameters.WithHelp("Test name parameter"),
-				parameters.WithRequired(true),
+				fields.TypeString,
+				fields.WithHelp("Test name parameter"),
+				fields.WithRequired(true),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"count",
-				parameters.ParameterTypeInteger,
-				parameters.WithHelp("Test count parameter"),
-				parameters.WithDefault(42),
+				fields.TypeInteger,
+				fields.WithHelp("Test count parameter"),
+				fields.WithDefault(42),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"enabled",
-				parameters.ParameterTypeBool,
-				parameters.WithHelp("Test boolean parameter"),
-				parameters.WithDefault(false),
+				fields.TypeBool,
+				fields.WithHelp("Test boolean parameter"),
+				fields.WithDefault(false),
 			),
 		),
 	)
@@ -195,9 +193,8 @@ func TestFormMiddlewareWithDefaultLayer(t *testing.T) {
 	resp := httptest.NewRecorder()
 	c := e.NewContext(req, resp)
 
-	// Create parameter layers and parsed layers
-	layers_ := layers.NewParameterLayers(layers.WithLayers(layer))
-	parsedLayers := layers.NewParsedLayers()
+	schema_ := schema.NewSchema(schema.WithSections(section))
+	parsedValues := values.New()
 
 	// Create and execute the middleware
 	middleware := NewFormMiddleware(c)
@@ -205,24 +202,20 @@ func TestFormMiddlewareWithDefaultLayer(t *testing.T) {
 		_ = middleware.Close()
 	}()
 
-	err = middleware.Middleware()(func(layers_ *layers.ParameterLayers, parsedLayers *layers.ParsedLayers) error {
+	err = middleware.Middleware()(func(schema_ *schema.Schema, parsedValues *values.Values) error {
 		return nil
-	})(layers_, parsedLayers)
+	})(schema_, parsedValues)
 	require.NoError(t, err)
 
-	// Verify the parsed values
-	// Check string parameter
-	nameParam, ok := parsedLayers.GetParameter("config", "name")
+	nameParam, ok := parsedValues.GetField("config", "name")
 	require.True(t, ok)
 	assert.Equal(t, "test-value", nameParam.Value)
 
-	// Check integer parameter
-	countParam, ok := parsedLayers.GetParameter("config", "count")
+	countParam, ok := parsedValues.GetField("config", "count")
 	require.True(t, ok)
 	assert.Equal(t, 123, countParam.Value)
 
-	// Check boolean parameter
-	enabledParam, ok := parsedLayers.GetParameter("config", "enabled")
+	enabledParam, ok := parsedValues.GetField("config", "enabled")
 	require.True(t, ok)
 	assert.Equal(t, true, enabledParam.Value)
 }

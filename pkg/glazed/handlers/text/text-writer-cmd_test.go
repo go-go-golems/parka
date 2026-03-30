@@ -20,14 +20,14 @@ import (
 // takes a GET HTTP query and parses the url parameters to render
 // the template after parsing according it to the parameter definitions.
 type TextHandlerTest struct {
-	Name            string                       `yaml:"name"`
-	Description     string                       `yaml:"description"`
-	ParameterLayers []helpers.TestParameterLayer `yaml:"parameterLayers"`
-	QueryParameters []utils.QueryParameter       `yaml:"queryParameters"`
-	Template        string                       `yaml:"template"`
-	ExpectedOutput  string                       `yaml:"expectedOutput"`
-	ExpectedError   bool                         `yaml:"expectedError"`
-	ErrorString     string                       `yaml:"errorString,omitempty"`
+	Name            string                 `yaml:"name"`
+	Description     string                 `yaml:"description"`
+	Sections        []helpers.TestSection  `yaml:"sections"`
+	QueryParameters []utils.QueryParameter `yaml:"queryParameters"`
+	Template        string                 `yaml:"template"`
+	ExpectedOutput  string                 `yaml:"expectedOutput"`
+	ExpectedError   bool                   `yaml:"expectedError"`
+	ErrorString     string                 `yaml:"errorString,omitempty"`
 }
 
 //go:embed test-data/text-handler.yaml
@@ -41,11 +41,10 @@ func TestTextHandler(t *testing.T) {
 		t.Run(tt.Name, func(t *testing.T) {
 			req := utils.NewRequestWithQueryParameters(tt.QueryParameters)
 
-			// Create ParameterLayers and ParsedLayers from test definitions
-			layers_ := helpers.NewTestParameterLayers(tt.ParameterLayers)
+			schema_ := helpers.NewTestSchema(tt.Sections)
 
 			// TODO(manuel, 2024-01-02) We also need to test with glazed commands
-			cmd := cmds.NewTemplateCommand(tt.Name, tt.Template, cmds.WithLayers(layers_))
+			cmd := cmds.NewTemplateCommand(tt.Name, tt.Template, cmds.WithSections(schema_.AsList()...))
 
 			rec := httptest.NewRecorder()
 			e := echo.New()

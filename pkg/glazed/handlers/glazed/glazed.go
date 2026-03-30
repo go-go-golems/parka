@@ -4,9 +4,9 @@ import (
 	"net/http"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/sources"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
 	middlewares2 "github.com/go-go-golems/parka/pkg/glazed/middlewares"
@@ -16,13 +16,13 @@ import (
 
 type QueryHandler struct {
 	cmd               cmds.GlazeCommand
-	middlewares       []middlewares.Middleware
+	middlewares       []sources.Middleware
 	whitelistedLayers []string
 }
 
 type QueryHandlerOption func(*QueryHandler)
 
-func WithMiddlewares(middlewares ...middlewares.Middleware) QueryHandlerOption {
+func WithMiddlewares(middlewares ...sources.Middleware) QueryHandlerOption {
 	return func(handler *QueryHandler) {
 		handler.middlewares = middlewares
 	}
@@ -50,27 +50,27 @@ var _ handlers.Handler = (*QueryHandler)(nil)
 
 func (h *QueryHandler) Handle(c echo.Context) error {
 	description := h.cmd.Description()
-	parsedLayers := layers.NewParsedLayers()
+	parsedValues := values.New()
 
-	queryMiddleware := middlewares2.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query"))
+	queryMiddleware := middlewares2.UpdateFromQueryParameters(c, fields.WithSource("query"))
 	if len(h.whitelistedLayers) > 0 {
-		queryMiddleware = middlewares.WrapWithWhitelistedLayers(h.whitelistedLayers, queryMiddleware)
+		queryMiddleware = sources.WrapWithWhitelistedSections(h.whitelistedLayers, queryMiddleware)
 	}
 
 	middlewares_ := append(
-		[]middlewares.Middleware{
+		[]sources.Middleware{
 			queryMiddleware,
 		},
 		h.middlewares...,
 	)
-	middlewares_ = append(middlewares_, middlewares.SetFromDefaults())
+	middlewares_ = append(middlewares_, sources.FromDefaults())
 
-	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers, middlewares_...)
+	err := sources.Execute(description.Schema.Clone(), parsedValues, middlewares_...)
 	if err != nil {
 		return err
 	}
 
-	glazedLayer, ok := parsedLayers.Get(settings.GlazedSlug)
+	glazedLayer, ok := parsedValues.Get(settings.GlazedSlug)
 	if !ok {
 		return errors.New("glazed layer not found")
 	}
@@ -89,7 +89,7 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 	c.Response().WriteHeader(http.StatusOK)
 
 	ctx := c.Request().Context()
-	err = h.cmd.RunIntoGlazeProcessor(ctx, parsedLayers, gp)
+	err = h.cmd.RunIntoGlazeProcessor(ctx, parsedValues, gp)
 	if err != nil {
 		return err
 	}

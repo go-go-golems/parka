@@ -2,9 +2,9 @@ package text
 
 import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/sources"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares/table"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
@@ -15,7 +15,7 @@ import (
 
 type QueryHandler struct {
 	cmd         cmds.Command
-	middlewares []middlewares.Middleware
+	middlewares []sources.Middleware
 	// whitelistedLayers contains the list of layers that are allowed to be modified through query parameters
 	whitelistedLayers []string
 }
@@ -34,7 +34,7 @@ func NewQueryHandler(cmd cmds.Command, options ...QueryHandlerOption) *QueryHand
 	return h
 }
 
-func WithMiddlewares(middlewares ...middlewares.Middleware) QueryHandlerOption {
+func WithMiddlewares(middlewares ...sources.Middleware) QueryHandlerOption {
 	return func(handler *QueryHandler) {
 		handler.middlewares = middlewares
 	}
@@ -50,22 +50,22 @@ var _ handlers.Handler = (*QueryHandler)(nil)
 
 func (h *QueryHandler) Handle(c echo.Context) error {
 	description := h.cmd.Description()
-	parsedLayers := layers.NewParsedLayers()
+	parsedValues := values.New()
 
-	queryMiddleware := parka_middlewares.UpdateFromQueryParameters(c, parameters.WithParseStepSource("query"))
+	queryMiddleware := parka_middlewares.UpdateFromQueryParameters(c, fields.WithSource("query"))
 	if len(h.whitelistedLayers) > 0 {
-		queryMiddleware = middlewares.WrapWithWhitelistedLayers(h.whitelistedLayers, queryMiddleware)
+		queryMiddleware = sources.WrapWithWhitelistedSections(h.whitelistedLayers, queryMiddleware)
 	}
 
 	middlewares_ := append(
-		[]middlewares.Middleware{
+		[]sources.Middleware{
 			queryMiddleware,
 		},
 		h.middlewares...,
 	)
-	middlewares_ = append(middlewares_, middlewares.SetFromDefaults())
+	middlewares_ = append(middlewares_, sources.FromDefaults())
 
-	err := middlewares.ExecuteMiddlewares(description.Layers, parsedLayers, middlewares_...)
+	err := sources.Execute(description.Schema.Clone(), parsedValues, middlewares_...)
 	if err != nil {
 		return err
 	}
@@ -74,18 +74,18 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 	ctx := c.Request().Context()
 	switch cmd := h.cmd.(type) {
 	case cmds.WriterCommand:
-		err := cmd.RunIntoWriter(ctx, parsedLayers, c.Response())
+		err := cmd.RunIntoWriter(ctx, parsedValues, c.Response())
 		if err != nil {
 			return err
 		}
 
 	case cmds.GlazeCommand:
-		gp, err := handlers.CreateTableProcessorWithOutput(parsedLayers, "table", "ascii")
+		gp, err := handlers.CreateTableProcessorWithOutput(parsedValues, "table", "ascii")
 		if err != nil {
 			return err
 		}
 
-		glazedLayer, ok := parsedLayers.Get("glazed")
+		glazedLayer, ok := parsedValues.Get(settings.GlazedSlug)
 		if !ok {
 			return errors.New("glazed layer not found")
 		}
@@ -101,7 +101,7 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 
 		gp.AddTableMiddleware(table.NewOutputMiddleware(of, c.Response()))
 
-		err = cmd.RunIntoGlazeProcessor(ctx, parsedLayers, gp)
+		err = cmd.RunIntoGlazeProcessor(ctx, parsedValues, gp)
 		if err != nil {
 			return err
 		}
@@ -112,7 +112,7 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 		}
 
 	case cmds.BareCommand:
-		err := cmd.Run(ctx, parsedLayers)
+		err := cmd.Run(ctx, parsedValues)
 		if err != nil {
 			return err
 		}

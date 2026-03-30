@@ -19,13 +19,13 @@ import (
 // takes a GET HTTP query and parses the url parameters to render
 // the template after parsing according it to the parameter definitions.
 type TextHandlerGlazedCommandTest struct {
-	Name            string                       `yaml:"name"`
-	Description     string                       `yaml:"description"`
-	ParameterLayers []helpers.TestParameterLayer `yaml:"parameterLayers"`
-	QueryParameters []utils.QueryParameter       `yaml:"queryParameters"`
-	ExpectedOutput  interface{}                  `yaml:"expectedOutput"`
-	ExpectedError   bool                         `yaml:"expectedError"`
-	ErrorString     string                       `yaml:"errorString,omitempty"`
+	Name            string                 `yaml:"name"`
+	Description     string                 `yaml:"description"`
+	Sections        []helpers.TestSection  `yaml:"sections"`
+	QueryParameters []utils.QueryParameter `yaml:"queryParameters"`
+	ExpectedOutput  interface{}            `yaml:"expectedOutput"`
+	ExpectedError   bool                   `yaml:"expectedError"`
+	ErrorString     string                 `yaml:"errorString,omitempty"`
 }
 
 //go:embed test-data/text-handler-glazed-command.yaml
@@ -39,9 +39,8 @@ func TestTextHandlerGlazeCommand(t *testing.T) {
 		t.Run(tt.Name, func(t *testing.T) {
 			req := utils.NewRequestWithQueryParameters(tt.QueryParameters)
 
-			// Create ParameterLayers and ParsedLayers from test definitions
-			layers_ := helpers.NewTestParameterLayers(tt.ParameterLayers)
-			cmd, err := utils.NewTestGlazedCommand(cmds.WithLayers(layers_))
+			schema_ := helpers.NewTestSchema(tt.Sections)
+			cmd, err := utils.NewTestGlazedCommand(cmds.WithSections(schema_.AsList()...))
 			require.NoError(t, err)
 
 			resp := httptest.NewRecorder()

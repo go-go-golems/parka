@@ -2,8 +2,8 @@ package layout
 
 import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/pkg/errors"
 )
 
@@ -67,7 +67,7 @@ type Input struct {
 	Template string
 	Type     string
 
-	ParameterDefinition *parameters.ParameterDefinition
+	ParameterDefinition *fields.Definition
 
 	Value interface{}
 }
@@ -79,7 +79,7 @@ type Option struct {
 
 func ComputeLayout(
 	cmd cmds.Command,
-	parsedLayers *layers.ParsedLayers,
+	parsedValues *values.Values,
 ) (*Layout, error) {
 	description := cmd.Description()
 
@@ -89,12 +89,12 @@ func ComputeLayout(
 		Sections: []*Section{},
 	}
 
-	defaultLayer := parsedLayers.GetDefaultParameterLayer()
+	defaultSectionValues := parsedValues.DefaultSectionValues()
 
 	if len(layout) == 0 {
-		pds := defaultLayer.Layer.GetParameterDefinitions()
+		pds := defaultSectionValues.Section.GetDefinitions()
 		flagSection := NewSectionFromParameterDefinitions(
-			pds, defaultLayer.Parameters.ToMap(),
+			pds, defaultSectionValues.Fields.ToMap(),
 			WithSectionTitle("All flags and arguments"),
 		)
 		ret.Sections = append(ret.Sections, flagSection)
@@ -113,8 +113,8 @@ func ComputeLayout(
 		//	ret.Sections = append(ret.Sections, section)
 		//}
 	} else {
-		allParameterDefinitions := cmd.Description().Layers.GetAllParameterDefinitions()
-		values := parsedLayers.GetDataMap()
+		allParameterDefinitions := cmd.Description().Schema.GetAllDefinitions()
+		values := parsedValues.GetDataMap()
 
 		for _, section_ := range layout {
 			section := &Section{
@@ -212,9 +212,10 @@ func choicesToOptions(choices []string) []Option {
 }
 
 func NewSectionFromParameterDefinitions(
-	pds *parameters.ParameterDefinitions,
+	pds *fields.Definitions,
 	values map[string]interface{},
-	options ...SectionOption) *Section {
+	options ...SectionOption,
+) *Section {
 	section := &Section{
 		Rows: []Row{},
 	}
@@ -225,7 +226,7 @@ func NewSectionFromParameterDefinitions(
 
 	// if there is no layout, go through all flags and put 3 per row
 	currentRow := Row{}
-	pds.ForEach(func(pd *parameters.ParameterDefinition) {
+	pds.ForEach(func(pd *fields.Definition) {
 		name := pd.Name
 		value, ok := values[name]
 		if !ok {

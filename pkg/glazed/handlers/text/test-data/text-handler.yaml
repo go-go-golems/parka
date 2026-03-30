@@ -1,7 +1,7 @@
 # Test Case 1: Basic Functionality Test
 - name: "Basic Functionality"
   description: "Test with valid parameters and template to ensure the expected output is produced without errors."
-  parameterLayers:
+  sections:
     - name: "default"
       definitions:
         - name: "greeting"
@@ -22,7 +22,7 @@
 # Test Case 2: Error Handling Test for Missing Required Parameters
 - name: "Missing Required Parameters"
   description: "Test with missing required parameters to ensure that an error is triggered."
-  parameterLayers:
+  sections:
     - name: "default"
       definitions:
         - name: "greeting"
@@ -41,7 +41,7 @@
 # Test Case: Default Values Test
 - name: "Default Values"
   description: "Test that default values are used when parameters are not provided."
-  parameterLayers:
+  sections:
     - name: "default"
       definitions:
         - name: "greeting"
@@ -57,7 +57,7 @@
 
 - name: "Default Values with one parameter override"
   description: "Test that default values are used when parameters are not provided."
-  parameterLayers:
+  sections:
     - name: "default"
       definitions:
         - name: "greeting"
@@ -76,7 +76,7 @@
 # Test Case: Integer Parameter Type Test
 - name: "Integer Parameter Type"
   description: "Test that integer parameters are parsed correctly."
-  parameterLayers:
+  sections:
     - name: "default"
       definitions:
         - name: "count"
@@ -92,7 +92,7 @@
 # Test Case: Boolean Parameter Type Test
 - name: "Boolean Parameter Type"
   description: "Test that boolean parameters are parsed correctly."
-  parameterLayers:
+  sections:
     - name: "default"
       definitions:
         - name: "isConfirmed"
@@ -108,7 +108,7 @@
 # Test Case: File Parameter Type Test
 - name: "File Parameter Type"
   description: "Test that file parameters are passed as strings."
-  parameterLayers:
+  sections:
     - name: "default"
       definitions:
         - name: "configFile"
@@ -125,7 +125,7 @@
 # Test Case: Special Characters in Parameters
 - name: "Special Characters in Parameters"
   description: "Test that special characters in parameters are handled correctly."
-  parameterLayers:
+  sections:
     - name: "default"
       definitions:
         - name: "message"
@@ -139,7 +139,7 @@
 
 - name: "Unicode Characters in Parameters"
   description: "Test that unicode characters in parameters are handled correctly."
-  parameterLayers:
+  sections:
     - name: "default"
       definitions:
         - name: "message"
@@ -154,7 +154,7 @@
 # Test Case: Iterating Over Lists in Template
 - name: "Iterating Over Lists in Template"
   description: "Test that lists can be iterated over in the template."
-  parameterLayers:
+  sections:
     - name: "default"
       definitions:
         - name: "fruits"
@@ -169,7 +169,7 @@
 # Test Case: Error in Template Syntax
 - name: "Error in Template Syntax"
   description: "Test that an error is raised for incorrect template syntax."
-  parameterLayers:
+  sections:
     - name: "default"
       definitions:
         - name: "username"

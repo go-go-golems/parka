@@ -9,7 +9,7 @@ import (
 	"github.com/go-go-golems/clay/pkg/repositories"
 	"github.com/go-go-golems/clay/pkg/repositories/trie"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
+	"github.com/go-go-golems/glazed/pkg/cmds/sources"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/datatables"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers/json"
 	output_file "github.com/go-go-golems/parka/pkg/glazed/handlers/output-file"
@@ -56,11 +56,11 @@ type GenericCommandHandler struct {
 	WhitelistedLayers []string
 
 	// preMiddlewares are run before the parameter filter middlewares
-	preMiddlewares []middlewares.Middleware
+	preMiddlewares []sources.Middleware
 	// postMiddlewares are run after the parameter filter middlewares
-	postMiddlewares []middlewares.Middleware
+	postMiddlewares []sources.Middleware
 	// middlewares contains all middlewares in order: pre + parameter filter + post
-	middlewares []middlewares.Middleware
+	middlewares []sources.Middleware
 }
 
 func NewGenericCommandHandler(options ...GenericCommandHandlerOption) (*GenericCommandHandler, error) {
@@ -68,8 +68,8 @@ func NewGenericCommandHandler(options ...GenericCommandHandlerOption) (*GenericC
 		AdditionalData:  map[string]interface{}{},
 		TemplateLookup:  datatables.NewDataTablesLookupTemplate(),
 		ParameterFilter: &config.ParameterFilter{},
-		preMiddlewares:  []middlewares.Middleware{},
-		postMiddlewares: []middlewares.Middleware{},
+		preMiddlewares:  []sources.Middleware{},
+		postMiddlewares: []sources.Middleware{},
 	}
 
 	for _, opt := range options {
@@ -159,13 +159,13 @@ func WithTemplateLookup(lookup render.TemplateLookup) GenericCommandHandlerOptio
 	}
 }
 
-func WithPreMiddlewares(middlewares ...middlewares.Middleware) GenericCommandHandlerOption {
+func WithPreMiddlewares(middlewares ...sources.Middleware) GenericCommandHandlerOption {
 	return func(handler *GenericCommandHandler) {
 		handler.preMiddlewares = append(handler.preMiddlewares, middlewares...)
 	}
 }
 
-func WithPostMiddlewares(middlewares ...middlewares.Middleware) GenericCommandHandlerOption {
+func WithPostMiddlewares(middlewares ...sources.Middleware) GenericCommandHandlerOption {
 	return func(handler *GenericCommandHandler) {
 		handler.postMiddlewares = append(handler.postMiddlewares, middlewares...)
 	}

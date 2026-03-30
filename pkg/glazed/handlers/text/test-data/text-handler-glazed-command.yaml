@@ -1,7 +1,7 @@
 # Test Case 1: Basic Functionality Test
 - name: "Basic Functionality"
   description: "Test with valid parameters and template to ensure the expected output is produced without errors."
-  parameterLayers:
+  sections:
     - name: "default"
       definitions:
         - name: "v"
@@ -27,7 +27,7 @@
 # Test Case 1: Basic Functionality Test
 - name: "Basic Functionality (json format, still outputs a text table)"
   description: "Test with valid parameters and make sure that despite json output, we still output text"
-  parameterLayers:
+  sections:
     - name: "default"
       definitions:
         - name: "v"
@@ -56,7 +56,7 @@
 # Test Case 2: passing a glazed layer fields: test only returns the test field
 - name: "Basic Functionality (json format, still outputs a text table)"
   description: "Test with valid parameters and make sure that despite json output, we still output text"
-  parameterLayers:
+  sections:
     - name: "default"
       definitions:
         - name: "v"

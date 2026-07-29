@@ -70,17 +70,12 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 		return err
 	}
 
-	glazedLayer, ok := parsedValues.Get(settings.GlazedSlug)
+	glazedLayer, ok := parsedValues.Get(settings.StructuredOutputSlug)
 	if !ok {
 		return errors.New("glazed layer not found")
 	}
 
-	gp, err := settings.SetupTableProcessor(glazedLayer)
-	if err != nil {
-		return err
-	}
-
-	of, err := settings.SetupProcessorOutput(gp, glazedLayer, c.Response())
+	gp, of, err := settings.SetupStructuredOutput(glazedLayer, c.Response())
 	if err != nil {
 		return err
 	}

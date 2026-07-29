@@ -64,28 +64,27 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 	needsRealFileOutput := false
 
 	// create a temporary file for glazed output
+	// The structured-output cleanup removed the table-format flag and the
+	// markdown/html/excel table formatters. CSV/TSV are now first-class
+	// format values; markdown/html/xlsx output is no longer supported by
+	// the structured-output section and must be handled separately.
 	if strings.HasSuffix(h.fileName, ".csv") {
-		glazedOverrides["output"] = "table"
-		glazedOverrides["table-format"] = "csv"
+		glazedOverrides["format"] = "csv"
 	} else if strings.HasSuffix(h.fileName, ".tsv") {
-		glazedOverrides["output"] = "table"
-		glazedOverrides["table-format"] = "tsv"
+		glazedOverrides["format"] = "tsv"
 	} else if strings.HasSuffix(h.fileName, ".md") {
-		glazedOverrides["output"] = "table"
-		glazedOverrides["table-format"] = "markdown"
+		glazedOverrides["format"] = "table"
 	} else if strings.HasSuffix(h.fileName, ".html") {
-		glazedOverrides["output"] = "table"
-		glazedOverrides["table-format"] = "html"
+		glazedOverrides["format"] = "table"
 	} else if strings.HasSuffix(h.fileName, ".json") {
-		glazedOverrides["output"] = "json"
+		glazedOverrides["format"] = "json"
 	} else if strings.HasSuffix(h.fileName, ".yaml") {
-		glazedOverrides["output"] = "yaml"
+		glazedOverrides["format"] = "yaml"
 	} else if strings.HasSuffix(h.fileName, ".xlsx") {
-		glazedOverrides["output"] = "excel"
+		glazedOverrides["format"] = "table"
 		needsRealFileOutput = true
 	} else if strings.HasSuffix(h.fileName, ".txt") {
-		glazedOverrides["output"] = "table"
-		glazedOverrides["table-format"] = "ascii"
+		glazedOverrides["format"] = "table"
 	} else {
 		return errors.New("unsupported file format")
 	}
@@ -95,7 +94,7 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 
 	glazedOverride := sources.FromMap(
 		map[string]map[string]interface{}{
-			settings.GlazedSlug: glazedOverrides,
+			settings.StructuredOutputSlug: glazedOverrides,
 		},
 		fields.WithSource("output-file-glazed-override"),
 	)

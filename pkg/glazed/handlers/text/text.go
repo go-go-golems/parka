@@ -3,14 +3,13 @@ package text
 import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/cmds/sources"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
-	"github.com/go-go-golems/glazed/pkg/middlewares/table"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/parka/pkg/glazed/handlers"
 	parka_middlewares "github.com/go-go-golems/parka/pkg/glazed/middlewares"
 	"github.com/labstack/echo/v4"
-	"github.com/pkg/errors"
 )
 
 type QueryHandler struct {
@@ -80,26 +79,39 @@ func (h *QueryHandler) Handle(c echo.Context) error {
 		}
 
 	case cmds.GlazeCommand:
-		gp, err := handlers.CreateTableProcessorWithOutput(parsedValues, "table", "ascii")
-		if err != nil {
-			return err
-		}
-
-		glazedLayer, ok := parsedValues.Get(settings.GlazedSlug)
+		glazedLayer, ok := parsedValues.Get(settings.StructuredOutputSlug)
 		if !ok {
-			return errors.New("glazed layer not found")
+			// No structured-output section was provided; create a default one
+			// with table format (what the text handler wants).
+			section, err := settings.NewStructuredOutputSection(
+				schema.WithDefaults(map[string]interface{}{"format": "table"}),
+			)
+			if err != nil {
+				return err
+			}
+			glazedLayer, err = values.NewSectionValues(section)
+			if err != nil {
+				return err
+			}
+			// Apply the section's field defaults to the values.
+			defaults, err := section.GetDefinitions().FieldValuesFromDefaults()
+			if err != nil {
+				return err
+			}
+			if _, err := glazedLayer.Fields.Merge(defaults); err != nil {
+				return err
+			}
+		} else {
+			// Force table output for the text handler regardless of the request.
+			if _, err := glazedLayer.Fields.UpdateExistingValue("format", "table", fields.WithSource("parka-text-handler")); err != nil {
+				return err
+			}
 		}
 
-		of, err := settings.SetupTableOutputFormatter(glazedLayer)
+		gp, _, err := settings.SetupStructuredOutput(glazedLayer, c.Response())
 		if err != nil {
 			return err
 		}
-		err = of.RegisterTableMiddlewares(gp)
-		if err != nil {
-			return err
-		}
-
-		gp.AddTableMiddleware(table.NewOutputMiddleware(of, c.Response()))
 
 		err = cmd.RunIntoGlazeProcessor(ctx, parsedValues, gp)
 		if err != nil {

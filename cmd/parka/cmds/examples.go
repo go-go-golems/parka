@@ -7,9 +7,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
-	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
-	"github.com/spf13/cobra"
 )
 
 type ExampleCommand struct {
@@ -19,8 +17,6 @@ type ExampleCommand struct {
 var _ cmds.GlazeCommand = &ExampleCommand{}
 
 func NewExampleCommand() *ExampleCommand {
-	glazedSection, err := settings.NewGlazedSection()
-	cobra.CheckErr(err)
 
 	defaultSection, err := schema.NewSection(
 		schema.DefaultSlug,
@@ -115,7 +111,6 @@ func NewExampleCommand() *ExampleCommand {
 		cmds.WithShort("Short parka example command"),
 		cmds.WithSections(
 			defaultSection,
-			glazedSection,
 		),
 	)
 	return &ExampleCommand{

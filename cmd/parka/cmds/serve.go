@@ -113,7 +113,7 @@ var LsServerCmd = &cobra.Command{
 		err = json.Unmarshal(body, &cmds)
 		cobra.CheckErr(err)
 
-		gp, _, err := cli.CreateGlazedProcessorFromCobra(cmd)
+		gp, _, err := cli.CreateStructuredOutputProcessorFromCobra(cmd)
 		cobra.CheckErr(err)
 
 		for _, cmd := range cmds {
@@ -133,6 +133,6 @@ func init() {
 	ServeCmd.Flags().Bool("dev", false, "Enable development mode")
 
 	LsServerCmd.PersistentFlags().String("server", "", "Server to list commands from")
-	err := cli.AddGlazedProcessorFlagsToCobraCommand(LsServerCmd)
+	err := cli.AddStructuredOutputFlagsToCobraCommand(LsServerCmd)
 	cobra.CheckErr(err)
 }

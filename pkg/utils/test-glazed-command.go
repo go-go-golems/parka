@@ -18,12 +18,14 @@ type TestGlazedCommand struct {
 }
 
 func NewTestGlazedCommand(options ...cmds.CommandDescriptionOption) (*TestGlazedCommand, error) {
-	glazedLayer, err := settings.NewGlazedSection()
+
+	// Ensure a structured-output section is present so that query parameters
+	// like --format and --output-fields bind to a section and are parsed.
+	structuredOutputSection, err := settings.NewStructuredOutputSection()
 	if err != nil {
 		return nil, err
 	}
-
-	options = append(options, cmds.WithSections(glazedLayer))
+	options = append(options, cmds.WithSections(structuredOutputSection))
 
 	description := cmds.NewCommandDescription("test-glazed-command", options...)
 	return &TestGlazedCommand{

@@ -41,7 +41,7 @@
       value: "v"
     - name: "w"
       value: "w"
-    - name: output
+    - name: format
       value: json
   expectedOutput: |
     +------+--------+---------+---+---+
@@ -70,9 +70,9 @@
       value: "v"
     - name: "w"
       value: "w"
-    - name: output
+    - name: format
       value: json
-    - name: fields
+    - name: output-fields
       value: test
   expectedOutput: |
     +------+
